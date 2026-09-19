@@ -7,6 +7,7 @@ import {
 } from 'ai';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
+  boundAgentStateForEvaluation,
   evaluateAgentState,
   JevEvaluationError,
   JEV_EVALUATION_MAX_RETRIES,
@@ -14,6 +15,12 @@ import {
   normalizeJevEvaluationError,
 } from './evaluate.js';
 import type { AgentState } from '../types.js';
+import {
+  MAX_EVALUATION_COMMAND_OUTPUT_LENGTH,
+  MAX_EVALUATION_COMMANDS,
+  MAX_EVALUATION_LIST_ITEMS,
+  MAX_TASK_LENGTH,
+} from '../limits.js';
 
 vi.mock('ai', async () => {
   const actual = await vi.importActual<typeof import('ai')>('ai');
@@ -110,6 +117,37 @@ describe('evaluateAgentState', () => {
       code: 'rate_limit',
       message: 'Jev Gateway rate limit reached. Wait before retrying the evaluation.',
     });
+  });
+
+  it('bounds state before sending it to Jev', () => {
+    const oversizedState: AgentState = {
+      ...state,
+      task: 't'.repeat(MAX_TASK_LENGTH + 1),
+      currentGoal: 'g'.repeat(MAX_TASK_LENGTH + 1),
+      repo: {
+        ...state.repo,
+        scripts: Array.from({ length: MAX_EVALUATION_LIST_ITEMS + 1 }, () => 's'.repeat(3_000)),
+        validationScripts: Array.from(
+          { length: MAX_EVALUATION_LIST_ITEMS + 1 },
+          () => 'v'.repeat(3_000),
+        ),
+        gitStatus: Array.from({ length: MAX_EVALUATION_LIST_ITEMS + 1 }, () => 'g'.repeat(3_000)),
+      },
+      observations: Array.from({ length: MAX_EVALUATION_LIST_ITEMS + 1 }, () => 'o'.repeat(3_000)),
+      commandsRun: Array.from({ length: MAX_EVALUATION_COMMANDS + 1 }, () => ({
+        command: 'c'.repeat(3_000),
+        exitCode: 1,
+        output: 'o'.repeat(MAX_EVALUATION_COMMAND_OUTPUT_LENGTH + 1),
+      })),
+    };
+
+    const requestState = boundAgentStateForEvaluation(oversizedState);
+
+    expect(requestState.task).toHaveLength(MAX_TASK_LENGTH);
+    expect(requestState.repo.scripts).toHaveLength(MAX_EVALUATION_LIST_ITEMS);
+    expect(requestState.observations).toHaveLength(MAX_EVALUATION_LIST_ITEMS);
+    expect(requestState.commandsRun).toHaveLength(MAX_EVALUATION_COMMANDS);
+    expect(requestState.commandsRun[0]?.output).toHaveLength(MAX_EVALUATION_COMMAND_OUTPUT_LENGTH);
   });
 });
 

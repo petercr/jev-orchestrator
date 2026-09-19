@@ -7,6 +7,15 @@ import {
   type Experimental_EvaluationModel as EvaluationModel,
 } from 'ai';
 import type { Action, AgentAssessment, AgentState, EvaluationResult } from '../types.js';
+import {
+  limitStrings,
+  MAX_EVALUATION_COMMAND_OUTPUT_LENGTH,
+  MAX_EVALUATION_COMMANDS,
+  MAX_EVALUATION_LIST_ITEMS,
+  MAX_EVALUATION_TEXT_LENGTH,
+  MAX_TASK_LENGTH,
+  truncateText,
+} from '../limits.js';
 
 export const JEV_EVALUATION_TIMEOUT_MS = 10_000;
 export const JEV_EVALUATION_MAX_RETRIES = 1;
@@ -39,6 +48,45 @@ const ACTION_CRITERIA = {
   ASK_USER: 'Required information or authorization is unavailable and must come from the user.',
   FINISH: 'The requested task is complete and adequately validated.',
 } as const;
+
+export function boundAgentStateForEvaluation(state: AgentState): AgentState {
+  const { repo } = state;
+  return {
+    ...state,
+    task: truncateText(state.task, MAX_TASK_LENGTH),
+    currentGoal: truncateText(state.currentGoal, MAX_EVALUATION_TEXT_LENGTH),
+    repo: {
+      root: truncateText(repo.root, MAX_EVALUATION_TEXT_LENGTH),
+      packageManager: repo.packageManager,
+      ...(repo.packageName
+        ? { packageName: truncateText(repo.packageName, MAX_EVALUATION_TEXT_LENGTH) }
+        : {}),
+      scripts: limitStrings(repo.scripts),
+      validationScripts: limitStrings(repo.validationScripts),
+      ...(repo.gitBranch
+        ? { gitBranch: truncateText(repo.gitBranch, MAX_EVALUATION_TEXT_LENGTH) }
+        : {}),
+      gitStatus: limitStrings(repo.gitStatus),
+      topLevelFiles: limitStrings(repo.topLevelFiles),
+    },
+    filesRead: limitStrings(state.filesRead),
+    filesModified: limitStrings(state.filesModified),
+    observations: limitStrings(state.observations),
+    commandsRun: state.commandsRun.slice(0, MAX_EVALUATION_COMMANDS).map((command) => ({
+      command: truncateText(command.command, MAX_EVALUATION_TEXT_LENGTH),
+      exitCode: command.exitCode,
+      output: truncateText(command.output, MAX_EVALUATION_COMMAND_OUTPUT_LENGTH),
+    })),
+    tests: {
+      ran: state.tests.ran,
+      ...(state.tests.passed !== undefined ? { passed: state.tests.passed } : {}),
+      ...(state.tests.summary !== undefined
+        ? { summary: truncateText(state.tests.summary, MAX_EVALUATION_TEXT_LENGTH) }
+        : {}),
+    },
+    failedApproaches: limitStrings(state.failedApproaches, MAX_EVALUATION_LIST_ITEMS),
+  };
+}
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === 'object' && !Array.isArray(value);
@@ -154,7 +202,7 @@ export async function evaluateAgentState(
   const startedAt = performance.now();
   const evaluation = evaluate({
     model,
-    state,
+    state: boundAgentStateForEvaluation(state),
     questions: {
       taskComplete: {
         type: 'boolean',
