@@ -1,0 +1,71 @@
+{
+  "version": 1,
+  "skills": {
+    "address-findings": {
+      "source": "entireio/skills",
+      "sourceType": "github",
+      "skillPath": "skills/address-findings/SKILL.md",
+      "computedHash": "435f2cf43375653e7b2d167ec95394bbd1d7fedd7e4fab1cd28621f411187871"
+    },
+    "explain": {
+      "source": "entireio/skills",
+      "sourceType": "github",
+      "skillPath": "skills/explain/SKILL.md",
+      "computedHash": "cf87653cd282a1c2d2b1cf762431f7873994ab9cb8e2c53b4b089ab2ef02dbb9"
+    },
+    "recall": {
+      "source": "entireio/skills",
+      "sourceType": "github",
+      "skillPath": "skills/recall/SKILL.md",
+      "computedHash": "ef6aa86a3c0cad5f3dba19b9b56c1da1130c9a5da33e1f0fe2cd96e088259e5f"
+    },
+    "replay": {
+      "source": "entireio/skills",
+      "sourceType": "github",
+      "skillPath": "skills/replay/SKILL.md",
+      "computedHash": "2efa747acabbc5d06f65490fc25240c807947654a3672576e4bb30273dea01d8"
+    },
+    "review": {
+      "source": "entireio/skills",
+      "sourceType": "github",
+      "skillPath": "skills/review/SKILL.md",
+      "computedHash": "2b159cfb9f06f885589e63b6175b8f57b8b69b5b24467df8a7ab1ab576303b11"
+    },
+    "session-crosslink": {
+      "source": "entireio/skills",
+      "sourceType": "github",
+      "skillPath": "skills/session-crosslink/SKILL.md",
+      "computedHash": "601061e9544bdba83c98a7f6a4bb6103caa7dd1d4108ee973e0fa4f6bc38e36b"
+    },
+    "session-handoff": {
+      "source": "entireio/skills",
+      "sourceType": "github",
+      "skillPath": "skills/session-handoff/SKILL.md",
+      "computedHash": "4781a0fb3e36317ec41ecf423dd974ea9d1a73c8e99bf1041e8bb99e419ac735"
+    },
+    "session-to-skill": {
+      "source": "entireio/skills",
+      "sourceType": "github",
+      "skillPath": "skills/session-to-skill/SKILL.md",
+      "computedHash": "35a4b7117ae7cca2d12031d6ce73d68fceec53a80deff8f83cab260606f73d7f"
+    },
+    "teach": {
+      "source": "entireio/skills",
+      "sourceType": "github",
+      "skillPath": "skills/teach/SKILL.md",
+      "computedHash": "b68aebc7bfbeb506c1844c4bd9eb95b51cc4797a2c66187f4f0ff8f4ac454fca"
+    },
+    "using-entire": {
+      "source": "entireio/skills",
+      "sourceType": "github",
+      "skillPath": "skills/using-entire/SKILL.md",
+      "computedHash": "2ae4c24eb498ae8782dd5c1b9b8e452c9b4a7a9e74a226a893e6afc12f6567cc"
+    },
+    "what-happened": {
+      "source": "entireio/skills",
+      "sourceType": "github",
+      "skillPath": "skills/what-happened/SKILL.md",
+      "computedHash": "ee8057e8ddcba6343bf6c01ce3901a00864268dc5d46197e33b31886414c4586"
+    }
+  }
+}
