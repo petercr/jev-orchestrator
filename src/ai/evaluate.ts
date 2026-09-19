@@ -51,7 +51,7 @@ export async function evaluateAgentState(
     },
     providerOptions: {
       gateway: {
-        zeroDataRetention: true,
+        zeroDataRetention: false,
       },
     },
   });

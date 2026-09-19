@@ -5,6 +5,7 @@ import { evaluateAgentState } from './ai/evaluate.js';
 import { applyPolicy } from './policy.js';
 import { writeTrace } from './logging/trace.js';
 import { mockEvaluation } from './mock.js';
+import { requireGatewayApiKey } from './config.js';
 import type { Action, AgentState } from './types.js';
 
 type CliOptions = {
@@ -73,6 +74,7 @@ async function main(): Promise<void> {
   console.log(`Task: ${state.task}`);
   console.log(`Mode: ${options.mock ? 'mock' : 'live Jev'}\n`);
 
+  if (!options.mock) requireGatewayApiKey();
   const evaluation = options.mock ? mockEvaluation() : await evaluateAgentState(state);
   const policy = applyPolicy(state, evaluation.assessment);
   const { assessment } = evaluation;
