@@ -18,7 +18,7 @@ Codex or Claude Code.
    - Complete when a fresh checkout can install and run the documented mock
      command, while a keyless live run gives a clear error.
 
-2. Harden Jev evaluation.
+2. [x] Harden Jev evaluation.
    - Add a request deadline and bounded retry policy.
    - Present clear, credential-safe errors for authentication, rate limits,
      unavailable models, and invalid responses.

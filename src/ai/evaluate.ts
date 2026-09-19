@@ -1,8 +1,34 @@
 import {
+  APICallError,
   experimental_evaluate as evaluate,
+  InvalidResponseDataError,
+  NoSuchModelError,
+  RetryError,
   type Experimental_EvaluationModel as EvaluationModel,
 } from 'ai';
 import type { Action, AgentAssessment, AgentState, EvaluationResult } from '../types.js';
+
+export const JEV_EVALUATION_TIMEOUT_MS = 10_000;
+export const JEV_EVALUATION_MAX_RETRIES = 1;
+
+export type JevEvaluationErrorCode =
+  | 'timeout'
+  | 'authentication'
+  | 'rate_limit'
+  | 'model_unavailable'
+  | 'invalid_response'
+  | 'service_unavailable'
+  | 'request_failed';
+
+export class JevEvaluationError extends Error {
+  readonly code: JevEvaluationErrorCode;
+
+  constructor(code: JevEvaluationErrorCode, message: string) {
+    super(message);
+    this.name = 'JevEvaluationError';
+    this.code = code;
+  }
+}
 
 const ACTION_CRITERIA = {
   SEARCH_REPO: 'Search repository contents to locate relevant code or configuration.',
@@ -14,12 +40,119 @@ const ACTION_CRITERIA = {
   FINISH: 'The requested task is complete and adequately validated.',
 } as const;
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === 'object' && !Array.isArray(value);
+}
+
+function isProbability(value: unknown): value is number {
+  return typeof value === 'number' && Number.isFinite(value) && value >= 0 && value <= 1;
+}
+
+function invalidProviderMetadata(): never {
+  throw new JevEvaluationError(
+    'invalid_response',
+    'Jev returned invalid provider metadata.',
+  );
+}
+
+function getNextActionConfidence(providerMetadata: unknown): number | undefined {
+  if (providerMetadata === undefined) return undefined;
+  if (!isRecord(providerMetadata)) invalidProviderMetadata();
+
+  const typesafe = providerMetadata.typesafe;
+  if (typesafe === undefined) return undefined;
+  if (!isRecord(typesafe)) invalidProviderMetadata();
+
+  const confidence = typesafe.confidence;
+  if (confidence === undefined) return undefined;
+  if (!isRecord(confidence)) invalidProviderMetadata();
+
+  const nextAction = confidence.nextAction;
+  if (nextAction === undefined) return undefined;
+  if (!isProbability(nextAction)) invalidProviderMetadata();
+
+  return nextAction;
+}
+
+function isTimeoutError(error: unknown): boolean {
+  return (
+    (RetryError.isInstance(error) && error.reason === 'abort') ||
+    (error instanceof Error && (error.name === 'AbortError' || error.name === 'TimeoutError'))
+  );
+}
+
+function lastEvaluationError(error: unknown): unknown {
+  return RetryError.isInstance(error) ? error.lastError : error;
+}
+
+function getStatusCode(error: unknown): number | undefined {
+  if (APICallError.isInstance(error)) return error.statusCode;
+  if (!isRecord(error)) return undefined;
+  const statusCode = error.statusCode;
+  return typeof statusCode === 'number' && Number.isInteger(statusCode)
+    ? statusCode
+    : undefined;
+}
+
+export function normalizeJevEvaluationError(error: unknown): JevEvaluationError {
+  if (error instanceof JevEvaluationError) return error;
+  if (isTimeoutError(error)) {
+    return new JevEvaluationError(
+      'timeout',
+      `Jev evaluation timed out after ${JEV_EVALUATION_TIMEOUT_MS / 1000} seconds.`,
+    );
+  }
+
+  const lastError = lastEvaluationError(error);
+  if (InvalidResponseDataError.isInstance(lastError)) {
+    return new JevEvaluationError('invalid_response', 'Jev returned invalid evaluation data.');
+  }
+  if (NoSuchModelError.isInstance(lastError)) {
+    return new JevEvaluationError(
+      'model_unavailable',
+      'The configured Jev model is unavailable. Check ROUTER_MODEL and Gateway access.',
+    );
+  }
+
+  switch (getStatusCode(lastError)) {
+    case 401:
+    case 403:
+      return new JevEvaluationError(
+        'authentication',
+        'Jev Gateway authentication or authorization failed. Check AI_GATEWAY_API_KEY and Gateway access.',
+      );
+    case 404:
+      return new JevEvaluationError(
+        'model_unavailable',
+        'The configured Jev model is unavailable. Check ROUTER_MODEL and Gateway access.',
+      );
+    case 429:
+      return new JevEvaluationError(
+        'rate_limit',
+        'Jev Gateway rate limit reached. Wait before retrying the evaluation.',
+      );
+    default: {
+      const statusCode = getStatusCode(lastError);
+      if (statusCode !== undefined && statusCode >= 500) {
+        return new JevEvaluationError(
+          'service_unavailable',
+          'Jev Gateway is temporarily unavailable. Try the evaluation again later.',
+        );
+      }
+      return new JevEvaluationError(
+        'request_failed',
+        'Jev evaluation failed. Try the evaluation again later.',
+      );
+    }
+  }
+}
+
 export async function evaluateAgentState(
   state: AgentState,
   model: EvaluationModel = process.env.ROUTER_MODEL ?? 'typesafe-ai/jev',
 ): Promise<EvaluationResult> {
   const startedAt = performance.now();
-  const result = await evaluate({
+  const evaluation = evaluate({
     model,
     state,
     questions: {
@@ -49,16 +182,23 @@ export async function evaluateAgentState(
         criteria: ACTION_CRITERIA,
       },
     },
+    maxRetries: JEV_EVALUATION_MAX_RETRIES,
+    abortSignal: AbortSignal.timeout(JEV_EVALUATION_TIMEOUT_MS),
     providerOptions: {
       gateway: {
         zeroDataRetention: false,
       },
     },
   });
+  let result: Awaited<typeof evaluation>;
 
-  const confidence = result.providerMetadata?.typesafe?.confidence as
-    | Record<string, number>
-    | undefined;
+  try {
+    result = await evaluation;
+  } catch (error) {
+    throw normalizeJevEvaluationError(error);
+  }
+
+  const confidence = getNextActionConfidence(result.providerMetadata);
   const { taskComplete, needsMoreInformation, needsTesting, stuck, nextAction } = result.answers;
 
   const assessment: AgentAssessment = {
@@ -69,9 +209,7 @@ export async function evaluateAgentState(
     nextAction: {
       choice: nextAction.choice as Action,
       probabilities: nextAction.probabilities ?? {},
-      ...(confidence?.nextAction !== undefined
-        ? { confidence: confidence.nextAction }
-        : {}),
+      ...(confidence !== undefined ? { confidence } : {}),
     },
   };
 
