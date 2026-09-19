@@ -73,6 +73,14 @@ pnpm test
 pnpm build
 ```
 
+## Continuous integration
+
+The `Verify` workflow runs on pull requests targeting `main`. It uses no
+Gateway credentials and runs `pnpm check`, `pnpm test`, and `pnpm build` only
+when GitHub reports the PR author has effective `write` or `admin` repository
+permission. The permission check itself does not check out or execute PR code;
+for everyone else, verification is skipped.
+
 ## Entire Cloud trails and reviews
 
 Entire is enabled for this repository and syncs Codex checkpoints to the

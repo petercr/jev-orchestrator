@@ -1,0 +1,74 @@
+name: Verify
+
+on:
+  pull_request:
+    branches:
+      - main
+    types:
+      - opened
+      - reopened
+      - synchronize
+
+permissions:
+  contents: read
+
+concurrency:
+  group: verify-pr-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  maintainer_permission:
+    name: Check maintainer permission
+    runs-on: ubuntu-latest
+    timeout-minutes: 1
+    outputs:
+      trusted: ${{ steps.permission.outputs.result }}
+    steps:
+      - id: permission
+        uses: actions/github-script@v8
+        with:
+          result-encoding: string
+          script: |
+            const login = context.payload.pull_request?.user?.login;
+            if (!login) return 'false';
+
+            try {
+              const { data } = await github.rest.repos.getCollaboratorPermissionLevel({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                username: login,
+              });
+              return ['admin', 'write'].includes(data.permission) ? 'true' : 'false';
+            } catch {
+              return 'false';
+            }
+
+  verify:
+    name: Check, test, and build
+    needs: maintainer_permission
+    if: ${{ needs.maintainer_permission.outputs.trusted == 'true' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11.19.0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Type-check
+        run: pnpm check
+
+      - name: Test
+        run: pnpm test
+
+      - name: Build
+        run: pnpm build
