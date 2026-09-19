@@ -9,7 +9,7 @@ importers:
   .:
     dependencies:
       ai:
-        specifier: '>=7.0.105'
+        specifier: 7.0.106
         version: 7.0.106(zod@4.6.5)
     devDependencies:
       '@types/node':

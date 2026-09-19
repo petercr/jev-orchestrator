@@ -21,12 +21,11 @@ pnpm install
 cp .env.example .env
 ```
 
-Add your key to `.env`, then either export it or use Node's env-file support:
+Add your key to `.env`, then use Node's env-file support to load it:
 
 ```bash
-set -a
-source .env
-set +a
+pnpm exec node --env-file=.env --import tsx src/cli.ts -- \
+  . "Inspect this repo and choose the safest useful first action"
 ```
 
 Never commit `.env`; it is ignored by git.
@@ -39,14 +38,15 @@ First verify the full local flow without spending tokens:
 pnpm dev -- . "Inspect this repo and choose the safest useful first action" --mock
 ```
 
-Then run the live Jev evaluation:
+Then run the live Jev evaluation with the key from `.env`:
 
 ```bash
-AI_GATEWAY_API_KEY=your_key_here \
-  pnpm dev -- . "Inspect this repo and choose the safest useful first action"
+pnpm exec node --env-file=.env --import tsx src/cli.ts -- \
+  . "Inspect this repo and choose the safest useful first action"
 ```
 
-Against another repository:
+After exporting `AI_GATEWAY_API_KEY`, the shorter command works as well. Against
+another repository:
 
 ```bash
 pnpm dev -- ../my-app "Fix the preview route returning 401 in production"
@@ -65,6 +65,9 @@ pnpm build
 This version is read-only except for trace files written under `./traces` in
 the directory where the CLI is launched. The policy refuses to finish a task
 until validation has passed and routes ambiguous decisions to `ASK_USER`.
+Live Jev evaluations allow standard Gateway data retention
+(`zeroDataRetention: false`); run them only with repository data you authorize
+for that service.
 
 ## Next milestone
 

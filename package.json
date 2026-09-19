@@ -22,7 +22,7 @@
     "node": ">=22"
   },
   "dependencies": {
-    "ai": ">=7.0.105"
+    "ai": "7.0.106"
   },
   "devDependencies": {
     "@types/node": "^24.0.0",
