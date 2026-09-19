@@ -65,6 +65,25 @@ pnpm test
 pnpm build
 ```
 
+## Entire Cloud trails and reviews
+
+Entire is enabled for this repository and syncs Codex checkpoints to the
+configured remote. The checked-in `.entire/runners/` definitions run in Entire
+Cloud: they produce a change summary, confidence, drift, risk, and security
+signals, plus line-level review findings. They use read-only repository access
+and are triggered from Trail push events; no local `entire review` command or
+local model is part of this workflow.
+
+Create a Trail for a branch before pushing its changes:
+
+```bash
+entire trail create --title "Describe the change" --type task
+```
+
+Review the summary, monitors, and findings in Entire Cloud. The default runner
+definitions are intentionally generic; tailor them in a future reviewed change
+once the repository has enough conventions to encode.
+
 ## Current safety boundary
 
 This version is read-only except for trace files written under `./traces` in
