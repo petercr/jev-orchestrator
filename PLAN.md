@@ -108,8 +108,8 @@ type Action =
 7. Add offline integration coverage and continuous integration.
    - Test inspection, evaluation normalization, CLI output, traces, and failure
      paths with temporary repositories and mocked boundaries.
-   - Run `pnpm check`, `pnpm test`, and `pnpm build` in CI without an API key or
-     live model request.
+   - [x] Run `pnpm check`, `pnpm test`, and `pnpm build` in maintainer-authored
+     pull-request CI without an API key or live model request.
    - Complete when the complete offline release gate is automated.
 
 8. Verify live Gateway routing.
