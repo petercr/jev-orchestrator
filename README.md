@@ -45,6 +45,11 @@ pnpm exec node --env-file=.env --import tsx src/cli.ts -- \
   . "Inspect this repo and choose the safest useful first action"
 ```
 
+Each live evaluation has a 10-second deadline and at most one retry for a
+transient Gateway failure. The CLI reports authentication, rate-limit,
+unavailable-model, timeout, and malformed-response failures without printing
+Gateway response data.
+
 After exporting `AI_GATEWAY_API_KEY`, the shorter command works as well. Against
 another repository:
 
