@@ -6,6 +6,7 @@ import { applyPolicy } from './policy.js';
 import { writeTrace } from './logging/trace.js';
 import { mockEvaluation } from './mock.js';
 import { requireGatewayApiKey } from './config.js';
+import { requireBoundedTask } from './limits.js';
 import type { Action, AgentState } from './types.js';
 
 type CliOptions = {
@@ -36,7 +37,7 @@ function parseArgs(argv: string[]): CliOptions {
   const noTrace = argv.includes('--no-trace');
   const positional = argv.filter((arg) => !arg.startsWith('--'));
   const repoPath = positional[0];
-  const task = positional.slice(1).join(' ').trim();
+  const task = requireBoundedTask(positional.slice(1).join(' ').trim());
   if (!repoPath || !task) throw new Error(`Missing repository path or task.\n\n${usage()}`);
   return { repoPath, task, mock, noTrace };
 }

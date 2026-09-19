@@ -75,7 +75,7 @@ type Action =
    - Validate provider confidence metadata at the integration boundary.
    - Complete when provider failures are bounded and predictable.
 
-3. Bound repository inspection.
+3. [x] Bound repository inspection.
    - Validate that the input is a directory and safely handle malformed
      `package.json` data and non-Git repositories.
    - Bound repository metadata, task text, Git output, and evaluation input.

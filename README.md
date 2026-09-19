@@ -50,6 +50,14 @@ transient Gateway failure. The CLI reports authentication, rate-limit,
 unavailable-model, timeout, and malformed-response failures without printing
 Gateway response data.
 
+## Inspection bounds
+
+The target must be an existing directory. Repository inspection is read-only
+and bounds the task to 4,000 characters, package metadata to 64 KiB, and Git
+output and snapshot lists to small fixed limits before sending state to Jev.
+Malformed or oversized `package.json` files and non-Git directories are handled
+as incomplete metadata rather than causing a model request to fail.
+
 After exporting `AI_GATEWAY_API_KEY`, the shorter command works as well. Against
 another repository:
 
