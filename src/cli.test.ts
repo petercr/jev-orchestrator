@@ -47,6 +47,7 @@ describe('parseArgs', () => {
         mock: true,
         noTrace: true,
         json: true,
+        orchestrate: false,
       },
     });
   });
@@ -60,6 +61,7 @@ describe('parseArgs', () => {
         mock: true,
         noTrace: false,
         json: true,
+        orchestrate: false,
       },
     });
   });
@@ -73,6 +75,7 @@ describe('parseArgs', () => {
         mock: false,
         noTrace: false,
         json: false,
+        orchestrate: false,
       },
     });
   });
@@ -86,6 +89,22 @@ describe('parseArgs', () => {
     expect(() => parseArgs(['/repo', 'Inspect', '--unsafe'])).toThrow(CliUsageError);
     expect(() => parseArgs(['/repo'])).toThrow(CliUsageError);
     expect(() => parseArgs(['--help', '--mock'])).toThrow(CliUsageError);
+    expect(() => parseArgs(['/repo', 'Inspect', '--orchestrate', '--json'])).toThrow(CliUsageError);
+    expect(() => parseArgs(['/repo', 'Inspect', '--orchestrate', '--no-trace'])).toThrow(CliUsageError);
+  });
+
+  it('parses the explicit orchestration mode', () => {
+    expect(parseArgs(['/repo', 'Inspect', '--mock', '--orchestrate'])).toEqual({
+      kind: 'run',
+      options: {
+        repoPath: '/repo',
+        task: 'Inspect',
+        mock: true,
+        noTrace: false,
+        json: false,
+        orchestrate: true,
+      },
+    });
   });
 });
 

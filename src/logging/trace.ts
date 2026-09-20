@@ -1,9 +1,10 @@
 import { randomUUID } from 'node:crypto';
-import { mkdir, writeFile } from 'node:fs/promises';
+import { appendFile, mkdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import type { AgentState, EvaluationResult, PolicyDecision } from '../types.js';
 
 export const TRACE_SCHEMA_VERSION = 1;
+export const ORCHESTRATION_TRACE_SCHEMA_VERSION = 2;
 export const MAX_TRACE_VALUE_BYTES = 8 * 1024;
 
 const MAX_TRACE_DEPTH = 6;
@@ -38,6 +39,18 @@ export type TraceRecord = {
     rawAnswers: TraceValue;
   };
   policy: TraceValue;
+};
+
+export type OrchestrationTracePayload = {
+  iteration: number;
+  stateBefore: AgentState;
+  evaluation: EvaluationResult;
+  policy: PolicyDecision;
+  proposal: unknown;
+  approval: unknown;
+  toolInput: unknown;
+  toolResult: unknown;
+  stateAfter: AgentState;
 };
 
 export class TraceWriteError extends Error {
@@ -164,6 +177,26 @@ function isFileExistsError(error: unknown): boolean {
   return isRecord(error) && error.code === 'EEXIST';
 }
 
+async function uniqueTracePath(root: string): Promise<{ path: string; runId: string }> {
+  const traceDir = path.join(root, 'traces');
+  await mkdir(traceDir, { recursive: true });
+
+  for (let attempt = 0; attempt < MAX_TRACE_WRITE_ATTEMPTS; attempt += 1) {
+    const date = new Date();
+    const runId = `${date.toISOString().replaceAll(':', '-').replaceAll('.', '-')}-${randomUUID()}`;
+    const tracePath = path.join(traceDir, `${runId}.jsonl`);
+    try {
+      await writeFile(tracePath, '', { flag: 'wx' });
+      return { path: tracePath, runId };
+    } catch (error) {
+      if (isFileExistsError(error)) continue;
+      throw error;
+    }
+  }
+
+  throw new Error('Unable to allocate a unique trace path.');
+}
+
 export async function writeTrace(
   root: string,
   payload: {
@@ -173,26 +206,54 @@ export async function writeTrace(
   },
 ): Promise<string> {
   try {
-    const traceDir = path.join(root, 'traces');
-    await mkdir(traceDir, { recursive: true });
-
-    for (let attempt = 0; attempt < MAX_TRACE_WRITE_ATTEMPTS; attempt += 1) {
-      const date = new Date();
-      const runId = `${date.toISOString().replaceAll(':', '-').replaceAll('.', '-')}-${randomUUID()}`;
-      const tracePath = path.join(traceDir, `${runId}.jsonl`);
-      const record = makeTraceRecord(payload, date, runId);
-
-      try {
-        await writeFile(tracePath, `${JSON.stringify(record)}\n`, { flag: 'wx' });
-        return tracePath;
-      } catch (error) {
-        if (isFileExistsError(error)) continue;
-        throw error;
-      }
-    }
+    const trace = await uniqueTracePath(root);
+    const record = makeTraceRecord(payload, new Date(), trace.runId);
+    await writeFile(trace.path, `${JSON.stringify(record)}\n`);
+    return trace.path;
   } catch {
     throw new TraceWriteError();
   }
+}
 
-  throw new TraceWriteError();
+export async function createOrchestrationTrace(root: string): Promise<{
+  path: string;
+  runId: string;
+}> {
+  try {
+    return await uniqueTracePath(root);
+  } catch {
+    throw new TraceWriteError();
+  }
+}
+
+export async function appendOrchestrationTrace(
+  trace: { path: string; runId: string },
+  payload: OrchestrationTracePayload,
+): Promise<void> {
+  const secretValues = configuredSecretValues();
+  const record = {
+    schemaVersion: ORCHESTRATION_TRACE_SCHEMA_VERSION,
+    runId: trace.runId,
+    timestamp: new Date().toISOString(),
+    iteration: payload.iteration,
+    stateBefore: sanitizeTraceValue(payload.stateBefore, secretValues),
+    evaluation: {
+      assessment: sanitizeTraceValue(payload.evaluation.assessment, secretValues),
+      model: redactText(payload.evaluation.model, secretValues),
+      latencyMs: Number.isFinite(payload.evaluation.latencyMs) ? payload.evaluation.latencyMs : 0,
+      rawAnswers: sanitizeTraceValue(payload.evaluation.rawAnswers, secretValues),
+    },
+    policy: sanitizeTraceValue(payload.policy, secretValues),
+    proposal: sanitizeTraceValue(payload.proposal, secretValues),
+    approval: sanitizeTraceValue(payload.approval, secretValues),
+    toolInput: sanitizeTraceValue(payload.toolInput, secretValues),
+    toolResult: sanitizeTraceValue(payload.toolResult, secretValues),
+    stateAfter: sanitizeTraceValue(payload.stateAfter, secretValues),
+  };
+
+  try {
+    await appendFile(trace.path, `${JSON.stringify(record)}\n`);
+  } catch {
+    throw new TraceWriteError();
+  }
 }

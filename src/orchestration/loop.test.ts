@@ -1,0 +1,262 @@
+import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import os from 'node:os';
+import path from 'node:path';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { mockEvaluation } from '../mock.js';
+import type { AgentAssessment, EvaluationResult, RepoSnapshot } from '../types.js';
+import { createInitialState, runOrchestration, type ApprovalDecision } from './loop.js';
+import type { ToolResult } from './execute.js';
+
+const roots: string[] = [];
+
+async function repository(): Promise<RepoSnapshot> {
+  const root = await mkdtemp(path.join(os.tmpdir(), 'jev-loop-'));
+  roots.push(root);
+  await writeFile(path.join(root, 'README.md'), 'fixture auth documentation');
+  await writeFile(path.join(root, 'package.json'), JSON.stringify({ scripts: { test: 'vitest run' } }));
+  return {
+    root,
+    packageManager: 'pnpm',
+    scripts: ['test'],
+    validationScripts: ['test'],
+    gitStatus: [],
+    topLevelFiles: ['README.md', 'package.json'],
+  };
+}
+
+function evaluation(assessment: AgentAssessment): EvaluationResult {
+  return {
+    assessment,
+    model: 'mock/jev',
+    latencyMs: 0,
+    rawAnswers: { mock: true },
+  };
+}
+
+function clearAssessment(choice: AgentAssessment['nextAction']['choice']): EvaluationResult {
+  return evaluation({
+    taskComplete: { probability: 0.02 },
+    needsMoreInformation: { probability: 0.02 },
+    needsTesting: { probability: 0.02 },
+    stuck: { probability: 0.02 },
+    nextAction: {
+      choice,
+      probabilities: { [choice]: 0.8 },
+      confidence: 0.8,
+    },
+  });
+}
+
+const approve = async (): Promise<ApprovalDecision> => ({ kind: 'approve' });
+
+afterEach(async () => {
+  vi.restoreAllMocks();
+  await Promise.all(roots.splice(0).map((root) => rm(root, { recursive: true, force: true })));
+});
+
+describe('approval-gated orchestration loop', () => {
+  it('executes an approved search, read, validation, and finish sequence', async () => {
+    const repo = await repository();
+    const execute = vi.fn().mockImplementation(async (proposal): Promise<ToolResult> => {
+      if (proposal.action === 'SEARCH_REPO') {
+        return {
+          action: 'SEARCH_REPO',
+          ok: true,
+          exitCode: 0,
+          durationMs: 1,
+          timedOut: false,
+          output: 'README.md',
+          files: ['README.md'],
+        };
+      }
+      if (proposal.action === 'READ_FILE') {
+        return {
+          action: 'READ_FILE',
+          ok: true,
+          exitCode: 0,
+          durationMs: 1,
+          timedOut: false,
+          output: 'fixture auth documentation',
+          files: ['README.md'],
+        };
+      }
+      return {
+        action: 'RUN_TESTS',
+        ok: true,
+        exitCode: 0,
+        durationMs: 1,
+        timedOut: false,
+        output: 'tests passed',
+        files: [],
+      };
+    });
+
+    const result = await runOrchestration(
+      createInitialState(repo, 'Inspect fixture auth'),
+      {
+        evaluate: async (state) => mockEvaluation(state),
+        approve,
+        askForInformation: async () => '',
+        execute,
+      },
+    );
+
+    expect(result.status).toBe('finished');
+    expect(result.iterations).toBe(4);
+    expect(result.state).toMatchObject({
+      filesRead: ['README.md'],
+      tests: { ran: true, passed: true },
+    });
+    expect(execute).toHaveBeenCalledTimes(3);
+    const records = (await readFile(result.tracePath, 'utf8')).trim().split('\n').map((line) => JSON.parse(line));
+    expect(records).toHaveLength(4);
+    expect(records[0]).toMatchObject({
+      schemaVersion: 2,
+      iteration: 1,
+      approval: { kind: 'approve' },
+      toolInput: { terms: expect.any(Array) },
+      toolResult: { ok: true },
+    });
+    expect(records[3]).toMatchObject({
+      proposal: { selected: { action: 'FINISH' } },
+      toolInput: null,
+      toolResult: null,
+    });
+  });
+
+  it('records rejection as an observation and executes nothing', async () => {
+    const repo = await repository();
+    const execute = vi.fn();
+    const result = await runOrchestration(
+      createInitialState(repo, 'Inspect fixture auth'),
+      {
+        evaluate: async () => clearAssessment('SEARCH_REPO'),
+        approve: async () => ({ kind: 'reject', reason: 'Use another approach' }),
+        askForInformation: async () => '',
+        execute,
+      },
+      { maxIterations: 1 },
+    );
+
+    expect(result.status).toBe('iteration_limit');
+    expect(execute).not.toHaveBeenCalled();
+    expect(result.state.observations).toContain('User rejected the proposal: Use another approach');
+  });
+
+  it('resolves and re-presents a permitted user alternative before execution', async () => {
+    const repo = await repository();
+    const approvals: ApprovalDecision[] = [
+      { kind: 'alternative', action: 'READ_FILE' },
+      { kind: 'approve' },
+    ];
+    const execute = vi.fn().mockResolvedValue({
+      action: 'READ_FILE',
+      ok: true,
+      exitCode: 0,
+      durationMs: 1,
+      timedOut: false,
+      output: 'contents',
+      files: ['README.md'],
+    } satisfies ToolResult);
+
+    await runOrchestration(
+      createInitialState(repo, 'Inspect fixture auth'),
+      {
+        evaluate: async () => clearAssessment('SEARCH_REPO'),
+        approve: async () => approvals.shift() ?? { kind: 'reject' },
+        askForInformation: async () => '',
+        execute,
+      },
+      { maxIterations: 1 },
+    );
+
+    expect(execute).toHaveBeenCalledWith(expect.objectContaining({ action: 'READ_FILE' }));
+  });
+
+  it('does not repeat an identical failed candidate', async () => {
+    const repo = await repository();
+    const execute = vi.fn().mockResolvedValue({
+      action: 'SEARCH_REPO',
+      ok: false,
+      exitCode: null,
+      durationMs: 10_000,
+      timedOut: true,
+      output: 'Process timed out.',
+      files: [],
+    } satisfies ToolResult);
+    const proposals: string[] = [];
+    const result = await runOrchestration(
+      createInitialState(repo, 'Inspect fixture auth'),
+      {
+        evaluate: async () => clearAssessment('SEARCH_REPO'),
+        approve: async ({ proposal }) => {
+          proposals.push(proposal.action);
+          return { kind: 'approve' };
+        },
+        askForInformation: async () => 'Try a narrower search',
+        execute,
+      },
+      { maxIterations: 2 },
+    );
+
+    expect(result.status).toBe('iteration_limit');
+    expect(execute).toHaveBeenCalledTimes(1);
+    expect(proposals).toEqual(['SEARCH_REPO', 'ASK_USER']);
+    expect(result.state.failedApproaches).toHaveLength(1);
+  });
+
+  it('normalizes a malformed tool result into a traced failure', async () => {
+    const repo = await repository();
+    const malformedExecute = (async () => ({ ok: true })) as never;
+    const result = await runOrchestration(
+      createInitialState(repo, 'Inspect fixture auth'),
+      {
+        evaluate: async () => clearAssessment('SEARCH_REPO'),
+        approve,
+        askForInformation: async () => '',
+        execute: malformedExecute,
+      },
+      { maxIterations: 1 },
+    );
+
+    expect(result.state.failedApproaches).toHaveLength(1);
+    expect(result.state.observations).toContain(
+      'SEARCH_REPO failed: The tool executor returned a malformed result.',
+    );
+    const record = JSON.parse((await readFile(result.tracePath, 'utf8')).trim());
+    expect(record.toolResult).toMatchObject({ ok: false, exitCode: null });
+  });
+
+  it('records failed validation and enforces the hard iteration ceiling', async () => {
+    const repo = await repository();
+    const initial = createInitialState(repo, 'Validate fixture auth');
+    initial.filesRead = ['README.md'];
+    const result = await runOrchestration(
+      initial,
+      {
+        evaluate: async () => clearAssessment('RUN_TESTS'),
+        approve,
+        askForInformation: async () => '',
+        execute: async () => ({
+          action: 'RUN_TESTS',
+          ok: false,
+          exitCode: 1,
+          durationMs: 5,
+          timedOut: false,
+          output: 'tests failed',
+          files: [],
+        }),
+      },
+      { maxIterations: 1 },
+    );
+
+    expect(result.state.tests).toEqual({ ran: true, passed: false, summary: 'tests failed' });
+    expect(result.state.commandsRun).toMatchObject([{ exitCode: 1 }]);
+    expect(result.state.observations.at(-1)).toContain('iteration limit');
+    await expect(runOrchestration(initial, {
+      evaluate: async () => clearAssessment('RUN_TESTS'),
+      approve,
+      askForInformation: async () => '',
+    }, { maxIterations: 9 })).rejects.toThrow('between 1 and 8');
+  });
+});
