@@ -1,9 +1,1 @@
-pr 10 merged move on to next step
-
----
-
-ok pushlih branch and pr with this
-
----
-
 now lets move on to the final step. DO NOT just go testing it in a random dir, i will handle the testing it locally on another project part, just give Instructions
