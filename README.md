@@ -106,7 +106,10 @@ once the repository has enough conventions to encode.
 
 This version is read-only except for trace files written under `./traces` in
 the directory where the CLI is launched. The policy refuses to finish a task
-until validation has passed and routes ambiguous decisions to `ASK_USER`.
+until a detected validation script has passed, routes high missing-information
+or stuck signals to `ASK_USER`, and does the same for ambiguous next actions.
+If detected validation fails or none is available, the policy asks the user
+rather than assuming completion or blindly retrying it.
 Live Jev evaluations allow standard Gateway data retention
 (`zeroDataRetention: false`); run them only with repository data you authorize
 for that service.

@@ -16,6 +16,44 @@ export const DEFAULT_THRESHOLDS: PolicyThresholds = {
   minChoiceConfidence: 0.35,
 };
 
+function hasPassedValidation(state: AgentState): boolean {
+  return (
+    state.repo.validationScripts.length > 0 &&
+    state.tests.ran &&
+    state.tests.passed === true
+  );
+}
+
+function requireValidation(
+  state: AgentState,
+  requested: PolicyDecision['requested'],
+): PolicyDecision {
+  if (state.repo.validationScripts.length === 0) {
+    return {
+      requested,
+      selected: 'ASK_USER',
+      override: requested !== 'ASK_USER',
+      reason: 'No detected validation script can provide the evidence required for completion.',
+    };
+  }
+
+  if (state.tests.ran && state.tests.passed === false) {
+    return {
+      requested,
+      selected: 'ASK_USER',
+      override: requested !== 'ASK_USER',
+      reason: 'Validation failed and requires diagnosis before another test run.',
+    };
+  }
+
+  return {
+    requested,
+    selected: 'RUN_TESTS',
+    override: requested !== 'RUN_TESTS',
+    reason: 'Policy requires a passing validation run before completion.',
+  };
+}
+
 export function applyPolicy(
   state: AgentState,
   assessment: AgentAssessment,
@@ -34,10 +72,18 @@ export function applyPolicy(
     };
   }
 
+  if (assessment.stuck.probability >= thresholds.askUser) {
+    return {
+      requested,
+      selected: 'ASK_USER',
+      override: requested !== 'ASK_USER',
+      reason: 'The stuck assessment exceeds the user-question threshold.',
+    };
+  }
+
   if (
     assessment.taskComplete.probability >= thresholds.finish &&
-    state.tests.ran &&
-    state.tests.passed === true
+    hasPassedValidation(state)
   ) {
     return {
       requested,
@@ -49,23 +95,22 @@ export function applyPolicy(
 
   if (
     assessment.needsTesting.probability >= thresholds.test &&
-    state.repo.validationScripts.length > 0
+    !hasPassedValidation(state)
   ) {
-    return {
-      requested,
-      selected: 'RUN_TESTS',
-      override: requested !== 'RUN_TESTS',
-      reason: 'Testing is indicated and the repository exposes validation scripts.',
-    };
+    return requireValidation(state, requested);
   }
 
   if (requested === 'FINISH') {
-    return {
-      requested,
-      selected: state.repo.validationScripts.length > 0 ? 'RUN_TESTS' : 'ASK_USER',
-      override: true,
-      reason: 'Policy blocks completion until validation passes.',
-    };
+    if (hasPassedValidation(state)) {
+      return {
+        requested,
+        selected: 'ASK_USER',
+        override: true,
+        reason: 'Completion confidence does not clear the finish threshold.',
+      };
+    }
+
+    return requireValidation(state, requested);
   }
 
   if (
