@@ -4,7 +4,7 @@
 
 This repository is a deliberately small TypeScript orchestrator. Jev evaluates a compact snapshot of a coding task and recommends the next action; deterministic local policy decides whether that recommendation is safe enough to execute. The intended destination is a bounded loop that can route implementation work to either Claude Code or the Codex CLI.
 
-The current milestone is decision-only. It inspects a repository, evaluates state with Jev (or a mock), applies policy, prints the decision, and writes an optional JSONL trace. It does **not** yet execute the selected action or invoke either coding agent. Preserve that distinction in code, tests, and documentation.
+The current milestone adds an explicit `--orchestrate` mode around the original decision-only CLI. Decision-only remains the default. Orchestration can search, read a bounded file, or run a detected validation script only after manual approval; it cannot run arbitrary commands, edit files, or invoke either coding agent. Preserve those distinctions in code, tests, and documentation.
 
 ## Repository map
 
@@ -16,6 +16,9 @@ The current milestone is decision-only. It inspects a repository, evaluates stat
 - `src/repo/inspect.ts`: read-only repository metadata collection.
 - `src/logging/trace.ts`: JSONL decision trace writer.
 - `src/mock.ts`: deterministic token-free evaluation for local smoke tests.
+- `src/orchestration/candidate.ts`: deterministic safe-candidate selection.
+- `src/orchestration/execute.ts`: constrained search, read, and validation tools.
+- `src/orchestration/loop.ts`: approval, iteration bounds, state transitions, and loop traces.
 - `README.md`: user-facing setup, commands, and milestone status.
 
 Generated or local-only paths such as `dist/`, `traces/`, `.env`, and `node_modules/` must not be committed or edited as source.
@@ -35,6 +38,12 @@ Run the complete local flow without network access or token spend:
 
 ```bash
 pnpm dev -- . "Inspect this repo and choose the safest useful first action" --mock
+```
+
+Run the approval-gated mock loop interactively:
+
+```bash
+pnpm dev -- . "Inspect this repo and choose the safest useful first action" --mock --orchestrate
 ```
 
 Live evaluation requires `AI_GATEWAY_API_KEY`. Do not require a live model call in automated tests. Never print, trace, or commit credentials.

@@ -152,6 +152,11 @@ type Action =
 
 ## Next milestone: approval-gated orchestration loop
 
+Implementation status (2026-09-20): complete for the first executable action
+set. Decision-only mode remains the default, and `--orchestrate` enables the
+manually approved loop. `CALL_CODEX` and arbitrary `RUN_COMMAND` execution
+remain out of scope.
+
 After v0.1's decision-only release gate is met, add a bounded loop that can
 perform approved, safe repository work. Manual approval is the default.
 
