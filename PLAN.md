@@ -42,7 +42,7 @@ tool arguments.
   credential-safe. Gateway calls use standard data retention
   (`zeroDataRetention: false`), so send only repository data authorized for
   that service.
-- `--mock` remains token-free and offline. `pnpm check`, `pnpm test` (51
+- `--mock` remains token-free and offline. `pnpm check`, `pnpm test` (59
   tests), and `pnpm build` currently pass.
 
 The current action vocabulary is:
@@ -93,10 +93,12 @@ type Action =
    - Complete when every accepted route and relevant policy override has a
      deterministic test.
 
-5. Finish the CLI contract.
+5. [x] Finish the CLI contract.
    - Reject unknown flags and add `--version` and machine-readable `--json`
      output while retaining `--mock` and `--no-trace`.
-   - Define documented exit codes and label decisions as unexecuted.
+   - Exit code `0` represents a printed result, `1` an operational failure,
+     and `2` invalid usage. Human and JSON decision output explicitly state
+     that selected actions remain unexecuted.
    - Complete when people and scripts can consume the same decision reliably.
 
 6. Make traces safe and useful.
