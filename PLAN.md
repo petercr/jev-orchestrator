@@ -134,10 +134,14 @@ type Action =
    - Complete when live responses normalize correctly and policy behavior matches
      the documented rules.
 
-9. Prepare the release package.
-   - Update the README and package contents.
-   - Smoke-test the packaged `jev-agent` executable from another directory.
-   - Complete when a local install follows the documented setup and commands.
+9. [x] Prepare the release package.
+   - [x] Update the README and package contents. The production build excludes
+     test compilation, and the package allowlist excludes compiled test files.
+   - [x] On 2026-09-20, install the packed archive in a separate pnpm project,
+     then run `pnpm exec jev-agent --version` and the documented mock command.
+     The mock JSON response was `unexecuted`, selected `SEARCH_REPO`, had
+     zero mock latency, and wrote no trace.
+   - Complete: a local install follows the documented setup and commands.
 
 ## Release gate
 

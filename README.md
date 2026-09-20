@@ -123,6 +123,34 @@ boundaries, so it does not require `AI_GATEWAY_API_KEY`, a coding agent, or a
 live Jev evaluation. Pull-request CI runs the same typecheck, test, and build
 commands for maintainers.
 
+## Packaged CLI verification
+
+The tarball contains the compiled runtime JavaScript and declarations under
+`dist/`, plus the README and license. Test sources and compiled test files are
+not published. The `prepack` lifecycle runs the production build before a
+tarball is created.
+
+To verify the package in your own separate project, first create a tarball from
+this repository:
+
+```bash
+pnpm pack --out /absolute/path/to/jev-orchestrator-%v.tgz
+```
+
+Then, from the other project, install that exact archive and run the installed
+binary against that project:
+
+```bash
+pnpm add --save-dev /absolute/path/to/jev-orchestrator-0.1.0.tgz
+pnpm exec jev-agent --version
+pnpm exec jev-agent . "Inspect this repository and choose the safest useful first action" \
+  --mock --no-trace --json
+```
+
+The expected mock result is one JSON object with `status: "unexecuted"`; it
+must not edit the target project or require an API key. Do not pack or publish
+`.env`, traces, build cache, or `node_modules`.
+
 ## Continuous integration
 
 The `Verify` workflow runs on pull requests targeting `main` from the trusted

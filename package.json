@@ -8,13 +8,18 @@
     "jev-agent": "./dist/cli.js"
   },
   "files": [
-    "dist",
-    "README.md"
+    "dist/**/*.js",
+    "dist/**/*.d.ts",
+    "!dist/**/*.test.js",
+    "!dist/**/*.test.d.ts",
+    "README.md",
+    "LICENSE"
   ],
   "scripts": {
-    "build": "tsc -p tsconfig.json",
+    "build": "tsc -p tsconfig.build.json",
     "check": "tsc -p tsconfig.json --noEmit",
     "dev": "node --import tsx src/cli.ts",
+    "prepack": "pnpm build",
     "start": "node dist/cli.js",
     "test": "vitest run"
   },
