@@ -1,7 +1,7 @@
 name: Verify
 
 on:
-  pull_request:
+  pull_request_target:
     branches:
       - main
     types:
@@ -51,6 +51,10 @@ jobs:
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v5
+        with:
+          repository: ${{ github.event.pull_request.head.repo.full_name }}
+          ref: ${{ github.event.pull_request.head.sha }}
+          persist-credentials: false
 
       - uses: actions/setup-node@v5
         with:
