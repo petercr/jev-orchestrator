@@ -1,9 +1,1 @@
-greast step 5 of the plan now
-
----
-
-ok cool commit push and pr
-
----
-
 pr 8 is merged. move on to the next step
