@@ -1,0 +1,28 @@
+{
+  "cli_version": "0.10.7-nightly.202609190623.ae303f31d",
+  "checkpoint_id": "01M300N6R7AVBPVCAXPGWQEKBE",
+  "strategy": "manual-commit",
+  "branch": "test/offline-integration",
+  "checkpoints_count": 2,
+  "files_touched": [
+    "PLAN.md",
+    "README.md",
+    "src/cli.integration.test.ts"
+  ],
+  "sessions": [
+    {
+      "metadata": "/0/metadata.json",
+      "transcript": "/0/full.jsonl",
+      "compact_transcript": "/0/transcript.jsonl",
+      "content_hash": "/0/content_hash.txt",
+      "prompt": "/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 251550,
+    "cache_creation_tokens": 0,
+    "cache_read_tokens": 1591808,
+    "output_tokens": 6771,
+    "api_call_count": 14
+  }
+}

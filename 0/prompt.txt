@@ -1,0 +1,9 @@
+pr 8 is merged. move on to the next step
+
+---
+
+ok commit pus hand pr
+
+---
+
+ok pr merged next step now
