@@ -50,6 +50,36 @@ transient Gateway failure. The CLI reports authentication, rate-limit,
 unavailable-model, timeout, and malformed-response failures without printing
 Gateway response data.
 
+## CLI contract
+
+Every successful run prints an **unexecuted** decision. The CLI does not run
+the selected tool or coding agent in this milestone.
+
+```bash
+jev-agent <repo-path> <task> [--mock] [--no-trace] [--json]
+```
+
+- `--mock` uses the offline deterministic evaluation.
+- `--no-trace` suppresses the JSONL trace file.
+- `--json` writes exactly one normalized, machine-readable decision object to
+  stdout. It includes the repository snapshot, task, assessment, deterministic
+  policy decision, model name, latency, and optional trace path. It omits raw
+  provider answers and provider metadata.
+- `--version` prints the installed package version; `--help` (or `-h`) prints
+  usage.
+
+For example, a token-free machine-readable run is:
+
+```bash
+pnpm dev -- . "Inspect this repo and choose the safest useful first action" \
+  --mock --no-trace --json
+```
+
+Exit code `0` means a decision, help text, or version was printed. Exit code
+`1` means an operational failure prevented a decision; exit code `2` means
+invalid command-line usage. In `--json` mode, errors are one JSON object on
+stderr with the same exit code.
+
 ## Inspection bounds
 
 The target must be an existing directory. Repository inspection is read-only
