@@ -42,7 +42,7 @@ tool arguments.
   credential-safe. Gateway calls use standard data retention
   (`zeroDataRetention: false`), so send only repository data authorized for
   that service.
-- `--mock` remains token-free and offline. `pnpm check`, `pnpm test` (20
+- `--mock` remains token-free and offline. `pnpm check`, `pnpm test` (51
   tests), and `pnpm build` currently pass.
 
 The current action vocabulary is:
@@ -82,11 +82,13 @@ type Action =
    - Complete when large or unusual repositories cannot hang the CLI or create
      oversized evaluation requests.
 
-4. Complete deterministic policy coverage.
+4. [x] Complete deterministic policy coverage.
    - Cover threshold boundaries, missing choice probabilities or confidence,
      required information, failed validation, and repositories with no
      validation scripts.
-   - Decide and test how the `stuck` assessment affects routing.
+   - A `stuck` probability at the user-question threshold now routes to
+     `ASK_USER`, as do failed validation and validation requests where no
+     detected validation script exists.
    - Keep `FINISH` unavailable until validation evidence has passed.
    - Complete when every accepted route and relevant policy override has a
      deterministic test.
