@@ -1,17 +1,1 @@
-ok v 0.1 is done we are now going to move on to line 153 in PLAN.md ## Next milestone: approval-gated orchestration loop
-
----
-
-Okay give me the instructions on how to test it myself live
-
----
-
-heres the trace traces/2026-09-20T20-50-02-101Z-354a01c2-7a02-4be2-9e3e-fda23c0aa620.jsonl
-
----
-
-ok ripgrep is now installed and i tried again but i couldnt get it to finish Even when that's what it's suggested
-
----
-
 ok well we need to add in a way to user override so we can manually end the run and still get a trace
