@@ -4,11 +4,13 @@ import path from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   executeCandidate,
+  FORCE_KILL_GRACE_MS,
   MAX_READ_FILE_BYTES,
   SEARCH_TIMEOUT_MS,
   ToolExecutionError,
   VALIDATION_TIMEOUT_MS,
   type ProcessRunner,
+  runProcess,
 } from './execute.js';
 
 const roots: string[] = [];
@@ -138,5 +140,19 @@ describe('constrained execution', () => {
     }, async () => ({ exitCode: 0, stdout: '', stderr: '', timedOut: false }))).rejects.toThrow(
       'does not match',
     );
+  });
+
+  it('force-kills a process that ignores the execution timeout', async () => {
+    const root = await temporaryRoot();
+    const startedAt = performance.now();
+    const result = await runProcess({
+      command: process.execPath,
+      args: ['-e', "process.on('SIGTERM', () => {}); setInterval(() => {}, 1_000);"],
+      cwd: root,
+      timeoutMs: 200,
+    });
+
+    expect(result).toMatchObject({ timedOut: true, exitCode: null });
+    expect(performance.now() - startedAt).toBeLessThan(FORCE_KILL_GRACE_MS + 1_000);
   });
 });

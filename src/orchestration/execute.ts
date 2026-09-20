@@ -8,6 +8,7 @@ export const MAX_SEARCH_RESULTS = 50;
 export const MAX_READ_FILE_BYTES = 64 * 1024;
 export const SEARCH_TIMEOUT_MS = 10_000;
 export const VALIDATION_TIMEOUT_MS = 120_000;
+export const FORCE_KILL_GRACE_MS = 1_000;
 
 export type ProcessRequest = {
   command: string;
@@ -51,9 +52,11 @@ function appendBounded(current: Buffer[], chunk: Buffer, byteCount: { value: num
 }
 
 export const runProcess: ProcessRunner = async (request) => new Promise((resolve, reject) => {
+  const useProcessGroup = process.platform !== 'win32';
   const child = spawn(request.command, request.args, {
     cwd: request.cwd,
     env: process.env,
+    detached: useProcessGroup,
     shell: false,
     stdio: ['ignore', 'pipe', 'pipe'],
   });
@@ -63,9 +66,23 @@ export const runProcess: ProcessRunner = async (request) => new Promise((resolve
   const stderrBytes = { value: 0 };
   let timedOut = false;
   let settled = false;
+  let forceKillTimeout: NodeJS.Timeout | undefined;
+  const kill = (signal: NodeJS.Signals): void => {
+    try {
+      if (useProcessGroup && child.pid !== undefined) {
+        process.kill(-child.pid, signal);
+      } else {
+        child.kill(signal);
+      }
+    } catch {
+      child.kill(signal);
+    }
+  };
   const timeout = setTimeout(() => {
     timedOut = true;
-    child.kill('SIGTERM');
+    kill('SIGTERM');
+    forceKillTimeout = setTimeout(() => kill('SIGKILL'), FORCE_KILL_GRACE_MS);
+    forceKillTimeout.unref();
   }, request.timeoutMs);
   timeout.unref();
 
@@ -75,12 +92,14 @@ export const runProcess: ProcessRunner = async (request) => new Promise((resolve
     if (settled) return;
     settled = true;
     clearTimeout(timeout);
+    if (forceKillTimeout !== undefined) clearTimeout(forceKillTimeout);
     reject(new ToolExecutionError(`Unable to start ${request.command}: ${error.message}`));
   });
   child.on('close', (exitCode) => {
     if (settled) return;
     settled = true;
     clearTimeout(timeout);
+    if (forceKillTimeout !== undefined) clearTimeout(forceKillTimeout);
     resolve({
       exitCode,
       stdout: Buffer.concat(stdout).toString('utf8'),
