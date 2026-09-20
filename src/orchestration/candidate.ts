@@ -278,7 +278,7 @@ export async function selectCandidate(
         action,
         tool: null,
         input: null,
-        reason: 'The policy permits the loop to finish.',
+        reason: 'Completion requires explicit user approval.',
       };
     case 'RUN_COMMAND':
     case 'CALL_CODEX':

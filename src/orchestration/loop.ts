@@ -2,7 +2,7 @@ import {
   appendOrchestrationTrace,
   createOrchestrationTrace,
 } from '../logging/trace.js';
-import { applyPolicy } from '../policy.js';
+import { applyPolicy, DEFAULT_THRESHOLDS } from '../policy.js';
 import { truncateText } from '../limits.js';
 import type {
   Action,
@@ -73,9 +73,38 @@ export function createInitialState(repo: RepoSnapshot, task: string): AgentState
   };
 }
 
-function allowedAlternatives(state: AgentState, policy: PolicyDecision): ExecutableAction[] {
+function canUserOverrideFinish(
+  state: AgentState,
+  evaluation: EvaluationResult,
+  policy: PolicyDecision,
+): boolean {
+  if (
+    state.repo.validationScripts.length === 0 ||
+    state.tests.ran !== true ||
+    state.tests.passed !== true ||
+    policy.requested !== 'FINISH' ||
+    policy.selected !== 'ASK_USER' ||
+    evaluation.assessment.needsMoreInformation.probability >= DEFAULT_THRESHOLDS.askUser ||
+    evaluation.assessment.stuck.probability >= DEFAULT_THRESHOLDS.askUser
+  ) {
+    return false;
+  }
+
+  const finishProbability = evaluation.assessment.nextAction.probabilities.FINISH ?? 0;
+  const confidence = evaluation.assessment.nextAction.confidence ?? 0;
+  return finishProbability >= DEFAULT_THRESHOLDS.minChoiceProbability &&
+    confidence >= DEFAULT_THRESHOLDS.minChoiceConfidence;
+}
+
+function allowedAlternatives(
+  state: AgentState,
+  evaluation: EvaluationResult,
+  policy: PolicyDecision,
+): ExecutableAction[] {
   return EXECUTABLE_ACTIONS.filter((action) => {
-    if (action === 'FINISH') return policy.selected === 'FINISH';
+    if (action === 'FINISH') {
+      return policy.selected === 'FINISH' || canUserOverrideFinish(state, evaluation, policy);
+    }
     if (action === 'RUN_TESTS') return state.repo.validationScripts.length > 0;
     return true;
   });
@@ -203,12 +232,14 @@ async function resolveApproval(
   proposals: CandidateProposal[];
   proposal: CandidateProposal;
   decision: ApprovalDecision;
+  decisions: ApprovalDecision[];
 }> {
   const proposals = [initialProposal];
+  const decisions: ApprovalDecision[] = [];
   let proposal = initialProposal;
 
   for (let attempt = 0; attempt <= MAX_APPROVAL_ALTERNATIVES; attempt += 1) {
-    const alternatives = allowedAlternatives(state, policy);
+    const alternatives = allowedAlternatives(state, evaluation, policy);
     const decision = await approve({
       state,
       evaluation,
@@ -216,22 +247,35 @@ async function resolveApproval(
       proposal,
       allowedAlternatives: alternatives,
     });
-    if (decision.kind !== 'alternative') return { proposals, proposal, decision };
+    decisions.push(decision);
+    if (decision.kind !== 'alternative') return { proposals, proposal, decision, decisions };
     if (!alternatives.includes(decision.action)) {
+      const rejection: ApprovalDecision = {
+        kind: 'reject',
+        reason: `${decision.action} is not a permitted alternative.`,
+      };
+      decisions.push(rejection);
       return {
         proposals,
         proposal,
-        decision: { kind: 'reject', reason: `${decision.action} is not a permitted alternative.` },
+        decision: rejection,
+        decisions,
       };
     }
     proposal = await selectCandidate(decision.action, state, searchResults);
     proposals.push(proposal);
   }
 
+  const rejection: ApprovalDecision = {
+    kind: 'reject',
+    reason: 'Too many alternative selections.',
+  };
+  decisions.push(rejection);
   return {
     proposals,
     proposal,
-    decision: { kind: 'reject', reason: 'Too many alternative selections.' },
+    decision: rejection,
+    decisions,
   };
 }
 
@@ -303,9 +347,12 @@ export async function runOrchestration(
       };
     } else if (proposal.action === 'FINISH') {
       finished = true;
+      const completionObservation = policy.selected === 'FINISH'
+        ? 'User approved completion.'
+        : 'User explicitly overrode completion confidence after passing validation.';
       nextState = {
         ...state,
-        observations: [...state.observations, 'User approved completion.'],
+        observations: [...state.observations, completionObservation],
         currentGoal: 'Task complete.',
       };
     } else {
@@ -329,7 +376,7 @@ export async function runOrchestration(
       evaluation,
       policy,
       proposal: { considered: approval.proposals, selected: structuredClone(proposal) },
-      approval: decision,
+      approval: { ...decision, history: approval.decisions },
       toolInput: proposal.input,
       toolResult,
       stateAfter: nextState,

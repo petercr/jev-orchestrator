@@ -282,6 +282,9 @@ function printApprovalProposal(context: ApprovalContext): void {
   console.log(`Parameters: ${JSON.stringify(proposal.input)}`);
   if ('reason' in proposal) console.log(`Candidate reason: ${proposal.reason}`);
   console.log(`Allowed alternatives: ${context.allowedAlternatives.join(', ')}`);
+  if (proposal.action === 'ASK_USER' && context.allowedAlternatives.includes('FINISH')) {
+    console.log('Validated finish override: enter FINISH, review it, then enter approve.');
+  }
 }
 
 async function promptForApproval(

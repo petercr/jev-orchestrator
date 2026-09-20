@@ -52,6 +52,12 @@ pnpm dev -- . "Inspect this repo and choose the safest useful first action" \
 Enter `approve`, `reject`, or an allowed action name. Choosing another action
 resolves and presents its safe candidate before a second approval prompt.
 
+After validation passes, a clear Jev `FINISH` recommendation can be completed
+manually even when the separate task-completion probability remains below the
+95% automatic threshold. Enter `FINISH` at the approval prompt, review the
+resolved completion candidate, then enter `approve`. This twice-confirmed
+override is unavailable before passing validation and is recorded in the trace.
+
 Then run the live Jev evaluation with the key from `.env`:
 
 ```bash
@@ -112,7 +118,8 @@ Orchestration writes schema-version `2` JSONL under the selected repository's
 answers, normalized assessment, policy decision, all considered and selected
 candidates, approval decision, tool input and result, exit status, duration,
 and the before/after state. A rejection records an observation and executes no
-repository tool.
+repository tool. Alternative selections and their final confirmation are kept
+as an approval-history array so manual completion overrides remain auditable.
 
 Trace recording is part of the default auditable run. If the trace directory
 cannot be created or written, the CLI returns operational exit code `1` and
@@ -223,6 +230,11 @@ signals to `ASK_USER`, and does the same for ambiguous next actions. If
 validation fails or none is available, the policy asks the user rather than
 assuming completion or blindly retrying it. An identical failed candidate is
 not retried without new user information.
+
+Automatic completion still requires the configured 95% task-completion
+threshold. Once validation has passed, a user may explicitly override that
+confidence threshold only when Jev itself clearly recommends `FINISH`; the
+resolved completion candidate must then be approved a second time.
 
 `RUN_COMMAND` and `CALL_CODEX` remain non-executable. The loop never evaluates
 model-generated shell text, deploys, publishes, pushes, performs destructive

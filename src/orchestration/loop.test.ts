@@ -47,6 +47,24 @@ function clearAssessment(choice: AgentAssessment['nextAction']['choice']): Evalu
   });
 }
 
+function finishAssessment(
+  taskComplete: number,
+  finishProbability: number = 0.99,
+  confidence: number = 0.98,
+): EvaluationResult {
+  return evaluation({
+    taskComplete: { probability: taskComplete },
+    needsMoreInformation: { probability: 0.1 },
+    needsTesting: { probability: 0.1 },
+    stuck: { probability: 0.1 },
+    nextAction: {
+      choice: 'FINISH',
+      probabilities: { FINISH: finishProbability },
+      confidence,
+    },
+  });
+}
+
 const approve = async (): Promise<ApprovalDecision> => ({ kind: 'approve' });
 
 afterEach(async () => {
@@ -113,7 +131,7 @@ describe('approval-gated orchestration loop', () => {
     expect(records[0]).toMatchObject({
       schemaVersion: 2,
       iteration: 1,
-      approval: { kind: 'approve' },
+      approval: { kind: 'approve', history: [{ kind: 'approve' }] },
       toolInput: { terms: expect.any(Array) },
       toolResult: { ok: true },
     });
@@ -171,6 +189,105 @@ describe('approval-gated orchestration loop', () => {
     );
 
     expect(execute).toHaveBeenCalledWith(expect.objectContaining({ action: 'READ_FILE' }));
+  });
+
+  it('allows a twice-confirmed finish override after passing validation', async () => {
+    const repo = await repository();
+    const initial = createInitialState(repo, 'Inspect and validate fixture auth');
+    initial.tests = { ran: true, passed: true, summary: 'tests passed' };
+    const approvals: ApprovalDecision[] = [
+      { kind: 'alternative', action: 'FINISH' },
+      { kind: 'approve' },
+    ];
+    const alternatives: string[][] = [];
+    const execute = vi.fn();
+
+    const result = await runOrchestration(
+      initial,
+      {
+        evaluate: async () => finishAssessment(0.66),
+        approve: async (context) => {
+          alternatives.push(context.allowedAlternatives);
+          return approvals.shift() ?? { kind: 'reject' };
+        },
+        askForInformation: async () => '',
+        execute,
+      },
+      { maxIterations: 1 },
+    );
+
+    expect(result.status).toBe('finished');
+    expect(alternatives).toHaveLength(2);
+    expect(alternatives[0]).toContain('FINISH');
+    expect(execute).not.toHaveBeenCalled();
+    expect(result.state.observations).toContain(
+      'User explicitly overrode completion confidence after passing validation.',
+    );
+    const record = JSON.parse((await readFile(result.tracePath, 'utf8')).trim());
+    expect(record).toMatchObject({
+      policy: { requested: 'FINISH', selected: 'ASK_USER', override: true },
+      proposal: {
+        considered: [
+          { action: 'ASK_USER' },
+          { action: 'FINISH' },
+        ],
+        selected: { action: 'FINISH' },
+      },
+      approval: {
+        kind: 'approve',
+        history: [
+          { kind: 'alternative', action: 'FINISH' },
+          { kind: 'approve' },
+        ],
+      },
+      toolInput: null,
+      toolResult: null,
+      stateAfter: { currentGoal: 'Task complete.' },
+    });
+  });
+
+  it('does not offer a finish override without passing validation or clear routing', async () => {
+    const repo = await repository();
+    const withoutValidation = createInitialState(repo, 'Inspect fixture auth');
+    const lowConfidence = createInitialState(repo, 'Inspect fixture auth');
+    lowConfidence.tests = { ran: true, passed: true, summary: 'tests passed' };
+    const missingInformation = createInitialState(repo, 'Inspect fixture auth');
+    missingInformation.tests = { ran: true, passed: true, summary: 'tests passed' };
+    const alternatives: string[][] = [];
+
+    await runOrchestration(withoutValidation, {
+      evaluate: async () => finishAssessment(0.66),
+      approve: async (context) => {
+        alternatives.push(context.allowedAlternatives);
+        return { kind: 'reject' };
+      },
+      askForInformation: async () => '',
+    }, { maxIterations: 1 });
+    await runOrchestration(lowConfidence, {
+      evaluate: async () => finishAssessment(0.66, 0.54, 0.98),
+      approve: async (context) => {
+        alternatives.push(context.allowedAlternatives);
+        return { kind: 'reject' };
+      },
+      askForInformation: async () => '',
+    }, { maxIterations: 1 });
+    await runOrchestration(missingInformation, {
+      evaluate: async () => {
+        const result = finishAssessment(0.66);
+        result.assessment.needsMoreInformation.probability = 0.95;
+        return result;
+      },
+      approve: async (context) => {
+        alternatives.push(context.allowedAlternatives);
+        return { kind: 'reject' };
+      },
+      askForInformation: async () => '',
+    }, { maxIterations: 1 });
+
+    expect(alternatives).toHaveLength(3);
+    expect(alternatives[0]).not.toContain('FINISH');
+    expect(alternatives[1]).not.toContain('FINISH');
+    expect(alternatives[2]).not.toContain('FINISH');
   });
 
   it('does not repeat an identical failed candidate', async () => {
