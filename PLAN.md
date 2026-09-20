@@ -118,12 +118,19 @@ type Action =
      pull-request CI without an API key or live model request.
    - Complete when the complete offline release gate is automated.
 
-8. Verify live Gateway routing.
+8. [x] Verify live Gateway routing.
    - With `AI_GATEWAY_API_KEY` supplied locally, exercise representative tasks:
      locating code, investigating a bug, ambiguous requirements, and premature
      completion.
-   - Review Jev recommendations and policy overrides; capture bounded latency
-     and usage observations.
+   - On 2026-09-20, live `typesafe-ai/jev` evaluations returned valid normalized
+     confidence metadata for repository location (`READ_FILE`), bug investigation
+     (`SEARCH_REPO`), ambiguous requirements (`ASK_USER`), and two unvalidated
+     completion prompts (`ASK_USER` on ambiguity, then `RUN_TESTS`). Policy
+     accepted or safely overrode each route; no live response was authorized to
+     finish without validation.
+   - The five calls completed in 464–787 ms (about 628 ms mean). The normalized
+     evaluation result exposes no usage metric, so none was recorded rather than
+     retaining raw provider metadata.
    - Complete when live responses normalize correctly and policy behavior matches
      the documented rules.
 
