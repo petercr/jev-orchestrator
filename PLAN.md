@@ -135,8 +135,11 @@ type Action =
      the documented rules.
 
 9. Prepare the release package.
-   - Update the README and package contents.
-   - Smoke-test the packaged `jev-agent` executable from another directory.
+   - [x] Update the README and package contents. The production build excludes
+     test compilation, and the package allowlist excludes compiled test files.
+   - [ ] In a separate local project, create the tarball with `pnpm pack --out
+     /absolute/path/to/jev-orchestrator-%v.tgz`, install it by absolute path,
+     then run `pnpm exec jev-agent --version` and the documented mock command.
    - Complete when a local install follows the documented setup and commands.
 
 ## Release gate
