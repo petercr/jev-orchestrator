@@ -42,7 +42,7 @@ tool arguments.
   credential-safe. Gateway calls use standard data retention
   (`zeroDataRetention: false`), so send only repository data authorized for
   that service.
-- `--mock` remains token-free and offline. `pnpm check`, `pnpm test` (63
+- `--mock` remains token-free and offline. `pnpm check`, `pnpm test` (67
   tests), and `pnpm build` currently pass.
 
 The current action vocabulary is:
@@ -110,9 +110,10 @@ type Action =
    - Complete when a trace explains a decision without collecting credentials
      or unnecessarily large provider data.
 
-7. Add offline integration coverage and continuous integration.
+7. [x] Add offline integration coverage and continuous integration.
    - Test inspection, evaluation normalization, CLI output, traces, and failure
-     paths with temporary repositories and mocked boundaries.
+     paths with temporary repositories and mocked boundaries; no test requires
+     a key, coding agent, or live Jev call.
    - [x] Run `pnpm check`, `pnpm test`, and `pnpm build` in maintainer-authored
      pull-request CI without an API key or live model request.
    - Complete when the complete offline release gate is automated.

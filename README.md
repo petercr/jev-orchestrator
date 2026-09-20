@@ -118,6 +118,11 @@ pnpm test
 pnpm build
 ```
 
+The test suite is offline: it uses temporary repositories and mocked AI SDK
+boundaries, so it does not require `AI_GATEWAY_API_KEY`, a coding agent, or a
+live Jev evaluation. Pull-request CI runs the same typecheck, test, and build
+commands for maintainers.
+
 ## Continuous integration
 
 The `Verify` workflow runs on pull requests targeting `main` from the trusted
