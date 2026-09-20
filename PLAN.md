@@ -42,7 +42,7 @@ tool arguments.
   credential-safe. Gateway calls use standard data retention
   (`zeroDataRetention: false`), so send only repository data authorized for
   that service.
-- `--mock` remains token-free and offline. `pnpm check`, `pnpm test` (59
+- `--mock` remains token-free and offline. `pnpm check`, `pnpm test` (63
   tests), and `pnpm build` currently pass.
 
 The current action vocabulary is:
@@ -101,11 +101,12 @@ type Action =
      that selected actions remain unexecuted.
    - Complete when people and scripts can consume the same decision reliably.
 
-6. Make traces safe and useful.
+6. [x] Make traces safe and useful.
    - Add a schema version and a collision-resistant run ID.
-   - Bound and redact raw Jev answers; omit credentials, upstream error bodies,
-     and unneeded raw provider metadata.
-   - Document trace write failures.
+   - Bound and redact raw Jev answers, sanitize traced state and policy values,
+     and omit raw provider metadata and upstream error bodies.
+   - Default trace write failures return the documented operational error;
+     `--no-trace` is the explicit unrecorded-run opt-out.
    - Complete when a trace explains a decision without collecting credentials
      or unnecessarily large provider data.
 
