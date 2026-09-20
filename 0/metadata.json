@@ -1,0 +1,52 @@
+{
+  "cli_version": "0.10.7-nightly.202609190623.ae303f31d",
+  "checkpoint_id": "01M2ZXDRW6SAP2WP0VJEGQ2H4Z",
+  "session_id": "01a0bb61-db02-7c32-b569-7e4f640ef191",
+  "strategy": "manual-commit",
+  "created_at": "2026-09-20T17:22:08.100535205Z",
+  "branch": "feat/safe-traces",
+  "checkpoints_count": 2,
+  "files_touched": [
+    "PLAN.md",
+    "README.md",
+    "src/logging/trace.test.ts",
+    "src/logging/trace.ts"
+  ],
+  "agent": "Codex",
+  "model": "gpt-5.6-terra",
+  "turn_id": "51e542eaf876",
+  "checkpoint_transcript_start": 2356,
+  "transcript_lines_at_start": 2356,
+  "compact_transcript_start": 269,
+  "token_usage": {
+    "input_tokens": 125043,
+    "cache_creation_tokens": 0,
+    "cache_read_tokens": 2759680,
+    "output_tokens": 21121,
+    "api_call_count": 28
+  },
+  "session_metrics": {
+    "turn_count": 3
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-09-20T17:22:07.889735183Z",
+    "agent_lines": 356,
+    "agent_removed": 13,
+    "human_added": 0,
+    "human_modified": 0,
+    "human_removed": 0,
+    "total_committed": 356,
+    "total_lines_changed": 369,
+    "agent_percentage": 100,
+    "metric_version": 2
+  },
+  "prompt_attributions": [
+    {
+      "checkpoint_number": 1,
+      "user_lines_added": 0,
+      "user_lines_removed": 0,
+      "agent_lines_added": 0,
+      "agent_lines_removed": 0
+    }
+  ]
+}
