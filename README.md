@@ -80,6 +80,21 @@ Exit code `0` means a decision, help text, or version was printed. Exit code
 invalid command-line usage. In `--json` mode, errors are one JSON object on
 stderr with the same exit code.
 
+## Traces
+
+Unless `--no-trace` is set, each successful decision writes one JSONL record
+under `./traces/`. Records use trace schema version `1` and a timestamp-plus-
+UUID run ID, so concurrent runs do not share a file. A record contains a
+sanitized state snapshot, normalized assessment, policy decision, model,
+latency, and bounded raw Jev answers. It deliberately excludes raw provider
+metadata and upstream error bodies; known credential values and common
+credential-shaped fields are redacted before writing.
+
+Trace recording is part of the default auditable run. If the trace directory
+cannot be created or written, the CLI returns operational exit code `1` and
+does not print a decision. Use `--no-trace` only when an unrecorded decision is
+acceptable.
+
 ## Inspection bounds
 
 The target must be an existing directory. Repository inspection is read-only
