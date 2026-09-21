@@ -3,10 +3,12 @@
 A deliberately small Node/TypeScript experiment for testing whether
 `typesafe-ai/jev` can make useful next-step decisions around a coding agent.
 
-The current milestone is **decision-only**. It inspects a repository, sends a
+The default mode remains **decision-only**: it inspects a repository, sends a
 compact state object to Jev through Vercel AI Gateway, applies deterministic
-policy thresholds, prints the result, and records a JSONL trace. It does not yet
-edit files, execute tests, or call Codex.
+policy thresholds, prints the result, and records a JSONL trace. The explicit
+`--orchestrate` mode adds a bounded, manually approved loop for safe repository
+searches, bounded file reads, and detected validation scripts. It cannot edit
+files, run arbitrary commands, or call a coding agent.
 
 ## Requirements
 
@@ -38,6 +40,24 @@ First verify the full local flow without spending tokens:
 pnpm dev -- . "Inspect this repo and choose the safest useful first action" --mock
 ```
 
+Then exercise the approval loop without spending tokens. Every iteration shows
+the Jev distribution, policy result, resolved tool and parameters, and allowed
+choices before prompting:
+
+```bash
+pnpm dev -- . "Inspect this repo and choose the safest useful first action" \
+  --mock --orchestrate
+```
+
+Enter `approve`, `reject`, or an allowed action name. Choosing another action
+resolves and presents its safe candidate before a second approval prompt.
+
+After validation passes, a clear Jev `FINISH` recommendation can be completed
+manually even when the separate task-completion probability remains below the
+95% automatic threshold. Enter `FINISH` at the approval prompt, review the
+resolved completion candidate, then enter `approve`. This twice-confirmed
+override is unavailable before passing validation and is recorded in the trace.
+
 Then run the live Jev evaluation with the key from `.env`:
 
 ```bash
@@ -52,19 +72,22 @@ Gateway response data.
 
 ## CLI contract
 
-Every successful run prints an **unexecuted** decision. The CLI does not run
-the selected tool or coding agent in this milestone.
+Without `--orchestrate`, every successful run prints an **unexecuted** decision.
+With it, the CLI enters the manually approved loop described below. Neither
+mode invokes a coding agent.
 
 ```bash
-jev-agent <repo-path> <task> [--mock] [--no-trace] [--json]
+jev-agent <repo-path> <task> [--mock] [--no-trace] [--json] [--orchestrate]
 ```
 
 - `--mock` uses the offline deterministic evaluation.
-- `--no-trace` suppresses the JSONL trace file.
+- `--no-trace` suppresses a decision-only JSONL trace file.
 - `--json` writes exactly one normalized, machine-readable decision object to
   stdout. It includes the repository snapshot, task, assessment, deterministic
   policy decision, model name, latency, and optional trace path. It omits raw
   provider answers and provider metadata.
+- `--orchestrate` enters the interactive loop. It cannot be combined with
+  `--json` or `--no-trace`; orchestration always records its safety trace.
 - `--version` prints the installed package version; `--help` (or `-h`) prints
   usage.
 
@@ -75,33 +98,50 @@ pnpm dev -- . "Inspect this repo and choose the safest useful first action" \
   --mock --no-trace --json
 ```
 
-Exit code `0` means a decision, help text, or version was printed. Exit code
-`1` means an operational failure prevented a decision; exit code `2` means
-invalid command-line usage. In `--json` mode, errors are one JSON object on
-stderr with the same exit code.
+Exit code `0` means a decision, completed loop status, help text, or version was
+printed. Exit code `1` means an operational failure prevented progress; exit
+code `2` means invalid command-line usage. In `--json` mode, errors are one JSON
+object on stderr with the same exit code.
 
 ## Traces
 
 Unless `--no-trace` is set, each successful decision writes one JSONL record
-under `./traces/`. Records use trace schema version `1` and a timestamp-plus-
-UUID run ID, so concurrent runs do not share a file. A record contains a
+under `./traces/`. Decision records use trace schema version `1` and a
+timestamp-plus-UUID run ID, so concurrent runs do not share a file. A record contains a
 sanitized state snapshot, normalized assessment, policy decision, model,
 latency, and bounded raw Jev answers. It deliberately excludes raw provider
 metadata and upstream error bodies; known credential values and common
 credential-shaped fields are redacted before writing.
 
+Orchestration writes schema-version `2` JSONL under the selected repository's
+`traces/` directory. Every completed iteration records bounded, redacted raw
+answers, normalized assessment, policy decision, all considered and selected
+candidates, approval decision, tool input and result, exit status, duration,
+and the before/after state. A rejection records an observation and executes no
+repository tool. Alternative selections and their final confirmation are kept
+as an approval-history array so manual completion overrides remain auditable.
+
 Trace recording is part of the default auditable run. If the trace directory
 cannot be created or written, the CLI returns operational exit code `1` and
-does not print a decision. Use `--no-trace` only when an unrecorded decision is
-acceptable.
+does not print a decision. Use `--no-trace` only when an unrecorded
+decision-only result is acceptable; the execution loop cannot disable traces.
 
-## Inspection bounds
+## Inspection and execution bounds
 
 The target must be an existing directory. Repository inspection is read-only
 and bounds the task to 4,000 characters, package metadata to 64 KiB, and Git
 output and snapshot lists to small fixed limits before sending state to Jev.
 Malformed or oversized `package.json` files and non-Git directories are handled
 as incomplete metadata rather than causing a model request to fail.
+
+Orchestration has a hard eight-iteration ceiling. Search uses direct `rg`
+arguments, literal bounded terms derived from the task, bounded file results,
+and exclusions for Git metadata, dependencies, build output, traces, and common
+secret files. Reads are limited to regular files below the selected root,
+reject traversal and symlink escape, block common credential paths, and cap
+content at 64 KiB. Validation can invoke only a recognized `test`, `check`,
+`typecheck`, `lint`, or `build` package script through the package manager
+detected from a lockfile. Process output and runtime are bounded.
 
 After exporting `AI_GATEWAY_API_KEY`, the shorter command works as well. Against
 another repository:
@@ -182,24 +222,30 @@ once the repository has enough conventions to encode.
 
 ## Current safety boundary
 
-This version is read-only except for trace files written under `./traces` in
-the directory where the CLI is launched. The policy refuses to finish a task
-until a detected validation script has passed, routes high missing-information
-or stuck signals to `ASK_USER`, and does the same for ambiguous next actions.
-If detected validation fails or none is available, the policy asks the user
-rather than assuming completion or blindly retrying it.
+Decision-only mode is read-only except for its trace file. Orchestration is
+read-only except for trace files and side effects inherent in an explicitly
+approved validation script. The policy refuses to finish a task until a
+detected validation script has passed, routes high missing-information or stuck
+signals to `ASK_USER`, and does the same for ambiguous next actions. If
+validation fails or none is available, the policy asks the user rather than
+assuming completion or blindly retrying it. An identical failed candidate is
+not retried without new user information.
+
+Automatic completion still requires the configured 95% task-completion
+threshold. Once validation has passed, a user may explicitly override that
+confidence threshold only when Jev itself clearly recommends `FINISH`; the
+resolved completion candidate must then be approved a second time.
+
+`RUN_COMMAND` and `CALL_CODEX` remain non-executable. The loop never evaluates
+model-generated shell text, deploys, publishes, pushes, performs destructive
+Git operations, deletes files, or reads known secret-file paths.
 Live Jev evaluations allow standard Gateway data retention
 (`zeroDataRetention: false`); run them only with repository data you authorize
 for that service.
 
 ## Next milestone
 
-Add an approval-gated loop with constrained implementations of:
-
-1. `SEARCH_REPO`
-2. `READ_FILE`
-3. `RUN_TESTS`
-4. `CALL_CODEX`
-
-The hard rules remain authoritative: no deploy, publish, push, destructive git,
-filesystem writes outside the selected repository, or secret access.
+Stabilize the approval loop against representative repositories, then add
+`CALL_CODEX` behind a small typed adapter with bounded stdout/stderr, exit
+status, timeouts, and per-run call limits. `RUN_COMMAND` remains disabled until
+a separately reviewed diagnostic-command allowlist exists.

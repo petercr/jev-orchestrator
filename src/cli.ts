@@ -1,12 +1,20 @@
 #!/usr/bin/env node
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
+import { createInterface, type Interface } from 'node:readline/promises';
 import { pathToFileURL } from 'node:url';
 import { evaluateAgentState } from './ai/evaluate.js';
 import { requireGatewayApiKey } from './config.js';
 import { requireBoundedTask } from './limits.js';
 import { writeTrace } from './logging/trace.js';
 import { mockEvaluation } from './mock.js';
+import {
+  createInitialState,
+  runOrchestration,
+  type ApprovalContext,
+  type ApprovalDecision,
+  type OrchestrationResult,
+} from './orchestration/loop.js';
 import { applyPolicy } from './policy.js';
 import { inspectRepo } from './repo/inspect.js';
 import type {
@@ -30,6 +38,7 @@ export type CliOptions = {
   mock: boolean;
   noTrace: boolean;
   json: boolean;
+  orchestrate: boolean;
 };
 
 export type CliCommand =
@@ -68,18 +77,20 @@ export class CliUsageError extends Error {
 }
 
 export function usage(): string {
-  return `jev-agent <repo-path> <task> [--mock] [--no-trace] [--json]
+  return `jev-agent <repo-path> <task> [--mock] [--no-trace] [--json] [--orchestrate]
 
 Options:
   --mock       Use the offline deterministic evaluation.
   --no-trace   Do not write a JSONL trace.
   --json       Write one machine-readable decision to stdout.
+  --orchestrate  Enter the bounded, manually approved execution loop.
   --version    Print the installed package version.
   --help, -h   Print this help text.
 
 Examples:
   pnpm dev -- . "Decide what to inspect first"
   pnpm dev -- ../my-app "Fix preview auth" --mock --json --no-trace
+  pnpm dev -- ../my-app "Investigate preview auth" --mock --orchestrate
 
 Environment:
   AI_GATEWAY_API_KEY   Vercel AI Gateway key
@@ -111,6 +122,7 @@ export function parseArgs(argv: string[]): CliCommand {
   let mock = false;
   let noTrace = false;
   let json = false;
+  let orchestrate = false;
   let showHelp = false;
   let showVersion = false;
   let parseFlags = true;
@@ -137,6 +149,9 @@ export function parseArgs(argv: string[]): CliCommand {
       case '--json':
         json = true;
         break;
+      case '--orchestrate':
+        orchestrate = true;
+        break;
       case '--help':
       case '-h':
         showHelp = true;
@@ -156,7 +171,7 @@ export function parseArgs(argv: string[]): CliCommand {
     if (showHelp && showVersion) {
       throw usageError('Use either --help or --version, not both.');
     }
-    if (mock || noTrace || json || positional.length > 0) {
+    if (mock || noTrace || json || orchestrate || positional.length > 0) {
       throw usageError('--help and --version cannot be combined with a decision request.');
     }
     return showHelp ? { kind: 'help' } : { kind: 'version' };
@@ -168,9 +183,15 @@ export function parseArgs(argv: string[]): CliCommand {
 
   const repoPath = positional[0] ?? '';
   const task = taskFromPositionals(positional);
+  if (orchestrate && json) {
+    throw usageError('--orchestrate is interactive and cannot be combined with --json.');
+  }
+  if (orchestrate && noTrace) {
+    throw usageError('--orchestrate requires its per-iteration safety trace.');
+  }
   return {
     kind: 'run',
-    options: { repoPath, task, mock, noTrace, json },
+    options: { repoPath, task, mock, noTrace, json, orchestrate },
   };
 }
 
@@ -183,22 +204,6 @@ function printDistribution(probabilities: Partial<Record<Action, number>>): void
   for (const [action, probability] of entries) {
     console.log(`  ${action.padEnd(14)} ${percent(probability ?? 0).padStart(4)}`);
   }
-}
-
-function makeState(repo: RepoSnapshot, task: string): AgentState {
-  return {
-    task,
-    iteration: 1,
-    currentGoal: 'Choose the safest useful first action.',
-    repo,
-    filesRead: [],
-    filesModified: [],
-    observations: ['Initial repository snapshot collected.'],
-    commandsRun: [],
-    tests: { ran: false },
-    failedApproaches: [],
-    codexCalls: 0,
-  };
 }
 
 export function createDecisionOutput(
@@ -223,11 +228,11 @@ export function createDecisionOutput(
 }
 
 export async function runDecision(
-  options: Omit<CliOptions, 'json'>,
+  options: Pick<CliOptions, 'repoPath' | 'task' | 'mock' | 'noTrace'>,
   cwd: string = process.cwd(),
 ): Promise<DecisionOutput> {
   const repo = await inspectRepo(options.repoPath);
-  const state = makeState(repo, options.task);
+  const state = createInitialState(repo, options.task);
   const mode: DecisionOutput['mode'] = options.mock ? 'mock' : 'live';
 
   if (!options.mock) requireGatewayApiKey();
@@ -238,6 +243,88 @@ export async function runDecision(
     : path.relative(cwd, await writeTrace(cwd, { state, evaluation, policy }));
 
   return createDecisionOutput(state, evaluation, policy, mode, tracePath);
+}
+
+function approvalChoice(value: string, context: ApprovalContext): ApprovalDecision | undefined {
+  const normalized = value.trim().toUpperCase();
+  if (normalized === 'A' || normalized === 'APPROVE') return { kind: 'approve' };
+  if (normalized === 'R' || normalized === 'REJECT') return { kind: 'reject' };
+
+  const actionAliases: Partial<Record<string, ApprovalDecision>> = {
+    SEARCH: { kind: 'alternative', action: 'SEARCH_REPO' },
+    SEARCH_REPO: { kind: 'alternative', action: 'SEARCH_REPO' },
+    READ: { kind: 'alternative', action: 'READ_FILE' },
+    READ_FILE: { kind: 'alternative', action: 'READ_FILE' },
+    TEST: { kind: 'alternative', action: 'RUN_TESTS' },
+    RUN_TESTS: { kind: 'alternative', action: 'RUN_TESTS' },
+    ASK: { kind: 'alternative', action: 'ASK_USER' },
+    ASK_USER: { kind: 'alternative', action: 'ASK_USER' },
+    FINISH: { kind: 'alternative', action: 'FINISH' },
+  };
+  const decision = actionAliases[normalized];
+  if (decision?.kind === 'alternative' && context.allowedAlternatives.includes(decision.action)) {
+    return decision;
+  }
+  return undefined;
+}
+
+function printApprovalProposal(context: ApprovalContext): void {
+  const { evaluation, policy, proposal } = context;
+  const { assessment } = evaluation;
+  console.log(`\nIteration ${context.state.iteration}`);
+  console.log(`Jev requested: ${policy.requested}`);
+  console.log('Next-action distribution');
+  printDistribution(assessment.nextAction.probabilities);
+  console.log(`Policy selected: ${policy.selected}${policy.override ? ' (override)' : ''}`);
+  console.log(`Reason: ${policy.reason}`);
+  console.log(`Safe candidate: ${proposal.action}`);
+  console.log(`Tool: ${proposal.tool ?? 'none'}`);
+  console.log(`Parameters: ${JSON.stringify(proposal.input)}`);
+  if ('reason' in proposal) console.log(`Candidate reason: ${proposal.reason}`);
+  console.log(`Allowed alternatives: ${context.allowedAlternatives.join(', ')}`);
+  if (proposal.action === 'ASK_USER' && context.allowedAlternatives.includes('FINISH')) {
+    console.log('Validated finish override: enter FINISH, review it, then enter approve.');
+  }
+}
+
+async function promptForApproval(
+  terminal: Interface,
+  context: ApprovalContext,
+): Promise<ApprovalDecision> {
+  printApprovalProposal(context);
+  while (true) {
+    const answer = await terminal.question(
+      'Choose approve, reject, or an allowed action name: ',
+    );
+    const decision = approvalChoice(answer, context);
+    if (decision) return decision;
+    console.log('Invalid choice. No repository action has run.');
+  }
+}
+
+export async function runCliOrchestration(options: CliOptions): Promise<OrchestrationResult> {
+  const repo = await inspectRepo(options.repoPath);
+  if (!options.mock) requireGatewayApiKey();
+  const state = createInitialState(repo, options.task);
+  const terminal = createInterface({ input: process.stdin, output: process.stdout });
+
+  console.log('\nJev Orchestrator — approval-gated orchestration');
+  console.log(`Repo: ${repo.root}`);
+  console.log(`Task: ${options.task}`);
+  console.log(`Mode: ${options.mock ? 'mock' : 'live Jev'}`);
+  console.log('No repository action runs without approval.');
+
+  try {
+    return await runOrchestration(state, {
+      evaluate: async (currentState) => options.mock
+        ? mockEvaluation(currentState)
+        : evaluateAgentState(currentState),
+      approve: async (context) => promptForApproval(terminal, context),
+      askForInformation: async () => terminal.question('Provide the required information: '),
+    });
+  } finally {
+    terminal.close();
+  }
 }
 
 function printHumanDecision(decision: DecisionOutput): void {
@@ -314,6 +401,14 @@ export async function main(argv: string[] = process.argv.slice(2)): Promise<void
   }
   if (command.kind === 'version') {
     console.log(await packageVersion());
+    return;
+  }
+
+  if (command.options.orchestrate) {
+    const result = await runCliOrchestration(command.options);
+    console.log(`\nLoop status: ${result.status}`);
+    console.log(`Iterations: ${result.iterations}`);
+    console.log(`Trace: ${path.relative(process.cwd(), result.tracePath)}`);
     return;
   }
 
