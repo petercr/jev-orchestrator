@@ -137,7 +137,16 @@ function isToolResult(value: unknown, action: CandidateProposal['action']): valu
     typeof result.timedOut === 'boolean' &&
     typeof result.output === 'string' &&
     Array.isArray(result.files) &&
-    result.files.every((file) => typeof file === 'string');
+    result.files.every((file) => typeof file === 'string') &&
+    (result.stdout === undefined || typeof result.stdout === 'string') &&
+    (result.stderr === undefined || typeof result.stderr === 'string');
+}
+
+function modifiedFiles(repo: RepoSnapshot): string[] {
+  return [...new Set(repo.gitStatus
+    .map((entry) => entry.slice(3).trim())
+    .filter(Boolean)
+    .filter((entry) => entry !== 'traces' && entry !== 'traces/' && !entry.startsWith('traces/')))];
 }
 
 async function safelyExecute(
@@ -240,9 +249,7 @@ function applyToolResult(
     }
     if (refreshedRepo !== undefined) {
       repo = refreshedRepo;
-      filesModified = [...new Set(refreshedRepo.gitStatus
-        .map((entry) => entry.slice(3).trim())
-        .filter(Boolean))];
+      filesModified = modifiedFiles(refreshedRepo);
     }
     if (filesModified.length > 0) tests = { ran: false };
   }

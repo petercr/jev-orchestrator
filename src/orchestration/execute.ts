@@ -34,6 +34,8 @@ export type ToolResult = {
   timedOut: boolean;
   output: string;
   files: string[];
+  stdout?: string;
+  stderr?: string;
 };
 
 export class ToolExecutionError extends Error {
@@ -46,6 +48,13 @@ export class ToolExecutionError extends Error {
 function normalizedOutput(result: ProcessResult): string {
   const combined = [result.stdout.trim(), result.stderr.trim()].filter(Boolean).join('\n');
   return combined || (result.timedOut ? 'Process timed out.' : 'Process produced no output.');
+}
+
+function normalizedAgentOutput(result: ProcessResult): string {
+  const finalMessage = result.stdout.trim();
+  if (finalMessage) return finalMessage;
+  const diagnostics = result.stderr.trim();
+  return diagnostics || (result.timedOut ? 'Process timed out.' : 'Process produced no output.');
 }
 
 function searchArgs(terms: string[]): string[] {
@@ -142,8 +151,10 @@ export async function executeCandidate(
       exitCode: result.exitCode,
       durationMs: result.durationMs,
       timedOut: result.timedOut,
-      output: normalizedOutput(result),
+      output: normalizedAgentOutput(result),
       files: [],
+      stdout: result.stdout,
+      stderr: result.stderr,
     };
   }
 

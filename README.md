@@ -154,10 +154,13 @@ detected from a lockfile. Process output and runtime are bounded.
 arguments, never a shell. It runs in `workspace-write` mode rooted at the
 selected repository, ignores user configuration and execution rules, cannot
 request further approvals, does not persist its session, and has a 15-minute
-deadline. Stdout and stderr are separately capped at 16 KiB, and each
-orchestration run permits at most two Codex calls. After every attempt the loop
-refreshes repository metadata; detected changes invalidate prior validation and
-must pass a separately approved validation script before completion.
+deadline. Stdout and stderr are separately capped at 16 KiB and recorded as
+separate trace fields; only Codex's final stdout message becomes the loop
+observation. Each orchestration run permits at most two Codex calls. After every
+attempt the loop refreshes repository metadata with exact untracked paths;
+generated trace files are excluded from the modified-source list, and detected
+source changes invalidate prior validation and must pass a separately approved
+validation script before completion.
 
 After exporting `AI_GATEWAY_API_KEY`, the shorter command works as well. Against
 another repository:
@@ -178,6 +181,23 @@ The test suite is offline: it uses temporary repositories and mocked AI SDK
 boundaries, so it does not require `AI_GATEWAY_API_KEY`, a coding agent, or a
 live Jev evaluation. Pull-request CI runs the same typecheck, test, and build
 commands for maintainers.
+
+## Live Codex verification
+
+On 2026-09-20, Codex CLI 0.155.1 was invoked through the approval loop against
+a disposable Git fixture with a missing `src/add.js` implementation and one
+failing Node test. Mock mode was used only for Jev routing; the approved
+`CALL_CODEX` action was live. Codex created only the requested source file and
+returned successfully in 19,991 ms. The loop refreshed repository state, then
+independently searched, read, ran the detected `pnpm test` script, and finished
+after a separate approval. The complete run took five iterations and its
+validation passed one test.
+
+The first trace revealed two normalization issues that were fixed before this
+milestone was marked complete: nested untracked files are now recorded as exact
+paths instead of directory placeholders, generated trace files are omitted from
+`filesModified`, and Codex progress diagnostics remain in bounded stderr rather
+than being merged into the final stdout summary.
 
 ## Packaged CLI verification
 
@@ -263,7 +283,7 @@ for that service.
 
 ## Next milestone
 
-Stabilize approved Codex delegation against representative repositories, then
-add Claude Code behind the same typed adapter result contract. `RUN_COMMAND`
-remains disabled until a separately reviewed diagnostic-command allowlist
-exists.
+Add Claude Code behind the same typed adapter result contract, then route
+between coding-agent capabilities under the existing approval and call-limit
+controls. `RUN_COMMAND` remains disabled until a separately reviewed
+diagnostic-command allowlist exists.

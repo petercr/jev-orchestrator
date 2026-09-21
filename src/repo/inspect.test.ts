@@ -116,6 +116,17 @@ describe('inspectRepo', () => {
     expect(snapshot.gitStatus).toHaveLength(MAX_GIT_STATUS_ENTRIES);
   });
 
+  it('reports exact paths for untracked files below directories', async () => {
+    const root = await createRepositoryDirectory();
+    await execFile('git', ['init', '--quiet'], { cwd: root });
+    await mkdir(path.join(root, 'src'));
+    await writeFile(path.join(root, 'src', 'new.ts'), 'export {};');
+
+    const snapshot = await inspectRepo(root);
+
+    expect(snapshot.gitStatus).toEqual(['?? src/new.ts']);
+  });
+
   it('stops collecting oversized Git output', async () => {
     const root = await createRepositoryDirectory();
     await execFile('git', ['init', '--quiet'], { cwd: root });
