@@ -124,7 +124,9 @@ function rejectionObservation(decision: Extract<ApprovalDecision, { kind: 'rejec
     : 'User rejected the proposal without executing it.';
 }
 
-function commandDescription(proposal: Extract<CandidateProposal, { action: 'RUN_TESTS' }>): string {
+function commandDescription(
+  proposal: Extract<CandidateProposal, { action: 'RUN_COMMAND' | 'RUN_TESTS' }>,
+): string {
   return [proposal.input.command, ...proposal.input.args].join(' ');
 }
 
@@ -223,6 +225,10 @@ function applyToolResult(
     filesRead = [...new Set([...state.filesRead, ...result.files])];
     observations.push(`Read ${result.files[0] ?? proposal.input.path}: ${truncateText(result.output, MAX_OBSERVATION_LENGTH)}`);
     currentGoal = 'Validate the repository after inspection.';
+  } else if (proposal.action === 'RUN_COMMAND') {
+    const summary = truncateText(result.output, MAX_OBSERVATION_LENGTH);
+    observations.push(`Diagnostic completed: ${summary}`);
+    currentGoal = 'Use the approved diagnostic result to choose the next action.';
   } else if (proposal.action === 'RUN_TESTS') {
     const summary = truncateText(result.output, MAX_OBSERVATION_LENGTH);
     commandsRun = [...state.commandsRun, {
@@ -253,6 +259,15 @@ function applyToolResult(
       output: summary,
     }];
     tests = { ran: true, passed: false, summary };
+  }
+
+  if (proposal.action === 'RUN_COMMAND') {
+    const summary = truncateText(result.output, MAX_OBSERVATION_LENGTH);
+    commandsRun = [...state.commandsRun, {
+      command: commandDescription(proposal),
+      exitCode: result.exitCode ?? 1,
+      output: summary,
+    }];
   }
 
   if (isCodingAgentProposal(proposal)) {

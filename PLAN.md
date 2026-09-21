@@ -42,7 +42,7 @@ tool arguments.
   credential-safe. Gateway calls use standard data retention
   (`zeroDataRetention: false`), so send only repository data authorized for
   that service.
-- `--mock` remains token-free and offline. `pnpm check`, `pnpm test` (104
+- `--mock` remains token-free and offline. `pnpm check`, `pnpm test` (108
   tests), and `pnpm build` currently pass.
 
 The current action vocabulary is:
@@ -315,6 +315,32 @@ to `gpt-5.6-terra` and high reasoning, created only `src/add.js` in 33,980 ms;
 its bounded stderr trace explicitly confirmed both model settings. Each route
 then refreshed repository state, passed a separately approved `pnpm test`, and
 finished after explicit approval in three iterations.
+
+## Next milestone: bounded diagnostic commands
+
+Implementation status (2026-09-21): complete. `RUN_COMMAND` is enabled only for
+a repository-owned allowlist of immutable, read-only diagnostics; do not accept
+model-generated commands, arguments, paths, environment variables, or shell
+text.
+
+The first allowlist contains bounded Git status for clean or untracked-only
+states and metadata-only `git diff --stat HEAD` for tracked changes. Both
+commands use the literal `git` executable with direct arguments, disable
+paging, optional locks, repository-configured filesystem monitors, renames, and
+submodule inspection, and exclude generated traces. Diff statistics also
+disable external diff drivers and text conversion so no source lines enter
+command output. Candidate selection is deterministic from the inspected
+repository state, and the executor revalidates the exact command identifier and
+argument list before spawning it with a 10-second deadline.
+
+Cover clean, untracked-only, and tracked-change selection; exact process
+arguments; tampered proposal rejection; failures and timeouts; approval and
+rejection; state transitions; bounded traces; and unchanged validation evidence.
+Live verification used a disposable Git fixture with one tracked change. The
+approved `git_diff_stat` diagnostic completed in 5 ms with exit status `0`,
+changed no files, and recorded the exact fixed command in its schema-v2 trace.
+The loop then passed a separately approved test and finished after explicit
+approval in three iterations.
 
 ## Reference, not a template
 
