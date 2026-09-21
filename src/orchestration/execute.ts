@@ -1,30 +1,30 @@
-import { spawn } from 'node:child_process';
 import { open } from 'node:fs/promises';
 import path from 'node:path';
+import { createCodexAdapter } from '../agents/codex.js';
+import {
+  FORCE_KILL_GRACE_MS,
+  MAX_PROCESS_OUTPUT_BYTES,
+  ProcessExecutionError,
+  runProcess,
+  validateProcessResult,
+  type ProcessRequest,
+  type ProcessResult,
+  type ProcessRunner,
+} from '../process.js';
 import { resolveSafeRepoFile, type CandidateProposal } from './candidate.js';
 
-export const MAX_TOOL_OUTPUT_BYTES = 16 * 1024;
+export {
+  FORCE_KILL_GRACE_MS,
+  runProcess,
+  type ProcessRequest,
+  type ProcessResult,
+  type ProcessRunner,
+};
+export const MAX_TOOL_OUTPUT_BYTES = MAX_PROCESS_OUTPUT_BYTES;
 export const MAX_SEARCH_RESULTS = 50;
 export const MAX_READ_FILE_BYTES = 64 * 1024;
 export const SEARCH_TIMEOUT_MS = 10_000;
 export const VALIDATION_TIMEOUT_MS = 120_000;
-export const FORCE_KILL_GRACE_MS = 1_000;
-
-export type ProcessRequest = {
-  command: string;
-  args: string[];
-  cwd: string;
-  timeoutMs: number;
-};
-
-export type ProcessResult = {
-  exitCode: number | null;
-  stdout: string;
-  stderr: string;
-  timedOut: boolean;
-};
-
-export type ProcessRunner = (request: ProcessRequest) => Promise<ProcessResult>;
 
 export type ToolResult = {
   action: CandidateProposal['action'];
@@ -40,83 +40,6 @@ export class ToolExecutionError extends Error {
   constructor(message: string) {
     super(message);
     this.name = 'ToolExecutionError';
-  }
-}
-
-function appendBounded(current: Buffer[], chunk: Buffer, byteCount: { value: number }): void {
-  const available = MAX_TOOL_OUTPUT_BYTES - byteCount.value;
-  if (available <= 0) return;
-  const bounded = chunk.subarray(0, available);
-  current.push(bounded);
-  byteCount.value += bounded.length;
-}
-
-export const runProcess: ProcessRunner = async (request) => new Promise((resolve, reject) => {
-  const useProcessGroup = process.platform !== 'win32';
-  const child = spawn(request.command, request.args, {
-    cwd: request.cwd,
-    env: process.env,
-    detached: useProcessGroup,
-    shell: false,
-    stdio: ['ignore', 'pipe', 'pipe'],
-  });
-  const stdout: Buffer[] = [];
-  const stderr: Buffer[] = [];
-  const stdoutBytes = { value: 0 };
-  const stderrBytes = { value: 0 };
-  let timedOut = false;
-  let settled = false;
-  let forceKillTimeout: NodeJS.Timeout | undefined;
-  const kill = (signal: NodeJS.Signals): void => {
-    try {
-      if (useProcessGroup && child.pid !== undefined) {
-        process.kill(-child.pid, signal);
-      } else {
-        child.kill(signal);
-      }
-    } catch {
-      child.kill(signal);
-    }
-  };
-  const timeout = setTimeout(() => {
-    timedOut = true;
-    kill('SIGTERM');
-    forceKillTimeout = setTimeout(() => kill('SIGKILL'), FORCE_KILL_GRACE_MS);
-    forceKillTimeout.unref();
-  }, request.timeoutMs);
-  timeout.unref();
-
-  child.stdout.on('data', (chunk: Buffer) => appendBounded(stdout, chunk, stdoutBytes));
-  child.stderr.on('data', (chunk: Buffer) => appendBounded(stderr, chunk, stderrBytes));
-  child.on('error', (error) => {
-    if (settled) return;
-    settled = true;
-    clearTimeout(timeout);
-    if (forceKillTimeout !== undefined) clearTimeout(forceKillTimeout);
-    reject(new ToolExecutionError(`Unable to start ${request.command}: ${error.message}`));
-  });
-  child.on('close', (exitCode) => {
-    if (settled) return;
-    settled = true;
-    clearTimeout(timeout);
-    if (forceKillTimeout !== undefined) clearTimeout(forceKillTimeout);
-    resolve({
-      exitCode,
-      stdout: Buffer.concat(stdout).toString('utf8'),
-      stderr: Buffer.concat(stderr).toString('utf8'),
-      timedOut,
-    });
-  });
-});
-
-function validateProcessResult(result: ProcessResult): void {
-  if (
-    (result.exitCode !== null && !Number.isInteger(result.exitCode)) ||
-    typeof result.stdout !== 'string' ||
-    typeof result.stderr !== 'string' ||
-    typeof result.timedOut !== 'boolean'
-  ) {
-    throw new ToolExecutionError('The process runner returned a malformed result.');
   }
 }
 
@@ -208,6 +131,21 @@ export async function executeCandidate(
     throw new ToolExecutionError(`${proposal.action} does not execute a repository tool.`);
   }
   if (proposal.action === 'READ_FILE') return executeRead(proposal);
+  if (proposal.action === 'CALL_CODEX') {
+    const result = await createCodexAdapter(runner)({
+      root: proposal.input.root,
+      task: proposal.input.task,
+    });
+    return {
+      action: proposal.action,
+      ok: result.ok,
+      exitCode: result.exitCode,
+      durationMs: result.durationMs,
+      timedOut: result.timedOut,
+      output: normalizedOutput(result),
+      files: [],
+    };
+  }
 
   if (proposal.action === 'RUN_TESTS') {
     const expectedCommand = proposal.input.packageManager;
@@ -236,7 +174,14 @@ export async function executeCandidate(
       timeoutMs: VALIDATION_TIMEOUT_MS,
     };
   const result = await runner(request);
-  validateProcessResult(result);
+  try {
+    validateProcessResult(result);
+  } catch (error) {
+    if (error instanceof ProcessExecutionError) {
+      throw new ToolExecutionError(error.message);
+    }
+    throw error;
+  }
   const files = proposal.action === 'SEARCH_REPO'
     ? normalizeSearchFiles(result.stdout)
     : [];

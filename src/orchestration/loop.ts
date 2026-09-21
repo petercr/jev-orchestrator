@@ -4,6 +4,7 @@ import {
 } from '../logging/trace.js';
 import { applyPolicy, DEFAULT_THRESHOLDS } from '../policy.js';
 import { truncateText } from '../limits.js';
+import { inspectRepo } from '../repo/inspect.js';
 import type {
   Action,
   AgentState,
@@ -13,6 +14,7 @@ import type {
 } from '../types.js';
 import {
   EXECUTABLE_ACTIONS,
+  MAX_CODEX_CALLS,
   proposalSignature,
   selectCandidate,
   type CandidateProposal,
@@ -51,6 +53,7 @@ export type OrchestrationDependencies = {
   approve: (context: ApprovalContext) => Promise<ApprovalDecision>;
   askForInformation: (state: AgentState) => Promise<string>;
   execute?: typeof executeCandidate;
+  inspect?: typeof inspectRepo;
 };
 
 export type OrchestrationOptions = {
@@ -106,6 +109,7 @@ function allowedAlternatives(
       return policy.selected === 'FINISH' || canUserOverrideFinish(state, evaluation, policy);
     }
     if (action === 'RUN_TESTS') return state.repo.validationScripts.length > 0;
+    if (action === 'CALL_CODEX') return state.codexCalls < MAX_CODEX_CALLS;
     return true;
   });
 }
@@ -167,14 +171,18 @@ function applyToolResult(
   state: AgentState,
   proposal: CandidateProposal,
   result: ToolResult,
+  refreshedRepo?: RepoSnapshot,
 ): AgentState {
   const signature = proposalSignature(proposal);
   const observations = [...state.observations];
   const failedApproaches = [...state.failedApproaches];
   let filesRead = state.filesRead;
+  let filesModified = state.filesModified;
   let commandsRun = state.commandsRun;
   let tests = state.tests;
   let currentGoal = state.currentGoal;
+  let repo = state.repo;
+  let codexCalls = state.codexCalls;
 
   if (!result.ok) {
     failedApproaches.push(signature);
@@ -198,6 +206,16 @@ function applyToolResult(
     tests = { ran: true, passed: true, summary };
     observations.push(`Validation passed: ${summary}`);
     currentGoal = 'Determine whether the requested task is complete.';
+  } else if (proposal.action === 'CALL_CODEX') {
+    const summary = truncateText(result.output, MAX_OBSERVATION_LENGTH);
+    commandsRun = [...state.commandsRun, {
+      command: 'codex exec',
+      exitCode: result.exitCode ?? 1,
+      output: summary,
+    }];
+    observations.push(`Codex completed: ${summary}`);
+    tests = { ran: false };
+    currentGoal = 'Validate the Codex changes with an approved repository script.';
   }
 
   if (proposal.action === 'RUN_TESTS' && !result.ok) {
@@ -210,14 +228,36 @@ function applyToolResult(
     tests = { ran: true, passed: false, summary };
   }
 
+  if (proposal.action === 'CALL_CODEX') {
+    codexCalls += 1;
+    if (!result.ok) {
+      const summary = truncateText(result.output, MAX_OBSERVATION_LENGTH);
+      commandsRun = [...state.commandsRun, {
+        command: 'codex exec',
+        exitCode: result.exitCode ?? 1,
+        output: summary,
+      }];
+    }
+    if (refreshedRepo !== undefined) {
+      repo = refreshedRepo;
+      filesModified = [...new Set(refreshedRepo.gitStatus
+        .map((entry) => entry.slice(3).trim())
+        .filter(Boolean))];
+    }
+    if (filesModified.length > 0) tests = { ran: false };
+  }
+
   return {
     ...state,
+    repo,
     currentGoal,
     filesRead,
+    filesModified,
     observations,
     commandsRun,
     tests,
     failedApproaches,
+    codexCalls,
   };
 }
 
@@ -301,6 +341,7 @@ export async function runOrchestration(
 
   const trace = await createOrchestrationTrace(initialState.repo.root);
   const execute = dependencies.execute ?? executeCandidate;
+  const inspect = dependencies.inspect ?? inspectRepo;
   let state = initialState;
   let searchResults: string[] = [];
 
@@ -358,7 +399,19 @@ export async function runOrchestration(
     } else {
       toolResult = await safelyExecute(proposal, execute);
       if (proposal.action === 'SEARCH_REPO' && toolResult.ok) searchResults = toolResult.files;
-      nextState = applyToolResult(state, proposal, toolResult);
+      let refreshedRepo: RepoSnapshot | undefined;
+      if (proposal.action === 'CALL_CODEX') {
+        try {
+          refreshedRepo = await inspect(state.repo.root);
+        } catch {
+          toolResult = {
+            ...toolResult,
+            ok: false,
+            output: `${toolResult.output}\nUnable to inspect the repository after Codex execution.`,
+          };
+        }
+      }
+      nextState = applyToolResult(state, proposal, toolResult, refreshedRepo);
     }
 
     const reachedLimit = !finished && iteration === maxIterations;
