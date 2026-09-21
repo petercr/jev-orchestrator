@@ -1,17 +1,1 @@
-ok 14 merged lets work on the live codex part
-
----
-
-ok commit push and pr
-
----
-
-pr 15 merged lets move on to next step
-
----
-
-hey lets run claude with sonnet on medium
-
----
-
-and for the codex tests lets use terra high
+commit push pr
