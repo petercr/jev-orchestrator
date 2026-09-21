@@ -1,9 +1,1 @@
-commit push pr
-
----
-
-16 merged
-
----
-
-ok well lets keep going
+ok lets commit push pr
