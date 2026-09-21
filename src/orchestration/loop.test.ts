@@ -5,7 +5,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { mockEvaluation } from '../mock.js';
 import type { AgentAssessment, EvaluationResult, RepoSnapshot } from '../types.js';
 import { createInitialState, runOrchestration, type ApprovalDecision } from './loop.js';
-import { MAX_CODEX_CALLS } from './candidate.js';
+import { MAX_CLAUDE_CALLS, MAX_CODEX_CALLS } from './candidate.js';
 import type { ToolResult } from './execute.js';
 
 const roots: string[] = [];
@@ -440,6 +440,62 @@ describe('approval-gated orchestration loop', () => {
 
     expect(execute).not.toHaveBeenCalled();
     expect(result.state.codexCalls).toBe(MAX_CODEX_CALLS);
+    expect(result.state.observations).toContain('User supplied information: Continue manually');
+  });
+
+  it('records an approved Claude call and tracks its limit independently', async () => {
+    const repo = await repository();
+    const initial = createInitialState(repo, 'Implement fixture authentication');
+    initial.codexCalls = MAX_CODEX_CALLS;
+    const execute = vi.fn().mockResolvedValue({
+      action: 'CALL_CLAUDE',
+      ok: true,
+      exitCode: 0,
+      durationMs: 12,
+      timedOut: false,
+      output: 'Implemented authentication.',
+      files: [],
+      stdout: 'Implemented authentication.',
+      stderr: 'Claude progress details.',
+    } satisfies ToolResult);
+
+    const result = await runOrchestration(initial, {
+      evaluate: async () => clearAssessment('CALL_CLAUDE'),
+      approve,
+      askForInformation: async () => '',
+      execute,
+      inspect: async () => ({
+        ...repo,
+        gitStatus: [' M src/auth.ts'],
+      }),
+    }, { maxIterations: 1 });
+
+    expect(execute).toHaveBeenCalledWith(expect.objectContaining({ action: 'CALL_CLAUDE' }));
+    expect(result.state).toMatchObject({
+      codexCalls: MAX_CODEX_CALLS,
+      claudeCalls: 1,
+      filesModified: ['src/auth.ts'],
+      tests: { ran: false },
+      commandsRun: [{ command: 'claude -p', exitCode: 0 }],
+    });
+    expect(result.state.observations).toContain('Claude completed: Implemented authentication.');
+  });
+
+  it('does not execute Claude after the per-run call limit', async () => {
+    const repo = await repository();
+    const initial = createInitialState(repo, 'Implement fixture authentication');
+    initial.claudeCalls = MAX_CLAUDE_CALLS;
+    const execute = vi.fn();
+
+    const result = await runOrchestration(initial, {
+      evaluate: async () => clearAssessment('CALL_CLAUDE'),
+      approve,
+      askForInformation: async () => 'Continue manually',
+      execute,
+    }, { maxIterations: 1 });
+
+    expect(execute).not.toHaveBeenCalled();
+    expect(result.state.claudeCalls).toBe(MAX_CLAUDE_CALLS);
     expect(result.state.observations).toContain('User supplied information: Continue manually');
   });
 

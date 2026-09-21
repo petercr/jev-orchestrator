@@ -137,6 +137,36 @@ describe('constrained execution', () => {
     }));
   });
 
+  it('routes CALL_CLAUDE through the bounded typed adapter', async () => {
+    const root = await temporaryRoot();
+    const runner = vi.fn<ProcessRunner>().mockResolvedValue({
+      exitCode: 0,
+      stdout: 'Implemented the requested change.',
+      stderr: 'Claude progress details.',
+      timedOut: false,
+    });
+    const result = await executeCandidate({
+      action: 'CALL_CLAUDE',
+      tool: 'claude_code_cli',
+      input: { root, task: 'Fix preview authentication' },
+    }, runner);
+
+    expect(result).toMatchObject({
+      action: 'CALL_CLAUDE',
+      ok: true,
+      exitCode: 0,
+      output: 'Implemented the requested change.',
+      files: [],
+      stdout: 'Implemented the requested change.',
+      stderr: 'Claude progress details.',
+    });
+    expect(runner).toHaveBeenCalledWith(expect.objectContaining({
+      command: 'claude',
+      cwd: root,
+      args: expect.arrayContaining(['--model', 'sonnet', '--effort', 'medium']),
+    }));
+  });
+
   it('rejects malformed process results and non-tool actions', async () => {
     const root = await temporaryRoot();
     const malformed = (async () => ({

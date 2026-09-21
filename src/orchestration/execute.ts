@@ -1,6 +1,8 @@
 import { open } from 'node:fs/promises';
 import path from 'node:path';
 import { createCodexAdapter } from '../agents/codex.js';
+import { createClaudeAdapter } from '../agents/claude.js';
+import type { CodingAgentResult } from '../agents/types.js';
 import {
   FORCE_KILL_GRACE_MS,
   MAX_PROCESS_OUTPUT_BYTES,
@@ -55,6 +57,23 @@ function normalizedAgentOutput(result: ProcessResult): string {
   if (finalMessage) return finalMessage;
   const diagnostics = result.stderr.trim();
   return diagnostics || (result.timedOut ? 'Process timed out.' : 'Process produced no output.');
+}
+
+function codingAgentToolResult(
+  action: 'CALL_CODEX' | 'CALL_CLAUDE',
+  result: CodingAgentResult,
+): ToolResult {
+  return {
+    action,
+    ok: result.ok,
+    exitCode: result.exitCode,
+    durationMs: result.durationMs,
+    timedOut: result.timedOut,
+    output: normalizedAgentOutput(result),
+    files: [],
+    stdout: result.stdout,
+    stderr: result.stderr,
+  };
 }
 
 function searchArgs(terms: string[]): string[] {
@@ -145,17 +164,14 @@ export async function executeCandidate(
       root: proposal.input.root,
       task: proposal.input.task,
     });
-    return {
-      action: proposal.action,
-      ok: result.ok,
-      exitCode: result.exitCode,
-      durationMs: result.durationMs,
-      timedOut: result.timedOut,
-      output: normalizedAgentOutput(result),
-      files: [],
-      stdout: result.stdout,
-      stderr: result.stderr,
-    };
+    return codingAgentToolResult(proposal.action, result);
+  }
+  if (proposal.action === 'CALL_CLAUDE') {
+    const result = await createClaudeAdapter(runner)({
+      root: proposal.input.root,
+      task: proposal.input.task,
+    });
+    return codingAgentToolResult(proposal.action, result);
   }
 
   if (proposal.action === 'RUN_TESTS') {

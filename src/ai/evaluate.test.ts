@@ -46,6 +46,7 @@ const state: AgentState = {
   tests: { ran: false },
   failedApproaches: [],
   codexCalls: 0,
+  claudeCalls: 0,
 };
 
 function evaluationResult(providerMetadata: unknown = {

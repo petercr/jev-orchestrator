@@ -21,6 +21,7 @@ const state: AgentState = {
   tests: { ran: false },
   failedApproaches: [],
   codexCalls: 0,
+  claudeCalls: 0,
 };
 
 function assessment(overrides: Partial<AgentAssessment> = {}): AgentAssessment {

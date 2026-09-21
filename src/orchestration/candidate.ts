@@ -8,11 +8,13 @@ export const EXECUTABLE_ACTIONS = [
   'READ_FILE',
   'RUN_TESTS',
   'CALL_CODEX',
+  'CALL_CLAUDE',
   'ASK_USER',
   'FINISH',
 ] as const satisfies readonly Action[];
 
 export const MAX_CODEX_CALLS = 2;
+export const MAX_CLAUDE_CALLS = 2;
 
 export type ExecutableAction = (typeof EXECUTABLE_ACTIONS)[number];
 
@@ -55,6 +57,15 @@ export type CodexProposal = {
   };
 };
 
+export type ClaudeProposal = {
+  action: 'CALL_CLAUDE';
+  tool: 'claude_code_cli';
+  input: {
+    root: string;
+    task: string;
+  };
+};
+
 export type AskUserProposal = {
   action: 'ASK_USER';
   tool: null;
@@ -74,6 +85,7 @@ export type CandidateProposal =
   | ReadProposal
   | TestProposal
   | CodexProposal
+  | ClaudeProposal
   | AskUserProposal
   | FinishProposal;
 
@@ -292,6 +304,23 @@ export async function selectCandidate(
       return {
         action,
         tool: 'codex_cli',
+        input: {
+          root: state.repo.root,
+          task: requireBoundedTask(state.task),
+        },
+      };
+    case 'CALL_CLAUDE':
+      if (state.claudeCalls >= MAX_CLAUDE_CALLS) {
+        return {
+          action: 'ASK_USER',
+          tool: null,
+          input: null,
+          reason: `The per-run Claude call limit of ${MAX_CLAUDE_CALLS} has been reached.`,
+        };
+      }
+      return {
+        action,
+        tool: 'claude_code_cli',
         input: {
           root: state.repo.root,
           task: requireBoundedTask(state.task),

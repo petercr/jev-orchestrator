@@ -45,6 +45,7 @@ const ACTION_CRITERIA = {
   RUN_COMMAND: 'Run a safe, non-destructive diagnostic command.',
   RUN_TESTS: 'Run an existing test, typecheck, lint, or build validation script.',
   CALL_CODEX: 'Delegate implementation or deeper coding analysis to Codex.',
+  CALL_CLAUDE: 'Delegate implementation or deeper coding analysis to Claude Code.',
   ASK_USER: 'Required information or authorization is unavailable and must come from the user.',
   FINISH: 'The requested task is complete and adequately validated.',
 } as const;

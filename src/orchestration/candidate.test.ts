@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import {
   CandidateSelectionError,
   deriveSearchTerms,
+  MAX_CLAUDE_CALLS,
   MAX_CODEX_CALLS,
   resolveSafeRepoFile,
   selectCandidate,
@@ -39,6 +40,7 @@ function state(root: string, overrides: Partial<AgentState> = {}): AgentState {
     tests: { ran: false },
     failedApproaches: [],
     codexCalls: 0,
+    claudeCalls: 0,
     ...overrides,
   };
 }
@@ -102,7 +104,7 @@ describe('candidate selection', () => {
     });
   });
 
-  it('keeps RUN_COMMAND disabled and selects a bounded Codex call', async () => {
+  it('keeps RUN_COMMAND disabled and selects bounded coding-agent calls', async () => {
     const root = await temporaryRoot();
     await expect(selectCandidate('RUN_COMMAND', state(root))).resolves.toMatchObject({
       action: 'ASK_USER',
@@ -115,12 +117,30 @@ describe('candidate selection', () => {
         task: 'Fix preview authentication failure',
       },
     });
+    await expect(selectCandidate('CALL_CLAUDE', state(root))).resolves.toMatchObject({
+      action: 'CALL_CLAUDE',
+      tool: 'claude_code_cli',
+      input: {
+        root,
+        task: 'Fix preview authentication failure',
+      },
+    });
   });
 
   it('stops proposing Codex after the per-run call limit', async () => {
     const root = await temporaryRoot();
     await expect(selectCandidate('CALL_CODEX', state(root, {
       codexCalls: MAX_CODEX_CALLS,
+    }))).resolves.toMatchObject({
+      action: 'ASK_USER',
+      reason: expect.stringContaining('call limit'),
+    });
+  });
+
+  it('stops proposing Claude after the per-run call limit', async () => {
+    const root = await temporaryRoot();
+    await expect(selectCandidate('CALL_CLAUDE', state(root, {
+      claudeCalls: MAX_CLAUDE_CALLS,
     }))).resolves.toMatchObject({
       action: 'ASK_USER',
       reason: expect.stringContaining('call limit'),

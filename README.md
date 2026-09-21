@@ -7,9 +7,9 @@ The default mode remains **decision-only**: it inspects a repository, sends a
 compact state object to Jev through Vercel AI Gateway, applies deterministic
 policy thresholds, prints the result, and records a JSONL trace. The explicit
 `--orchestrate` mode adds a bounded, manually approved loop for safe repository
-searches, bounded file reads, detected validation scripts, and Codex CLI
-delegation. It cannot run arbitrary commands, and Codex runs only after the
-resolved call receives explicit approval.
+searches, bounded file reads, detected validation scripts, and delegation to
+Codex CLI or Claude Code. It cannot run arbitrary commands, and either coding
+agent runs only after the resolved call receives explicit approval.
 
 ## Requirements
 
@@ -17,6 +17,8 @@ resolved call receives explicit approval.
 - pnpm
 - A Vercel AI Gateway key for live mode
 - An installed and authenticated Codex CLI for approved `CALL_CODEX` actions
+- An installed and authenticated Claude Code CLI for approved `CALL_CLAUDE`
+  actions
 
 ## Setup
 
@@ -60,10 +62,10 @@ manually even when the separate task-completion probability remains below the
 resolved completion candidate, then enter `approve`. This twice-confirmed
 override is unavailable before passing validation and is recorded in the trace.
 
-The mock flag applies only to Jev evaluation. If you choose `CALL_CODEX` as an
-alternative and approve its resolved candidate, the installed Codex CLI makes
-a real coding-agent call, may edit the selected repository, and may consume
-tokens. Reject the candidate to execute nothing.
+The mock flag applies only to Jev evaluation. If you choose `CALL_CODEX` or
+`CALL_CLAUDE` as an alternative and approve its resolved candidate, the
+installed coding-agent CLI makes a real call, may edit the selected repository,
+and may consume tokens. Reject the candidate to execute nothing.
 
 Then run the live Jev evaluation with the key from `.env`:
 
@@ -81,7 +83,7 @@ Gateway response data.
 
 Without `--orchestrate`, every successful run prints an **unexecuted** decision.
 With it, the CLI enters the manually approved loop described below. Only an
-approved `CALL_CODEX` candidate invokes a coding agent.
+approved `CALL_CODEX` or `CALL_CLAUDE` candidate invokes a coding agent.
 
 ```bash
 jev-agent <repo-path> <task> [--mock] [--no-trace] [--json] [--orchestrate]
@@ -150,17 +152,20 @@ content at 64 KiB. Validation can invoke only a recognized `test`, `check`,
 `typecheck`, `lint`, or `build` package script through the package manager
 detected from a lockfile. Process output and runtime are bounded.
 
-`CALL_CODEX` uses a typed adapter and the literal `codex` executable with direct
-arguments, never a shell. It runs in `workspace-write` mode rooted at the
-selected repository, ignores user configuration and execution rules, cannot
-request further approvals, does not persist its session, and has a 15-minute
-deadline. Stdout and stderr are separately capped at 16 KiB and recorded as
-separate trace fields; only Codex's final stdout message becomes the loop
-observation. Each orchestration run permits at most two Codex calls. After every
-attempt the loop refreshes repository metadata with exact untracked paths;
-generated trace files are excluded from the modified-source list, and detected
-source changes invalidate prior validation and must pass a separately approved
-validation script before completion.
+Both coding agents use small typed adapters and literal executables with direct
+arguments, never a shell. Codex is pinned to `gpt-5.6-terra` with `high`
+reasoning in a repository-rooted `workspace-write` sandbox; it ignores user
+configuration and execution rules, cannot request further approvals, and does
+not persist its session. Claude is pinned to Sonnet with `medium` effort and a
+restricted file-only tool set (`Read`, `Write`, `Edit`, `Glob`, and `Grep`), so
+the orchestrator—not Claude—runs validation separately. Each call has a
+15-minute deadline. Stdout and stderr are separately capped at 16 KiB and
+recorded as separate trace fields; only final stdout becomes the loop
+observation. Each orchestration run permits at most two calls to each agent.
+After every attempt the loop refreshes repository metadata with exact untracked
+paths; generated trace files are excluded from the modified-source list, and
+detected source changes invalidate prior validation and must pass a separately
+approved validation script before completion.
 
 After exporting `AI_GATEWAY_API_KEY`, the shorter command works as well. Against
 another repository:
@@ -182,7 +187,21 @@ boundaries, so it does not require `AI_GATEWAY_API_KEY`, a coding agent, or a
 live Jev evaluation. Pull-request CI runs the same typecheck, test, and build
 commands for maintainers.
 
-## Live Codex verification
+## Live coding-agent verification
+
+On 2026-09-20, the routed Claude and Codex paths were both exercised against
+separate disposable Git fixtures containing the same missing `src/add.js`
+implementation and one failing Node test. Claude Code 2.1.278 used Sonnet with
+medium effort and its restricted file-only tool set; it created only the
+requested file and returned successfully in 7,172 ms. Codex CLI 0.155.1 used
+`gpt-5.6-terra` with high reasoning; its trace confirmed both settings, it
+created only the requested file, and returned successfully in 33,980 ms.
+
+Each loop refreshed repository state, identified `src/add.js` exactly, reset
+validation, ran a separately approved `pnpm test`, and required a final
+completion approval. Both runs finished in three iterations and passed one
+test. Mock mode was used only for Jev routing; both approved coding-agent calls
+were live.
 
 On 2026-09-20, Codex CLI 0.155.1 was invoked through the approval loop against
 a disposable Git fixture with a missing `src/add.js` implementation and one
