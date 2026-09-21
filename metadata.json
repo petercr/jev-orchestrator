@@ -1,0 +1,30 @@
+{
+  "cli_version": "0.10.7-nightly.202609190623.ae303f31d",
+  "checkpoint_id": "01M32KT8R3BW21NK1GAS35F6EN",
+  "strategy": "manual-commit",
+  "branch": "release/v0.2.0",
+  "checkpoints_count": 2,
+  "files_touched": [
+    "PLAN.md",
+    "README.md",
+    "package.json",
+    "src/cli.integration.test.ts"
+  ],
+  "sessions": [
+    {
+      "metadata": "/0/metadata.json",
+      "transcript": "/0/full.jsonl",
+      "compact_transcript": "/0/transcript.jsonl",
+      "content_hash": "/0/content_hash.txt",
+      "prompt": "/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 194144,
+    "cache_creation_tokens": 0,
+    "cache_read_tokens": 3785984,
+    "output_tokens": 6878,
+    "api_call_count": 24,
+    "subagent_tokens_complete": true
+  }
+}
