@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import {
   CandidateSelectionError,
   deriveSearchTerms,
+  MAX_CODEX_CALLS,
   resolveSafeRepoFile,
   selectCandidate,
 } from './candidate.js';
@@ -101,13 +102,28 @@ describe('candidate selection', () => {
     });
   });
 
-  it('does not make RUN_COMMAND or CALL_CODEX executable', async () => {
+  it('keeps RUN_COMMAND disabled and selects a bounded Codex call', async () => {
     const root = await temporaryRoot();
     await expect(selectCandidate('RUN_COMMAND', state(root))).resolves.toMatchObject({
       action: 'ASK_USER',
     });
     await expect(selectCandidate('CALL_CODEX', state(root))).resolves.toMatchObject({
+      action: 'CALL_CODEX',
+      tool: 'codex_cli',
+      input: {
+        root,
+        task: 'Fix preview authentication failure',
+      },
+    });
+  });
+
+  it('stops proposing Codex after the per-run call limit', async () => {
+    const root = await temporaryRoot();
+    await expect(selectCandidate('CALL_CODEX', state(root, {
+      codexCalls: MAX_CODEX_CALLS,
+    }))).resolves.toMatchObject({
       action: 'ASK_USER',
+      reason: expect.stringContaining('call limit'),
     });
   });
 });

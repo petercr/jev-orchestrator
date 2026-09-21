@@ -107,6 +107,34 @@ describe('constrained execution', () => {
     });
   });
 
+  it('routes CALL_CODEX through the bounded typed adapter', async () => {
+    const root = await temporaryRoot();
+    const runner = vi.fn<ProcessRunner>().mockResolvedValue({
+      exitCode: 0,
+      stdout: 'Implemented and validated the change.',
+      stderr: '',
+      timedOut: false,
+    });
+    const result = await executeCandidate({
+      action: 'CALL_CODEX',
+      tool: 'codex_cli',
+      input: { root, task: 'Fix preview authentication' },
+    }, runner);
+
+    expect(result).toMatchObject({
+      action: 'CALL_CODEX',
+      ok: true,
+      exitCode: 0,
+      output: 'Implemented and validated the change.',
+      files: [],
+    });
+    expect(runner).toHaveBeenCalledWith(expect.objectContaining({
+      command: 'codex',
+      cwd: root,
+      args: expect.arrayContaining(['exec', '--sandbox', 'workspace-write']),
+    }));
+  });
+
   it('rejects malformed process results and non-tool actions', async () => {
     const root = await temporaryRoot();
     const malformed = (async () => ({

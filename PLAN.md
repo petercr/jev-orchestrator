@@ -155,7 +155,8 @@ type Action =
 Implementation status (2026-09-20): complete for the first executable action
 set. Decision-only mode remains the default, and `--orchestrate` enables the
 manually approved loop. `CALL_CODEX` and arbitrary `RUN_COMMAND` execution
-remain out of scope.
+remain out of scope for this completed milestone; Codex delegation is the
+follow-on milestone below.
 
 After v0.1's decision-only release gate is met, add a bounded loop that can
 perform approved, safe repository work. Manual approval is the default.
@@ -252,6 +253,34 @@ process and provider boundaries rather than policy logic.
 The milestone succeeds when the CLI can navigate a small repository
 investigation without arbitrary shell access, path escape, premature completion,
 or unbounded looping.
+
+## Next milestone: bounded Codex delegation
+
+Implementation status (2026-09-20): in progress. Add `CALL_CODEX` to the
+approval-gated executable set without enabling arbitrary `RUN_COMMAND`.
+
+The Codex integration must stay behind a small adapter with a common typed
+coding-agent result. Invoke the literal `codex` executable with direct
+arguments, a selected-repository working directory, `workspace-write`
+sandboxing, bounded stdout and stderr, a hard timeout, and no persistent
+session. User and repository text cannot change those invocation controls.
+
+Require explicit approval for each call and allow at most two calls per
+orchestration run. Record the normalized exit status, timeout, output, updated
+repository status, modified-file list, and call count. A failed or timed-out
+call must not be repeated unchanged. Any detected Codex change invalidates
+prior validation, so completion still requires a later approved validation
+script to pass.
+
+Cover successful delegation, malformed adapter results, failures, timeouts,
+argument-shaped task text, repository refresh, validation invalidation, and the
+call limit without invoking a live coding agent in automated tests. Validate a
+real call manually only against an expendable fixture repository before
+declaring the milestone complete.
+
+The follow-on milestone adds Claude Code behind the same adapter contract, then
+routes between coding-agent capabilities. `RUN_COMMAND` remains disabled until
+a separately reviewed diagnostic-command allowlist exists.
 
 ## Reference, not a template
 

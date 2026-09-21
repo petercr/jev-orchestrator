@@ -1,14 +1,18 @@
 import { lstat, realpath } from 'node:fs/promises';
 import path from 'node:path';
+import { requireBoundedTask } from '../limits.js';
 import type { Action, AgentState } from '../types.js';
 
 export const EXECUTABLE_ACTIONS = [
   'SEARCH_REPO',
   'READ_FILE',
   'RUN_TESTS',
+  'CALL_CODEX',
   'ASK_USER',
   'FINISH',
 ] as const satisfies readonly Action[];
+
+export const MAX_CODEX_CALLS = 2;
 
 export type ExecutableAction = (typeof EXECUTABLE_ACTIONS)[number];
 
@@ -42,6 +46,15 @@ export type TestProposal = {
   };
 };
 
+export type CodexProposal = {
+  action: 'CALL_CODEX';
+  tool: 'codex_cli';
+  input: {
+    root: string;
+    task: string;
+  };
+};
+
 export type AskUserProposal = {
   action: 'ASK_USER';
   tool: null;
@@ -60,6 +73,7 @@ export type CandidateProposal =
   | SearchProposal
   | ReadProposal
   | TestProposal
+  | CodexProposal
   | AskUserProposal
   | FinishProposal;
 
@@ -266,6 +280,23 @@ export async function selectCandidate(
         },
       };
     }
+    case 'CALL_CODEX':
+      if (state.codexCalls >= MAX_CODEX_CALLS) {
+        return {
+          action: 'ASK_USER',
+          tool: null,
+          input: null,
+          reason: `The per-run Codex call limit of ${MAX_CODEX_CALLS} has been reached.`,
+        };
+      }
+      return {
+        action,
+        tool: 'codex_cli',
+        input: {
+          root: state.repo.root,
+          task: requireBoundedTask(state.task),
+        },
+      };
     case 'ASK_USER':
       return {
         action,
@@ -281,12 +312,11 @@ export async function selectCandidate(
         reason: 'Completion requires explicit user approval.',
       };
     case 'RUN_COMMAND':
-    case 'CALL_CODEX':
       return {
         action: 'ASK_USER',
         tool: null,
         input: null,
-        reason: `${action} is not executable in the approval-gated milestone.`,
+        reason: 'RUN_COMMAND remains disabled until a reviewed diagnostic allowlist exists.',
       };
   }
 }

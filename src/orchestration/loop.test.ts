@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { mockEvaluation } from '../mock.js';
 import type { AgentAssessment, EvaluationResult, RepoSnapshot } from '../types.js';
 import { createInitialState, runOrchestration, type ApprovalDecision } from './loop.js';
+import { MAX_CODEX_CALLS } from './candidate.js';
 import type { ToolResult } from './execute.js';
 
 const roots: string[] = [];
@@ -375,5 +376,92 @@ describe('approval-gated orchestration loop', () => {
       approve,
       askForInformation: async () => '',
     }, { maxIterations: 9 })).rejects.toThrow('between 1 and 8');
+  });
+
+  it('records an approved Codex call, refreshes repository state, and invalidates validation', async () => {
+    const repo = await repository();
+    const initial = createInitialState(repo, 'Implement fixture authentication');
+    initial.tests = { ran: true, passed: true, summary: 'old validation' };
+    const execute = vi.fn().mockResolvedValue({
+      action: 'CALL_CODEX',
+      ok: true,
+      exitCode: 0,
+      durationMs: 12,
+      timedOut: false,
+      output: 'Implemented authentication.',
+      files: [],
+    } satisfies ToolResult);
+
+    const result = await runOrchestration(initial, {
+      evaluate: async () => clearAssessment('CALL_CODEX'),
+      approve,
+      askForInformation: async () => '',
+      execute,
+      inspect: async () => ({
+        ...repo,
+        gitStatus: [' M src/auth.ts', '?? src/auth.test.ts'],
+      }),
+    }, { maxIterations: 1 });
+
+    expect(execute).toHaveBeenCalledWith(expect.objectContaining({ action: 'CALL_CODEX' }));
+    expect(result.state).toMatchObject({
+      codexCalls: 1,
+      filesModified: ['src/auth.ts', 'src/auth.test.ts'],
+      tests: { ran: false },
+      commandsRun: [{ command: 'codex exec', exitCode: 0 }],
+    });
+    expect(result.state.observations).toContain('Codex completed: Implemented authentication.');
+  });
+
+  it('does not execute Codex after the per-run call limit', async () => {
+    const repo = await repository();
+    const initial = createInitialState(repo, 'Implement fixture authentication');
+    initial.codexCalls = MAX_CODEX_CALLS;
+    const execute = vi.fn();
+
+    const result = await runOrchestration(initial, {
+      evaluate: async () => clearAssessment('CALL_CODEX'),
+      approve,
+      askForInformation: async () => 'Continue manually',
+      execute,
+    }, { maxIterations: 1 });
+
+    expect(execute).not.toHaveBeenCalled();
+    expect(result.state.codexCalls).toBe(MAX_CODEX_CALLS);
+    expect(result.state.observations).toContain('User supplied information: Continue manually');
+  });
+
+  it('captures partial repository changes after a failed Codex call', async () => {
+    const repo = await repository();
+    const result = await runOrchestration(
+      createInitialState(repo, 'Implement fixture authentication'),
+      {
+        evaluate: async () => clearAssessment('CALL_CODEX'),
+        approve,
+        askForInformation: async () => '',
+        execute: async () => ({
+          action: 'CALL_CODEX',
+          ok: false,
+          exitCode: null,
+          durationMs: 900_000,
+          timedOut: true,
+          output: 'Codex timed out after making a partial change.',
+          files: [],
+        }),
+        inspect: async () => ({
+          ...repo,
+          gitStatus: [' M src/partial.ts'],
+        }),
+      },
+      { maxIterations: 1 },
+    );
+
+    expect(result.state).toMatchObject({
+      codexCalls: 1,
+      filesModified: ['src/partial.ts'],
+      tests: { ran: false },
+      commandsRun: [{ command: 'codex exec', exitCode: 1 }],
+    });
+    expect(result.state.failedApproaches).toHaveLength(1);
   });
 });
