@@ -1,5 +1,1 @@
-ok commit push and pr
-
----
-
 ok 14 merged lets work on the live codex part
