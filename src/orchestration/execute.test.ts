@@ -112,7 +112,7 @@ describe('constrained execution', () => {
     const runner = vi.fn<ProcessRunner>().mockResolvedValue({
       exitCode: 0,
       stdout: 'Implemented and validated the change.',
-      stderr: '',
+      stderr: 'progress details',
       timedOut: false,
     });
     const result = await executeCandidate({
@@ -127,6 +127,8 @@ describe('constrained execution', () => {
       exitCode: 0,
       output: 'Implemented and validated the change.',
       files: [],
+      stdout: 'Implemented and validated the change.',
+      stderr: 'progress details',
     });
     expect(runner).toHaveBeenCalledWith(expect.objectContaining({
       command: 'codex',

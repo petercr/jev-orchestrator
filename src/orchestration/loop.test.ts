@@ -390,6 +390,8 @@ describe('approval-gated orchestration loop', () => {
       timedOut: false,
       output: 'Implemented authentication.',
       files: [],
+      stdout: 'Implemented authentication.',
+      stderr: 'Codex progress details.',
     } satisfies ToolResult);
 
     const result = await runOrchestration(initial, {
@@ -399,7 +401,11 @@ describe('approval-gated orchestration loop', () => {
       execute,
       inspect: async () => ({
         ...repo,
-        gitStatus: [' M src/auth.ts', '?? src/auth.test.ts'],
+        gitStatus: [
+          ' M src/auth.ts',
+          '?? src/auth.test.ts',
+          '?? traces/run.jsonl',
+        ],
       }),
     }, { maxIterations: 1 });
 
@@ -411,6 +417,12 @@ describe('approval-gated orchestration loop', () => {
       commandsRun: [{ command: 'codex exec', exitCode: 0 }],
     });
     expect(result.state.observations).toContain('Codex completed: Implemented authentication.');
+    const record = JSON.parse((await readFile(result.tracePath, 'utf8')).trim());
+    expect(record.toolResult).toMatchObject({
+      output: 'Implemented authentication.',
+      stdout: 'Implemented authentication.',
+      stderr: 'Codex progress details.',
+    });
   });
 
   it('does not execute Codex after the per-run call limit', async () => {

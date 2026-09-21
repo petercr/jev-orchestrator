@@ -256,7 +256,7 @@ or unbounded looping.
 
 ## Next milestone: bounded Codex delegation
 
-Implementation status (2026-09-20): in progress. Add `CALL_CODEX` to the
+Implementation status (2026-09-20): complete. `CALL_CODEX` is part of the
 approval-gated executable set without enabling arbitrary `RUN_COMMAND`.
 
 The Codex integration must stay behind a small adapter with a common typed
@@ -277,6 +277,16 @@ argument-shaped task text, repository refresh, validation invalidation, and the
 call limit without invoking a live coding agent in automated tests. Validate a
 real call manually only against an expendable fixture repository before
 declaring the milestone complete.
+
+Live verification completed on 2026-09-20 with Codex CLI 0.155.1 against a
+disposable Git repository containing one failing Node test. The approved call
+created only `src/add.js`, exited successfully in 19,991 ms, and reported its
+own passing test. The orchestrator then independently completed search, read,
+validation, and approved finish steps in a five-iteration schema-v2 trace. Its
+validation command passed one test. The initial trace exposed directory-level
+untracked paths and merged progress diagnostics; the follow-up fix records exact
+untracked file paths, excludes generated traces from `filesModified`, and keeps
+bounded stdout and stderr separate while using stdout as the agent summary.
 
 The follow-on milestone adds Claude Code behind the same adapter contract, then
 routes between coding-agent capabilities. `RUN_COMMAND` remains disabled until

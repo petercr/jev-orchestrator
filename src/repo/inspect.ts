@@ -147,7 +147,7 @@ async function inspectGit(root: string): Promise<Pick<RepoSnapshot, 'gitBranch' 
 
   const [gitBranch, status] = await Promise.all([
     git(root, ['branch', '--show-current']),
-    git(root, ['status', '--short', '--no-renames', '--untracked-files=normal']),
+    git(root, ['status', '--short', '--no-renames', '--untracked-files=all']),
   ]);
 
   return {
