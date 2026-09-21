@@ -6,11 +6,11 @@
 AI's Jev can steer a coding-agent workflow. The repository is
 [`petercr/jev-orchestrator`](https://github.com/petercr/jev-orchestrator).
 
-Ship a reliable decision-only v0.1 CLI. Given a repository path and coding task,
-it collects a bounded repository snapshot, asks Jev for a typed recommendation,
-applies local policy, prints the unexecuted decision, and can write a safe JSONL
-trace. It does not execute the selected action, modify the target repository, or
-invoke Codex or Claude Code.
+Ship a reliable v0.2 CLI that preserves v0.1's decision-only default and adds an
+explicit approval-gated orchestration mode. Decision-only collects a bounded
+repository snapshot, asks Jev for a typed recommendation, applies local policy,
+prints the unexecuted decision, and can write a safe JSONL trace. Orchestration
+may execute only repository-owned bounded candidates after manual approval.
 
 The governing architecture is:
 
@@ -42,7 +42,7 @@ tool arguments.
   credential-safe. Gateway calls use standard data retention
   (`zeroDataRetention: false`), so send only repository data authorized for
   that service.
-- `--mock` remains token-free and offline. `pnpm check`, `pnpm test` (108
+- `--mock` remains token-free and offline. `pnpm check`, `pnpm test` (109
   tests), and `pnpm build` currently pass.
 
 The current action vocabulary is:
@@ -144,7 +144,7 @@ type Action =
      zero mock latency, and wrote no trace.
    - Complete: a local install follows the documented setup and commands.
 
-## Release gate
+## v0.1 release gate
 
 - `pnpm check`, `pnpm test`, and `pnpm build` pass.
 - The documented mock command succeeds without network access or a key.
@@ -341,6 +341,25 @@ approved `git_diff_stat` diagnostic completed in 5 ms with exit status `0`,
 changed no files, and recorded the exact fixed command in its schema-v2 trace.
 The loop then passed a separately approved test and finished after explicit
 approval in three iterations.
+
+## v0.2 release candidate
+
+Implementation status (2026-09-21): complete. Package the completed
+approval-gated orchestration milestones as version `0.2.0` without changing
+their runtime safety boundaries or publishing an artifact.
+
+The release gate requires `pnpm check`, `pnpm test`, and `pnpm build`; the
+documented mock decision smoke; a tarball whose production allowlist excludes
+tests, traces, credentials, and dependencies; installation into a disposable
+project; `jev-agent --version` reporting `0.2.0`; and a token-free installed
+binary decision returning `status: "unexecuted"` without writing a trace.
+
+Verification packed the production allowlist into
+`jev-orchestrator-0.2.0.tgz`; inspection found only runtime JavaScript and
+declarations, package metadata, README, and license. Installing that exact
+archive into a disposable pnpm project reported version `0.2.0`, returned a
+token-free mock decision with `status: "unexecuted"`, selected `SEARCH_REPO`,
+and created no trace. No artifact was published.
 
 ## Reference, not a template
 

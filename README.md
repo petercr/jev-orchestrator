@@ -247,14 +247,16 @@ Then, from the other project, install that exact archive and run the installed
 binary against that project:
 
 ```bash
-pnpm add --save-dev /absolute/path/to/jev-orchestrator-0.1.0.tgz
+pnpm add --save-dev /absolute/path/to/jev-orchestrator-0.2.0.tgz
 pnpm exec jev-agent --version
 pnpm exec jev-agent . "Inspect this repository and choose the safest useful first action" \
   --mock --no-trace --json
 ```
 
 The expected mock result is one JSON object with `status: "unexecuted"`; it
-must not edit the target project or require an API key. Do not pack or publish
+must not edit the target project or require an API key. On 2026-09-21, the
+`0.2.0` archive was installed into a disposable project, reported version
+`0.2.0`, returned that mock result, and created no trace. Do not pack or publish
 `.env`, traces, build cache, or `node_modules`.
 
 ## Continuous integration
@@ -313,12 +315,11 @@ Live Jev evaluations allow standard Gateway data retention
 (`zeroDataRetention: false`); run them only with repository data you authorize
 for that service.
 
-## Current milestone
+## v0.2 orchestration release
 
-The narrow diagnostic-command allowlist enables `RUN_COMMAND` without enabling
-general shell access. Candidate selection and execution both use repository-
-owned identifiers and fixed direct arguments, with focused coverage for
-selection, tampering rejection, timeouts, state transitions, and traces. Live
-verification against a disposable repository recorded the hardened
-`git_diff_stat` command, completed it in 5 ms without changing files, passed a
-separately approved test, and finished after explicit approval.
+Version 0.2 preserves the read-only decision-only default and packages the
+explicit approval-gated orchestration loop. Its executable set includes bounded
+search and reads, two fixed Git diagnostics, detected validation scripts, and
+bounded Claude Code or Codex delegation. Every executable candidate still
+requires approval, every iteration is traced, and completion still requires
+passing validation when available.
