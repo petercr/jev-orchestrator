@@ -104,10 +104,60 @@ describe('candidate selection', () => {
     });
   });
 
-  it('keeps RUN_COMMAND disabled and selects bounded coding-agent calls', async () => {
+  it('selects only fixed diagnostics and bounded coding-agent calls', async () => {
     const root = await temporaryRoot();
     await expect(selectCandidate('RUN_COMMAND', state(root))).resolves.toMatchObject({
-      action: 'ASK_USER',
+      action: 'RUN_COMMAND',
+      tool: 'diagnostic_command',
+      input: {
+        root,
+        diagnostic: 'git_status',
+        command: 'git',
+        args: [
+          '--no-pager',
+          '--no-optional-locks',
+          '-c',
+          'core.fsmonitor=false',
+          'status',
+          '--short',
+          '--untracked-files=all',
+          '--no-renames',
+          '--ignore-submodules=all',
+          '--',
+          '.',
+          ':(exclude)traces/**',
+        ],
+      },
+    });
+    await expect(selectCandidate('RUN_COMMAND', state(root, {
+      repo: { ...state(root).repo, gitStatus: ['?? src/new.ts'] },
+    }))).resolves.toMatchObject({
+      input: { diagnostic: 'git_status' },
+    });
+    await expect(selectCandidate('RUN_COMMAND', state(root, {
+      repo: { ...state(root).repo, gitStatus: [' M src/auth.ts'] },
+    }))).resolves.toMatchObject({
+      action: 'RUN_COMMAND',
+      input: {
+        diagnostic: 'git_diff_stat',
+        command: 'git',
+        args: [
+          '--no-pager',
+          '--no-optional-locks',
+          '-c',
+          'core.fsmonitor=false',
+          'diff',
+          '--stat',
+          '--no-ext-diff',
+          '--no-textconv',
+          '--no-renames',
+          '--ignore-submodules=all',
+          'HEAD',
+          '--',
+          '.',
+          ':(exclude)traces/**',
+        ],
+      },
     });
     await expect(selectCandidate('CALL_CODEX', state(root))).resolves.toMatchObject({
       action: 'CALL_CODEX',

@@ -255,6 +255,8 @@ function approvalChoice(value: string, context: ApprovalContext): ApprovalDecisi
     SEARCH_REPO: { kind: 'alternative', action: 'SEARCH_REPO' },
     READ: { kind: 'alternative', action: 'READ_FILE' },
     READ_FILE: { kind: 'alternative', action: 'READ_FILE' },
+    COMMAND: { kind: 'alternative', action: 'RUN_COMMAND' },
+    RUN_COMMAND: { kind: 'alternative', action: 'RUN_COMMAND' },
     TEST: { kind: 'alternative', action: 'RUN_TESTS' },
     RUN_TESTS: { kind: 'alternative', action: 'RUN_TESTS' },
     CODEX: { kind: 'alternative', action: 'CALL_CODEX' },

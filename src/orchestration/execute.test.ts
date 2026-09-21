@@ -4,6 +4,7 @@ import path from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   executeCandidate,
+  DIAGNOSTIC_TIMEOUT_MS,
   FORCE_KILL_GRACE_MS,
   MAX_READ_FILE_BYTES,
   SEARCH_TIMEOUT_MS,
@@ -104,6 +105,135 @@ describe('constrained execution', () => {
       args: ['run', 'test'],
       cwd: root,
       timeoutMs: VALIDATION_TIMEOUT_MS,
+    });
+  });
+
+  it('runs only an exact allowlisted diagnostic with a short timeout', async () => {
+    const root = await temporaryRoot();
+    const runner = vi.fn<ProcessRunner>().mockResolvedValue({
+      exitCode: 0,
+      stdout: ' M src/auth.ts\n',
+      stderr: '',
+      timedOut: false,
+    });
+    const result = await executeCandidate({
+      action: 'RUN_COMMAND',
+      tool: 'diagnostic_command',
+      input: {
+        root,
+        diagnostic: 'git_status',
+        command: 'git',
+        args: [
+          '--no-pager',
+          '--no-optional-locks',
+          '-c',
+          'core.fsmonitor=false',
+          'status',
+          '--short',
+          '--untracked-files=all',
+          '--no-renames',
+          '--ignore-submodules=all',
+          '--',
+          '.',
+          ':(exclude)traces/**',
+        ],
+      },
+    }, runner);
+
+    expect(result).toMatchObject({
+      action: 'RUN_COMMAND',
+      ok: true,
+      output: 'M src/auth.ts',
+    });
+    expect(runner).toHaveBeenCalledWith({
+      command: 'git',
+      args: [
+        '--no-pager',
+        '--no-optional-locks',
+        '-c',
+        'core.fsmonitor=false',
+        'status',
+        '--short',
+        '--untracked-files=all',
+        '--no-renames',
+        '--ignore-submodules=all',
+        '--',
+        '.',
+        ':(exclude)traces/**',
+      ],
+      cwd: root,
+      timeoutMs: DIAGNOSTIC_TIMEOUT_MS,
+    });
+  });
+
+  it('rejects modified diagnostic arguments before spawning a process', async () => {
+    const root = await temporaryRoot();
+    const runner = vi.fn<ProcessRunner>();
+
+    await expect(executeCandidate({
+      action: 'RUN_COMMAND',
+      tool: 'diagnostic_command',
+      input: {
+        root,
+        diagnostic: 'git_status',
+        command: 'git',
+        args: ['status', '--porcelain', '--', '../outside'],
+      },
+    }, runner)).rejects.toThrow('fixed command allowlist');
+    await expect(executeCandidate({
+      action: 'RUN_COMMAND',
+      tool: 'diagnostic_command',
+      input: {
+        root,
+        diagnostic: 'not_allowlisted',
+        command: 'git',
+        args: ['status'],
+      },
+    } as unknown as Parameters<typeof executeCandidate>[0], runner)).rejects.toThrow(
+      'fixed command allowlist',
+    );
+    expect(runner).not.toHaveBeenCalled();
+  });
+
+  it('normalizes a diagnostic timeout', async () => {
+    const root = await temporaryRoot();
+    const result = await executeCandidate({
+      action: 'RUN_COMMAND',
+      tool: 'diagnostic_command',
+      input: {
+        root,
+        diagnostic: 'git_diff_stat',
+        command: 'git',
+        args: [
+          '--no-pager',
+          '--no-optional-locks',
+          '-c',
+          'core.fsmonitor=false',
+          'diff',
+          '--stat',
+          '--no-ext-diff',
+          '--no-textconv',
+          '--no-renames',
+          '--ignore-submodules=all',
+          'HEAD',
+          '--',
+          '.',
+          ':(exclude)traces/**',
+        ],
+      },
+    }, async () => ({
+      exitCode: null,
+      stdout: '',
+      stderr: 'terminated',
+      timedOut: true,
+    }));
+
+    expect(result).toMatchObject({
+      action: 'RUN_COMMAND',
+      ok: false,
+      exitCode: null,
+      timedOut: true,
+      output: 'terminated',
     });
   });
 

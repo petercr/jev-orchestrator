@@ -14,6 +14,7 @@ import {
   type ProcessRunner,
 } from '../process.js';
 import { resolveSafeRepoFile, type CandidateProposal } from './candidate.js';
+import { isAllowedDiagnosticCommand } from './diagnostics.js';
 
 export {
   FORCE_KILL_GRACE_MS,
@@ -26,6 +27,7 @@ export const MAX_TOOL_OUTPUT_BYTES = MAX_PROCESS_OUTPUT_BYTES;
 export const MAX_SEARCH_RESULTS = 50;
 export const MAX_READ_FILE_BYTES = 64 * 1024;
 export const SEARCH_TIMEOUT_MS = 10_000;
+export const DIAGNOSTIC_TIMEOUT_MS = 10_000;
 export const VALIDATION_TIMEOUT_MS = 120_000;
 
 export type ToolResult = {
@@ -185,21 +187,41 @@ export async function executeCandidate(
       throw new ToolExecutionError('The validation proposal does not match its package-manager script.');
     }
   }
+  if (
+    proposal.action === 'RUN_COMMAND' &&
+    !isAllowedDiagnosticCommand(
+      proposal.input.diagnostic,
+      proposal.input.command,
+      proposal.input.args,
+    )
+  ) {
+    throw new ToolExecutionError('The diagnostic proposal does not match the fixed command allowlist.');
+  }
 
   const startedAt = performance.now();
-  const request: ProcessRequest = proposal.action === 'SEARCH_REPO'
-    ? {
+  let request: ProcessRequest;
+  if (proposal.action === 'SEARCH_REPO') {
+    request = {
       command: 'rg',
       args: searchArgs(proposal.input.terms),
       cwd: proposal.input.root,
       timeoutMs: SEARCH_TIMEOUT_MS,
-    }
-    : {
+    };
+  } else if (proposal.action === 'RUN_COMMAND') {
+    request = {
+      command: proposal.input.command,
+      args: proposal.input.args,
+      cwd: proposal.input.root,
+      timeoutMs: DIAGNOSTIC_TIMEOUT_MS,
+    };
+  } else {
+    request = {
       command: proposal.input.command,
       args: proposal.input.args,
       cwd: proposal.input.root,
       timeoutMs: VALIDATION_TIMEOUT_MS,
     };
+  }
   const result = await runner(request);
   try {
     validateProcessResult(result);

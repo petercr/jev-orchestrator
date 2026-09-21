@@ -378,6 +378,54 @@ describe('approval-gated orchestration loop', () => {
     }, { maxIterations: 9 })).rejects.toThrow('between 1 and 8');
   });
 
+  it('records an approved diagnostic without changing validation evidence', async () => {
+    const repo = await repository();
+    const initial = createInitialState(repo, 'Inspect the working tree');
+    initial.tests = { ran: true, passed: true, summary: 'existing validation' };
+    const execute = vi.fn().mockResolvedValue({
+      action: 'RUN_COMMAND',
+      ok: true,
+      exitCode: 0,
+      durationMs: 4,
+      timedOut: false,
+      output: 'M src/auth.ts',
+      files: [],
+    } satisfies ToolResult);
+
+    const result = await runOrchestration(initial, {
+      evaluate: async () => clearAssessment('RUN_COMMAND'),
+      approve,
+      askForInformation: async () => '',
+      execute,
+    }, { maxIterations: 1 });
+
+    expect(execute).toHaveBeenCalledWith(expect.objectContaining({
+      action: 'RUN_COMMAND',
+      tool: 'diagnostic_command',
+    }));
+    expect(result.state).toMatchObject({
+      tests: { ran: true, passed: true, summary: 'existing validation' },
+      commandsRun: [{
+        command: 'git --no-pager --no-optional-locks -c core.fsmonitor=false status --short --untracked-files=all --no-renames --ignore-submodules=all -- . :(exclude)traces/**',
+      }],
+    });
+    expect(result.state.observations).toContain('Diagnostic completed: M src/auth.ts');
+    const record = JSON.parse((await readFile(result.tracePath, 'utf8')).trim());
+    expect(record).toMatchObject({
+      proposal: {
+        selected: {
+          action: 'RUN_COMMAND',
+          tool: 'diagnostic_command',
+        },
+      },
+      toolInput: {
+        diagnostic: 'git_status',
+        command: 'git',
+      },
+      toolResult: { ok: true, exitCode: 0 },
+    });
+  });
+
   it('records an approved Codex call, refreshes repository state, and invalidates validation', async () => {
     const repo = await repository();
     const initial = createInitialState(repo, 'Implement fixture authentication');

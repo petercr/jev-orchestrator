@@ -7,9 +7,10 @@ The default mode remains **decision-only**: it inspects a repository, sends a
 compact state object to Jev through Vercel AI Gateway, applies deterministic
 policy thresholds, prints the result, and records a JSONL trace. The explicit
 `--orchestrate` mode adds a bounded, manually approved loop for safe repository
-searches, bounded file reads, detected validation scripts, and delegation to
-Codex CLI or Claude Code. It cannot run arbitrary commands, and either coding
-agent runs only after the resolved call receives explicit approval.
+searches, bounded file reads, fixed read-only Git diagnostics, detected
+validation scripts, and delegation to Codex CLI or Claude Code. It cannot run
+arbitrary commands, and every resolved executable candidate requires explicit
+approval.
 
 ## Requirements
 
@@ -152,6 +153,16 @@ content at 64 KiB. Validation can invoke only a recognized `test`, `check`,
 `typecheck`, `lint`, or `build` package script through the package manager
 detected from a lockfile. Process output and runtime are bounded.
 
+`RUN_COMMAND` is limited to two immutable, read-only Git diagnostics selected
+from repository state: bounded status for clean or untracked-only states, and
+metadata-only `git diff --stat HEAD` for tracked changes. Both disable paging,
+optional locks, repository-configured filesystem monitors, renames, and
+submodule inspection; diff statistics also disable external diff drivers and
+text conversion so no source lines enter command output. Generated traces are
+excluded from both diagnostics. The executor revalidates the exact command and
+argument list immediately before spawning the literal `git` executable, uses no
+shell, and enforces a 10-second deadline.
+
 Both coding agents use small typed adapters and literal executables with direct
 arguments, never a shell. Codex is pinned to `gpt-5.6-terra` with `high`
 reasoning in a repository-rooted `workspace-write` sandbox; it ignores user
@@ -278,7 +289,8 @@ once the repository has enough conventions to encode.
 ## Current safety boundary
 
 Decision-only mode is read-only except for its trace file. Orchestration writes
-trace files and may run an explicitly approved validation script or Codex call.
+trace files and may run an explicitly approved fixed diagnostic, validation
+script, Codex call, or Claude call.
 The policy refuses to finish a task until a detected validation script has
 passed, routes high missing-information or stuck signals to `ASK_USER`, and
 does the same for ambiguous next actions. If validation fails or none is
@@ -291,18 +303,22 @@ threshold. Once validation has passed, a user may explicitly override that
 confidence threshold only when Jev itself clearly recommends `FINISH`; the
 resolved completion candidate must then be approved a second time.
 
-`RUN_COMMAND` remains non-executable. The loop never evaluates model-generated
-shell text. The Codex adapter explicitly forbids deployment, publishing,
-pushing, commits, destructive Git, secret reads, and writes outside the selected
-repository; its workspace sandbox and fixed direct arguments provide the local
-execution boundary.
+`RUN_COMMAND` never evaluates model-generated shell text or accepts arbitrary
+arguments; it resolves only the two documented Git diagnostics. The Codex
+adapter explicitly forbids deployment, publishing, pushing, commits,
+destructive Git, secret reads, and writes outside the selected repository; its
+workspace sandbox and fixed direct arguments provide the local execution
+boundary.
 Live Jev evaluations allow standard Gateway data retention
 (`zeroDataRetention: false`); run them only with repository data you authorize
 for that service.
 
-## Next milestone
+## Current milestone
 
-Add Claude Code behind the same typed adapter result contract, then route
-between coding-agent capabilities under the existing approval and call-limit
-controls. `RUN_COMMAND` remains disabled until a separately reviewed
-diagnostic-command allowlist exists.
+The narrow diagnostic-command allowlist enables `RUN_COMMAND` without enabling
+general shell access. Candidate selection and execution both use repository-
+owned identifiers and fixed direct arguments, with focused coverage for
+selection, tampering rejection, timeouts, state transitions, and traces. Live
+verification against a disposable repository recorded the hardened
+`git_diff_stat` command, completed it in 5 ms without changing files, passed a
+separately approved test, and finished after explicit approval.

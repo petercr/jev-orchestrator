@@ -2,10 +2,12 @@ import { lstat, realpath } from 'node:fs/promises';
 import path from 'node:path';
 import { requireBoundedTask } from '../limits.js';
 import type { Action, AgentState } from '../types.js';
+import { selectDiagnosticCommand, type DiagnosticCommandId } from './diagnostics.js';
 
 export const EXECUTABLE_ACTIONS = [
   'SEARCH_REPO',
   'READ_FILE',
+  'RUN_COMMAND',
   'RUN_TESTS',
   'CALL_CODEX',
   'CALL_CLAUDE',
@@ -48,6 +50,17 @@ export type TestProposal = {
   };
 };
 
+export type DiagnosticProposal = {
+  action: 'RUN_COMMAND';
+  tool: 'diagnostic_command';
+  input: {
+    root: string;
+    diagnostic: DiagnosticCommandId;
+    command: string;
+    args: string[];
+  };
+};
+
 export type CodexProposal = {
   action: 'CALL_CODEX';
   tool: 'codex_cli';
@@ -83,6 +96,7 @@ export type FinishProposal = {
 export type CandidateProposal =
   | SearchProposal
   | ReadProposal
+  | DiagnosticProposal
   | TestProposal
   | CodexProposal
   | ClaudeProposal
@@ -340,13 +354,19 @@ export async function selectCandidate(
         input: null,
         reason: 'Completion requires explicit user approval.',
       };
-    case 'RUN_COMMAND':
+    case 'RUN_COMMAND': {
+      const diagnostic = selectDiagnosticCommand(state.repo.gitStatus);
       return {
-        action: 'ASK_USER',
-        tool: null,
-        input: null,
-        reason: 'RUN_COMMAND remains disabled until a reviewed diagnostic allowlist exists.',
+        action,
+        tool: 'diagnostic_command',
+        input: {
+          root: state.repo.root,
+          diagnostic: diagnostic.id,
+          command: diagnostic.command,
+          args: diagnostic.args,
+        },
       };
+    }
   }
 }
 
