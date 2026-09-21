@@ -1,0 +1,41 @@
+ok well we need to add in a way to user override so we can manually end the run and still get a trace
+
+---
+
+do we need to rebuild or can we just test
+
+---
+
+traces/2026-09-20T21-17-20-304Z-19e388ca-7794-40ee-8a70-b6f36a01f4cc.jsonl
+
+---
+
+ok well you run it then
+
+---
+
+ok make a new branch for this work
+
+---
+
+oklet push and pr then
+
+---
+
+ok check trail review
+
+---
+
+it appears to be stuck
+
+---
+
+ok i approved it check the review
+
+---
+
+ok pr merged lets work on the next part
+
+---
+
+think we shiould commit our work first or try the live codex call
