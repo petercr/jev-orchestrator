@@ -30,6 +30,7 @@ const MAX_OBSERVATION_LENGTH = 2_000;
 export type ApprovalDecision =
   | { kind: 'approve' }
   | { kind: 'reject'; reason?: string }
+  | { kind: 'stop'; reason?: string }
   | { kind: 'alternative'; action: ExecutableAction };
 
 export type ApprovalContext = {
@@ -40,7 +41,7 @@ export type ApprovalContext = {
   allowedAlternatives: ExecutableAction[];
 };
 
-export type OrchestrationStatus = 'finished' | 'iteration_limit';
+export type OrchestrationStatus = 'finished' | 'stopped' | 'iteration_limit';
 
 export type OrchestrationResult = {
   status: OrchestrationStatus;
@@ -122,6 +123,13 @@ function rejectionObservation(decision: Extract<ApprovalDecision, { kind: 'rejec
   return reason
     ? `User rejected the proposal: ${truncateText(reason, MAX_OBSERVATION_LENGTH)}`
     : 'User rejected the proposal without executing it.';
+}
+
+function stopObservation(decision: Extract<ApprovalDecision, { kind: 'stop' }>): string {
+  const reason = decision.reason?.trim();
+  return reason
+    ? `User stopped the run: ${truncateText(reason, MAX_OBSERVATION_LENGTH)}`
+    : 'User stopped the run without marking the task complete.';
 }
 
 function commandDescription(
@@ -407,9 +415,16 @@ export async function runOrchestration(
     const { proposal, decision } = approval;
     let toolResult: ToolResult | null = null;
     let nextState = state;
-    let finished = false;
+    let terminalStatus: Extract<OrchestrationStatus, 'finished' | 'stopped'> | undefined;
 
-    if (decision.kind === 'reject') {
+    if (decision.kind === 'stop') {
+      terminalStatus = 'stopped';
+      nextState = {
+        ...state,
+        observations: [...state.observations, stopObservation(decision)],
+        currentGoal: 'Run stopped by user without claiming completion.',
+      };
+    } else if (decision.kind === 'reject') {
       nextState = {
         ...state,
         observations: [...state.observations, rejectionObservation(decision)],
@@ -429,7 +444,7 @@ export async function runOrchestration(
         currentGoal: 'Reassess the task with the user response.',
       };
     } else if (proposal.action === 'FINISH') {
-      finished = true;
+      terminalStatus = 'finished';
       const completionObservation = policy.selected === 'FINISH'
         ? 'User approved completion.'
         : 'User explicitly overrode completion confidence after passing validation.';
@@ -456,7 +471,7 @@ export async function runOrchestration(
       nextState = applyToolResult(state, proposal, toolResult, refreshedRepo);
     }
 
-    const reachedLimit = !finished && iteration === maxIterations;
+    const reachedLimit = terminalStatus === undefined && iteration === maxIterations;
     if (reachedLimit) {
       nextState = {
         ...nextState,
@@ -472,15 +487,15 @@ export async function runOrchestration(
       policy,
       proposal: { considered: approval.proposals, selected: structuredClone(proposal) },
       approval: { ...decision, history: approval.decisions },
-      toolInput: proposal.input,
+      toolInput: decision.kind === 'stop' ? null : proposal.input,
       toolResult,
       stateAfter: nextState,
     });
     state = nextState;
 
-    if (finished) {
+    if (terminalStatus !== undefined) {
       return {
-        status: 'finished',
+        status: terminalStatus,
         state,
         tracePath: trace.path,
         iterations: iteration,

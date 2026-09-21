@@ -56,6 +56,9 @@ pnpm dev -- . "Inspect this repo and choose the safest useful first action" \
 
 Enter `approve`, `reject`, or an allowed action name. Choosing another action
 resolves and presents its safe candidate before a second approval prompt.
+Enter `stop` (or `quit`) at any approval prompt to end the run without marking
+the task complete. No repository tool executes for that iteration, the result
+status is `stopped`, and the terminal decision remains in the JSONL trace.
 
 After validation passes, a clear Jev `FINISH` recommendation can be completed
 manually even when the separate task-completion probability remains below the
@@ -304,6 +307,11 @@ Automatic completion still requires the configured 95% task-completion
 threshold. Once validation has passed, a user may explicitly override that
 confidence threshold only when Jev itself clearly recommends `FINISH`; the
 resolved completion candidate must then be approved a second time.
+
+Stopping is separate from completion. `stop` and `quit` are user-only approval
+controls, never Jev actions. They execute nothing, return status `stopped`, and
+record a terminal trace without changing validation evidence or claiming the
+task is complete.
 
 `RUN_COMMAND` never evaluates model-generated shell text or accepts arbitrary
 arguments; it resolves only the two documented Git diagnostics. The Codex
