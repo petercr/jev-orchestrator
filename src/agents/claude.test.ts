@@ -2,62 +2,68 @@ import { describe, expect, it, vi } from 'vitest';
 import { MAX_TASK_LENGTH } from '../limits.js';
 import type { ProcessRunner } from '../process.js';
 import {
-  buildCodexPrompt,
-  CODEX_MODEL,
-  CODEX_REASONING_EFFORT,
-  CODEX_TIMEOUT_MS,
-  createCodexAdapter,
-} from './codex.js';
+  buildClaudePrompt,
+  CLAUDE_EFFORT,
+  CLAUDE_MAX_TURNS,
+  CLAUDE_MODEL,
+  CLAUDE_TIMEOUT_MS,
+  createClaudeAdapter,
+} from './claude.js';
 
-describe('Codex adapter', () => {
-  it('uses Terra with high reasoning, fixed non-interactive arguments, and no shell', async () => {
+describe('Claude adapter', () => {
+  it('uses fixed Sonnet medium settings and file-only restricted tools', async () => {
     const runner = vi.fn<ProcessRunner>().mockResolvedValue({
       exitCode: 0,
       stdout: 'Implemented the fix.',
       stderr: '',
       timedOut: false,
     });
-    const result = await createCodexAdapter(runner)({
+    const result = await createClaudeAdapter(runner)({
       root: '/repo',
-      task: '--dangerously-bypass-approvals-and-sandbox',
+      task: '--dangerously-skip-permissions',
     });
 
     expect(result).toMatchObject({
-      agent: 'codex',
+      agent: 'claude',
       ok: true,
       exitCode: 0,
       timedOut: false,
       stdout: 'Implemented the fix.',
     });
     expect(runner).toHaveBeenCalledWith({
-      command: 'codex',
+      command: 'claude',
       args: [
-        '--ask-for-approval',
-        'never',
+        '-p',
         '--model',
-        CODEX_MODEL,
-        '--config',
-        `model_reasoning_effort="${CODEX_REASONING_EFFORT}"`,
-        'exec',
-        '--cd',
-        '/repo',
-        '--sandbox',
-        'workspace-write',
-        '--ephemeral',
-        '--ignore-user-config',
-        '--ignore-rules',
-        '--color',
-        'never',
+        CLAUDE_MODEL,
+        '--effort',
+        CLAUDE_EFFORT,
+        '--output-format',
+        'text',
+        '--permission-mode',
+        'acceptEdits',
+        '--permission-prompts',
+        'none',
+        '--max-turns',
+        String(CLAUDE_MAX_TURNS),
+        '--no-session-persistence',
+        '--safe-mode',
+        '--restricted',
+        '--strict-mcp-config',
+        '--disable-slash-commands',
+        '--no-chrome',
+        '--tools',
+        'Read,Write,Edit,Glob,Grep',
         '--',
-        buildCodexPrompt('--dangerously-bypass-approvals-and-sandbox'),
+        buildClaudePrompt('--dangerously-skip-permissions'),
       ],
       cwd: '/repo',
-      timeoutMs: CODEX_TIMEOUT_MS,
+      timeoutMs: CLAUDE_TIMEOUT_MS,
     });
   });
 
   it('normalizes failures and timeouts', async () => {
-    const result = await createCodexAdapter(async () => ({
+    const result = await createClaudeAdapter(async () => ({
       exitCode: null,
       stdout: 'partial output',
       stderr: 'timed out',
@@ -65,6 +71,7 @@ describe('Codex adapter', () => {
     }))({ root: '/repo', task: 'Fix the bug' });
 
     expect(result).toMatchObject({
+      agent: 'claude',
       ok: false,
       exitCode: null,
       timedOut: true,
@@ -81,11 +88,11 @@ describe('Codex adapter', () => {
       timedOut: false,
     })) as unknown as ProcessRunner;
 
-    await expect(createCodexAdapter(malformed)({
+    await expect(createClaudeAdapter(malformed)({
       root: '/repo',
       task: 'Fix the bug',
     })).rejects.toThrow('malformed result');
-    await expect(createCodexAdapter()({
+    await expect(createClaudeAdapter()({
       root: '/repo',
       task: 'x'.repeat(MAX_TASK_LENGTH + 1),
     })).rejects.toThrow('character limit');

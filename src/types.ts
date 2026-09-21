@@ -4,6 +4,7 @@ export const ACTIONS = [
   'RUN_COMMAND',
   'RUN_TESTS',
   'CALL_CODEX',
+  'CALL_CLAUDE',
   'ASK_USER',
   'FINISH',
 ] as const;
@@ -41,6 +42,7 @@ export type AgentState = {
   };
   failedApproaches: string[];
   codexCalls: number;
+  claudeCalls: number;
 };
 
 export type BooleanAssessment = {

@@ -42,7 +42,7 @@ tool arguments.
   credential-safe. Gateway calls use standard data retention
   (`zeroDataRetention: false`), so send only repository data authorized for
   that service.
-- `--mock` remains token-free and offline. `pnpm check`, `pnpm test` (67
+- `--mock` remains token-free and offline. `pnpm check`, `pnpm test` (104
   tests), and `pnpm build` currently pass.
 
 The current action vocabulary is:
@@ -54,6 +54,7 @@ type Action =
   | 'RUN_COMMAND'
   | 'RUN_TESTS'
   | 'CALL_CODEX'
+  | 'CALL_CLAUDE'
   | 'ASK_USER'
   | 'FINISH';
 ```
@@ -288,9 +289,32 @@ untracked paths and merged progress diagnostics; the follow-up fix records exact
 untracked file paths, excludes generated traces from `filesModified`, and keeps
 bounded stdout and stderr separate while using stdout as the agent summary.
 
-The follow-on milestone adds Claude Code behind the same adapter contract, then
-routes between coding-agent capabilities. `RUN_COMMAND` remains disabled until
-a separately reviewed diagnostic-command allowlist exists.
+## Next milestone: bounded Claude delegation and agent routing
+
+Implementation status (2026-09-20): complete. `CALL_CLAUDE` shares the typed
+coding-agent result contract and approval-gated execution path with
+`CALL_CODEX`; `RUN_COMMAND` remains disabled.
+
+Claude Code is invoked with the literal `claude` executable, direct arguments,
+Sonnet, medium effort, restricted mode, no session persistence, and only file
+inspection/editing tools. The adapter cannot run shell commands; validation is
+kept separate and must be approved through `RUN_TESTS`. Claude and Codex each
+have an independent two-call limit, and both refresh repository state and
+invalidate old validation after an attempt.
+
+Codex fixture verification for this milestone is pinned to `gpt-5.6-terra`
+with high reasoning rather than inheriting a user-configured model. Automated
+tests cover exact invocation controls, correct adapter selection, normalized
+success/failure/timeout results, repository refresh, validation invalidation,
+and both call limits without making live model requests.
+
+Live verification used separate disposable Git fixtures with the same missing
+implementation and failing Node test. Claude Code 2.1.278, pinned to Sonnet and
+medium effort, created only `src/add.js` in 7,172 ms. Codex CLI 0.155.1, pinned
+to `gpt-5.6-terra` and high reasoning, created only `src/add.js` in 33,980 ms;
+its bounded stderr trace explicitly confirmed both model settings. Each route
+then refreshed repository state, passed a separately approved `pnpm test`, and
+finished after explicit approval in three iterations.
 
 ## Reference, not a template
 

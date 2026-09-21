@@ -7,6 +7,8 @@ import { requireBoundedTask } from '../limits.js';
 import type { CodingAgentAdapter } from './types.js';
 
 export const CODEX_TIMEOUT_MS = 15 * 60 * 1_000;
+export const CODEX_MODEL = 'gpt-5.6-terra';
+export const CODEX_REASONING_EFFORT = 'high';
 
 export function buildCodexPrompt(task: string): string {
   return `Implement the repository task below within the selected repository.
@@ -29,6 +31,10 @@ export function createCodexAdapter(
       args: [
         '--ask-for-approval',
         'never',
+        '--model',
+        CODEX_MODEL,
+        '--config',
+        `model_reasoning_effort="${CODEX_REASONING_EFFORT}"`,
         'exec',
         '--cd',
         root,

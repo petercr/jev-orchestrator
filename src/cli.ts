@@ -259,6 +259,8 @@ function approvalChoice(value: string, context: ApprovalContext): ApprovalDecisi
     RUN_TESTS: { kind: 'alternative', action: 'RUN_TESTS' },
     CODEX: { kind: 'alternative', action: 'CALL_CODEX' },
     CALL_CODEX: { kind: 'alternative', action: 'CALL_CODEX' },
+    CLAUDE: { kind: 'alternative', action: 'CALL_CLAUDE' },
+    CALL_CLAUDE: { kind: 'alternative', action: 'CALL_CLAUDE' },
     ASK: { kind: 'alternative', action: 'ASK_USER' },
     ASK_USER: { kind: 'alternative', action: 'ASK_USER' },
     FINISH: { kind: 'alternative', action: 'FINISH' },

@@ -7,6 +7,7 @@ function probabilitiesFor(choice: Action): Partial<Record<Action, number>> {
     RUN_COMMAND: 0.02,
     RUN_TESTS: choice === 'RUN_TESTS' ? 0.68 : 0.04,
     CALL_CODEX: 0.02,
+    CALL_CLAUDE: 0.02,
     ASK_USER: choice === 'ASK_USER' ? 0.68 : 0.03,
     FINISH: choice === 'FINISH' ? 0.68 : 0.01,
   };

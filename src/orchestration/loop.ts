@@ -14,6 +14,7 @@ import type {
 } from '../types.js';
 import {
   EXECUTABLE_ACTIONS,
+  MAX_CLAUDE_CALLS,
   MAX_CODEX_CALLS,
   proposalSignature,
   selectCandidate,
@@ -73,6 +74,7 @@ export function createInitialState(repo: RepoSnapshot, task: string): AgentState
     tests: { ran: false },
     failedApproaches: [],
     codexCalls: 0,
+    claudeCalls: 0,
   };
 }
 
@@ -110,6 +112,7 @@ function allowedAlternatives(
     }
     if (action === 'RUN_TESTS') return state.repo.validationScripts.length > 0;
     if (action === 'CALL_CODEX') return state.codexCalls < MAX_CODEX_CALLS;
+    if (action === 'CALL_CLAUDE') return state.claudeCalls < MAX_CLAUDE_CALLS;
     return true;
   });
 }
@@ -123,6 +126,20 @@ function rejectionObservation(decision: Extract<ApprovalDecision, { kind: 'rejec
 
 function commandDescription(proposal: Extract<CandidateProposal, { action: 'RUN_TESTS' }>): string {
   return [proposal.input.command, ...proposal.input.args].join(' ');
+}
+
+type CodingAgentProposal = Extract<CandidateProposal, { action: 'CALL_CODEX' | 'CALL_CLAUDE' }>;
+
+function isCodingAgentProposal(proposal: CandidateProposal): proposal is CodingAgentProposal {
+  return proposal.action === 'CALL_CODEX' || proposal.action === 'CALL_CLAUDE';
+}
+
+function codingAgentName(proposal: CodingAgentProposal): 'Codex' | 'Claude' {
+  return proposal.action === 'CALL_CODEX' ? 'Codex' : 'Claude';
+}
+
+function codingAgentCommand(proposal: CodingAgentProposal): string {
+  return proposal.action === 'CALL_CODEX' ? 'codex exec' : 'claude -p';
 }
 
 function isToolResult(value: unknown, action: CandidateProposal['action']): value is ToolResult {
@@ -192,6 +209,7 @@ function applyToolResult(
   let currentGoal = state.currentGoal;
   let repo = state.repo;
   let codexCalls = state.codexCalls;
+  let claudeCalls = state.claudeCalls;
 
   if (!result.ok) {
     failedApproaches.push(signature);
@@ -215,16 +233,16 @@ function applyToolResult(
     tests = { ran: true, passed: true, summary };
     observations.push(`Validation passed: ${summary}`);
     currentGoal = 'Determine whether the requested task is complete.';
-  } else if (proposal.action === 'CALL_CODEX') {
+  } else if (isCodingAgentProposal(proposal)) {
     const summary = truncateText(result.output, MAX_OBSERVATION_LENGTH);
     commandsRun = [...state.commandsRun, {
-      command: 'codex exec',
+      command: codingAgentCommand(proposal),
       exitCode: result.exitCode ?? 1,
       output: summary,
     }];
-    observations.push(`Codex completed: ${summary}`);
+    observations.push(`${codingAgentName(proposal)} completed: ${summary}`);
     tests = { ran: false };
-    currentGoal = 'Validate the Codex changes with an approved repository script.';
+    currentGoal = `Validate the ${codingAgentName(proposal)} changes with an approved repository script.`;
   }
 
   if (proposal.action === 'RUN_TESTS' && !result.ok) {
@@ -237,12 +255,13 @@ function applyToolResult(
     tests = { ran: true, passed: false, summary };
   }
 
-  if (proposal.action === 'CALL_CODEX') {
-    codexCalls += 1;
+  if (isCodingAgentProposal(proposal)) {
+    if (proposal.action === 'CALL_CODEX') codexCalls += 1;
+    else claudeCalls += 1;
     if (!result.ok) {
       const summary = truncateText(result.output, MAX_OBSERVATION_LENGTH);
       commandsRun = [...state.commandsRun, {
-        command: 'codex exec',
+        command: codingAgentCommand(proposal),
         exitCode: result.exitCode ?? 1,
         output: summary,
       }];
@@ -265,6 +284,7 @@ function applyToolResult(
     tests,
     failedApproaches,
     codexCalls,
+    claudeCalls,
   };
 }
 
@@ -407,14 +427,14 @@ export async function runOrchestration(
       toolResult = await safelyExecute(proposal, execute);
       if (proposal.action === 'SEARCH_REPO' && toolResult.ok) searchResults = toolResult.files;
       let refreshedRepo: RepoSnapshot | undefined;
-      if (proposal.action === 'CALL_CODEX') {
+      if (isCodingAgentProposal(proposal)) {
         try {
           refreshedRepo = await inspect(state.repo.root);
         } catch {
           toolResult = {
             ...toolResult,
             ok: false,
-            output: `${toolResult.output}\nUnable to inspect the repository after Codex execution.`,
+            output: `${toolResult.output}\nUnable to inspect the repository after ${codingAgentName(proposal)} execution.`,
           };
         }
       }

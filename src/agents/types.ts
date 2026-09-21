@@ -4,7 +4,7 @@ export type CodingAgentRequest = {
 };
 
 export type CodingAgentResult = {
-  agent: 'codex';
+  agent: 'codex' | 'claude';
   ok: boolean;
   exitCode: number | null;
   durationMs: number;
