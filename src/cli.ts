@@ -245,10 +245,14 @@ export async function runDecision(
   return createDecisionOutput(state, evaluation, policy, mode, tracePath);
 }
 
-function approvalChoice(value: string, context: ApprovalContext): ApprovalDecision | undefined {
+export function parseApprovalChoice(
+  value: string,
+  context: ApprovalContext,
+): ApprovalDecision | undefined {
   const normalized = value.trim().toUpperCase();
   if (normalized === 'A' || normalized === 'APPROVE') return { kind: 'approve' };
   if (normalized === 'R' || normalized === 'REJECT') return { kind: 'reject' };
+  if (normalized === 'STOP' || normalized === 'QUIT') return { kind: 'stop' };
 
   const actionAliases: Partial<Record<string, ApprovalDecision>> = {
     SEARCH: { kind: 'alternative', action: 'SEARCH_REPO' },
@@ -288,6 +292,7 @@ function printApprovalProposal(context: ApprovalContext): void {
   console.log(`Parameters: ${JSON.stringify(proposal.input)}`);
   if ('reason' in proposal) console.log(`Candidate reason: ${proposal.reason}`);
   console.log(`Allowed alternatives: ${context.allowedAlternatives.join(', ')}`);
+  console.log('Enter stop to end the run without marking the task complete; the trace is kept.');
   if (proposal.action === 'ASK_USER' && context.allowedAlternatives.includes('FINISH')) {
     console.log('Validated finish override: enter FINISH, review it, then enter approve.');
   }
@@ -300,9 +305,9 @@ async function promptForApproval(
   printApprovalProposal(context);
   while (true) {
     const answer = await terminal.question(
-      'Choose approve, reject, or an allowed action name: ',
+      'Choose approve, reject, stop, or an allowed action name: ',
     );
-    const decision = approvalChoice(answer, context);
+    const decision = parseApprovalChoice(answer, context);
     if (decision) return decision;
     console.log('Invalid choice. No repository action has run.');
   }

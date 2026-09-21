@@ -162,6 +162,45 @@ describe('approval-gated orchestration loop', () => {
     expect(result.state.observations).toContain('User rejected the proposal: Use another approach');
   });
 
+  it('lets the user stop without executing or claiming completion and records the terminal trace', async () => {
+    const repo = await repository();
+    const execute = vi.fn();
+    const askForInformation = vi.fn();
+    const result = await runOrchestration(
+      createInitialState(repo, 'Inspect fixture auth'),
+      {
+        evaluate: async () => clearAssessment('SEARCH_REPO'),
+        approve: async () => ({ kind: 'stop', reason: 'Continue in a later session' }),
+        askForInformation,
+        execute,
+      },
+    );
+
+    expect(result).toMatchObject({ status: 'stopped', iterations: 1 });
+    expect(execute).not.toHaveBeenCalled();
+    expect(askForInformation).not.toHaveBeenCalled();
+    expect(result.state.currentGoal).toBe('Run stopped by user without claiming completion.');
+    expect(result.state.observations).toContain(
+      'User stopped the run: Continue in a later session',
+    );
+    expect(result.state.tests).toEqual({ ran: false });
+    const record = JSON.parse((await readFile(result.tracePath, 'utf8')).trim());
+    expect(record).toMatchObject({
+      proposal: { selected: { action: 'SEARCH_REPO' } },
+      approval: {
+        kind: 'stop',
+        reason: 'Continue in a later session',
+        history: [{ kind: 'stop', reason: 'Continue in a later session' }],
+      },
+      toolInput: null,
+      toolResult: null,
+      stateAfter: {
+        currentGoal: 'Run stopped by user without claiming completion.',
+        tests: { ran: false },
+      },
+    });
+  });
+
   it('resolves and re-presents a permitted user alternative before execution', async () => {
     const repo = await repository();
     const approvals: ApprovalDecision[] = [

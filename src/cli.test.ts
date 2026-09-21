@@ -5,6 +5,7 @@ import {
   EXIT_CODES,
   exitCodeFor,
   parseArgs,
+  parseApprovalChoice,
 } from './cli.js';
 import { mockEvaluation } from './mock.js';
 import type { AgentState, PolicyDecision } from './types.js';
@@ -110,6 +111,25 @@ describe('parseArgs', () => {
 });
 
 describe('CLI output contract', () => {
+  it('parses user-only stop controls independently of allowed action alternatives', () => {
+    const evaluation = mockEvaluation();
+    const context = {
+      state,
+      evaluation,
+      policy,
+      proposal: {
+        action: 'SEARCH_REPO' as const,
+        tool: 'rg' as const,
+        input: { root: '/repo', terms: ['auth'] },
+      },
+      allowedAlternatives: ['SEARCH_REPO' as const],
+    };
+
+    expect(parseApprovalChoice('stop', context)).toEqual({ kind: 'stop' });
+    expect(parseApprovalChoice('QUIT', context)).toEqual({ kind: 'stop' });
+    expect(parseApprovalChoice('FINISH', context)).toBeUndefined();
+  });
+
   it('creates a bounded JSON decision with explicit unexecuted status', () => {
     const output = createDecisionOutput(state, mockEvaluation(), policy, 'mock', 'traces/run.jsonl');
     const serialized = JSON.parse(JSON.stringify(output)) as Record<string, unknown>;

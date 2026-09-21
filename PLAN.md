@@ -42,7 +42,7 @@ tool arguments.
   credential-safe. Gateway calls use standard data retention
   (`zeroDataRetention: false`), so send only repository data authorized for
   that service.
-- `--mock` remains token-free and offline. `pnpm check`, `pnpm test` (109
+- `--mock` remains token-free and offline. `pnpm check`, `pnpm test` (111
   tests), and `pnpm build` currently pass.
 
 The current action vocabulary is:
@@ -360,6 +360,27 @@ declarations, package metadata, README, and license. Installing that exact
 archive into a disposable pnpm project reported version `0.2.0`, returned a
 token-free mock decision with `status: "unexecuted"`, selected `SEARCH_REPO`,
 and created no trace. No artifact was published.
+
+## Next milestone: graceful user stop
+
+Implementation status (2026-09-21): complete. The loop now supports a user-only
+`stop` approval decision that is not part of Jev's action vocabulary and cannot
+be selected by the model or policy. It executes no tool, does not reuse
+`FINISH` or claim task completion, and appends a terminal schema-v2 trace record
+before returning status `stopped`.
+
+Accept `stop` and `quit` only at an approval prompt. Preserve the considered
+proposal for audit context while recording null tool input and result, a
+bounded user reason when supplied by an embedding caller, unchanged validation
+evidence, and an explicit stopped current goal. Cover direct stop, no execution,
+trace contents, status, and iteration count with deterministic tests.
+
+Live verification used a clean disposable Git fixture. Entering `stop` at the
+first approval prompt returned status `stopped` after one iteration, executed
+no repository tool, left validation untouched, and changed no source file. Its
+schema-v2 trace retained the considered `SEARCH_REPO` proposal, recorded the
+`stop` approval history, null tool input and result, and the explicit
+non-completion state.
 
 ## Reference, not a template
 
