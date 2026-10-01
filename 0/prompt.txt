@@ -1,13 +1,1 @@
-astra will be the orchestrator for this sess. use sol 6.1 medium for impliment, luna 6 high for scout, and you do the review. now lets look at PLAN.md and see where we can go from here
-
----
-
-ok sounds good start with 1
-
----
-
-ok lets do live repair verifi
-
----
-
-continue
+ok commit push and pr
