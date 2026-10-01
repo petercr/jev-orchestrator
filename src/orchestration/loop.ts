@@ -7,6 +7,7 @@ import { truncateText } from '../limits.js';
 import { inspectRepo } from '../repo/inspect.js';
 import type {
   Action,
+  AgentEvidence,
   AgentState,
   EvaluationResult,
   PolicyDecision,
@@ -76,7 +77,129 @@ export function createInitialState(repo: RepoSnapshot, task: string): AgentState
     failedApproaches: [],
     codexCalls: 0,
     claudeCalls: 0,
+    evidence: {
+      revision: 0,
+      validationGeneration: 0,
+      clarifications: [],
+      findings: [],
+      failures: [],
+    },
   };
+}
+
+function currentEvidence(state: AgentState): AgentEvidence {
+  return state.evidence ?? {
+    revision: 0,
+    validationGeneration: 0,
+    clarifications: [],
+    findings: [],
+    failures: [],
+  };
+}
+
+function withClarification(state: AgentState, information: string): AgentState {
+  const evidence = currentEvidence(state);
+  const normalized = information.replace(/\s+/gu, ' ').trim();
+  const newInformation = normalized.length > 0 &&
+    !evidence.clarifications.some((item) => item.text.replace(/\s+/gu, ' ').trim() === normalized);
+  return {
+    ...state,
+    evidence: newInformation ? {
+      ...evidence,
+      revision: evidence.revision + 1,
+      lastRevisionSource: 'user',
+      clarifications: [...evidence.clarifications, { iteration: state.iteration, text: information }].slice(-8),
+    } : evidence,
+  };
+}
+
+function withToolEvidence(
+  state: AgentState,
+  proposal: CandidateProposal,
+  result: ToolResult,
+  modified: string[],
+  refreshFailed: boolean,
+): AgentEvidence {
+  const previous = currentEvidence(state);
+  let evidence: AgentEvidence = { ...previous };
+  if (!result.ok) {
+    evidence.failures = [...previous.failures, {
+      iteration: state.iteration,
+      action: proposal.action,
+      summary: truncateText(result.output, 1_000),
+    }].slice(-8);
+  }
+  if (proposal.action === 'SEARCH_REPO' && result.ok) {
+    const finding = { iteration: state.iteration, source: 'search' as const, paths: result.files.slice(0, 8) };
+    if (!previous.findings.some((item) => item.source === finding.source &&
+      JSON.stringify(item.paths) === JSON.stringify(finding.paths))) {
+      evidence = {
+        ...evidence,
+        revision: evidence.revision + 1,
+        lastRevisionSource: 'search',
+        findings: [...previous.findings, finding].slice(-8),
+      };
+    }
+  }
+  if (proposal.action === 'READ_FILE' && result.ok) {
+    const finding = {
+      iteration: state.iteration,
+      source: 'read' as const,
+      paths: result.files.slice(0, 8),
+      excerpt: truncateText(result.output, 1_000),
+    };
+    if (!previous.findings.some((item) => item.source === finding.source &&
+      JSON.stringify(item.paths) === JSON.stringify(finding.paths) && item.excerpt === finding.excerpt)) {
+      evidence = {
+        ...evidence,
+        revision: evidence.revision + 1,
+        lastRevisionSource: 'read',
+        findings: [...previous.findings, finding].slice(-8),
+      };
+    }
+  }
+  if (proposal.action === 'RUN_COMMAND' && result.ok) {
+    const finding = {
+      iteration: state.iteration,
+      source: 'diagnostic' as const,
+      paths: [],
+      excerpt: truncateText(result.output, 1_000),
+    };
+    if (!previous.findings.some((item) => item.source === finding.source && item.excerpt === finding.excerpt)) {
+      evidence = {
+        ...evidence,
+        revision: evidence.revision + 1,
+        lastRevisionSource: 'diagnostic',
+        findings: [...previous.findings, finding].slice(-8),
+      };
+    }
+  }
+  if (proposal.action === 'RUN_TESTS') {
+    evidence.validation = {
+      iteration: state.iteration,
+      generation: previous.validationGeneration,
+      script: proposal.input.script,
+      exitCode: result.exitCode,
+      timedOut: result.timedOut,
+      passed: result.ok,
+      summary: truncateText(result.output, 1_000),
+    };
+  }
+  if (isCodingAgentProposal(proposal)) {
+    evidence.validationGeneration = previous.validationGeneration + 1;
+    evidence.worker = {
+      iteration: state.iteration,
+      agent: proposal.action === 'CALL_CODEX' ? 'codex' : 'claude',
+      evidenceRevision: previous.revision,
+      exitCode: result.exitCode,
+      timedOut: result.timedOut,
+      ok: result.ok,
+      summary: truncateText(result.output, 500),
+      modifiedFiles: refreshFailed ? [] : modified.slice(0, 8),
+    };
+    evidence.repoRefreshRequired = refreshFailed;
+  }
+  return evidence;
 }
 
 function canUserOverrideFinish(
@@ -107,6 +230,7 @@ function allowedAlternatives(
   evaluation: EvaluationResult,
   policy: PolicyDecision,
 ): ExecutableAction[] {
+  if (state.evidence?.repoRefreshRequired) return ['ASK_USER'];
   return EXECUTABLE_ACTIONS.filter((action) => {
     if (action === 'FINISH') {
       return policy.selected === 'FINISH' || canUserOverrideFinish(state, evaluation, policy);
@@ -158,6 +282,8 @@ function isToolResult(value: unknown, action: CandidateProposal['action']): valu
   return result.action === action &&
     typeof result.ok === 'boolean' &&
     (result.exitCode === null || Number.isInteger(result.exitCode)) &&
+    (!result.ok || (result.exitCode === 0 || (action === 'SEARCH_REPO' && result.exitCode === 1))) &&
+    (!result.timedOut || !result.ok) &&
     typeof result.durationMs === 'number' &&
     Number.isFinite(result.durationMs) &&
     result.durationMs >= 0 &&
@@ -208,8 +334,9 @@ function applyToolResult(
   proposal: CandidateProposal,
   result: ToolResult,
   refreshedRepo?: RepoSnapshot,
+  refreshFailed: boolean = false,
 ): AgentState {
-  const signature = proposalSignature(proposal);
+  const signature = proposalSignature(proposal, state);
   const observations = [...state.observations];
   const failedApproaches = [...state.failedApproaches];
   let filesRead = state.filesRead;
@@ -293,7 +420,7 @@ function applyToolResult(
       repo = refreshedRepo;
       filesModified = modifiedFiles(refreshedRepo);
     }
-    if (filesModified.length > 0) tests = { ran: false };
+    tests = { ran: false };
   }
 
   return {
@@ -308,6 +435,7 @@ function applyToolResult(
     failedApproaches,
     codexCalls,
     claudeCalls,
+    evidence: withToolEvidence(state, proposal, result, filesModified, refreshFailed),
   };
 }
 
@@ -334,8 +462,8 @@ async function resolveApproval(
       state,
       evaluation,
       policy,
-      proposal,
-      allowedAlternatives: alternatives,
+      proposal: structuredClone(proposal),
+      allowedAlternatives: [...alternatives],
     });
     decisions.push(decision);
     if (decision.kind !== 'alternative') return { proposals, proposal, decision, decisions };
@@ -352,7 +480,10 @@ async function resolveApproval(
         decisions,
       };
     }
-    proposal = await selectCandidate(decision.action, state, searchResults);
+    proposal = repeatedFailureProposal(
+      await selectCandidate(decision.action, state, searchResults),
+      state,
+    );
     proposals.push(proposal);
   }
 
@@ -370,7 +501,7 @@ async function resolveApproval(
 }
 
 function repeatedFailureProposal(proposal: CandidateProposal, state: AgentState): CandidateProposal {
-  if (!state.failedApproaches.includes(proposalSignature(proposal))) return proposal;
+  if (!state.failedApproaches.includes(proposalSignature(proposal, state))) return proposal;
   return {
     action: 'ASK_USER',
     tool: null,
@@ -412,7 +543,23 @@ export async function runOrchestration(
       dependencies.approve,
       searchResults,
     );
-    const { proposal, decision } = approval;
+    const { proposal } = approval;
+    let { decision } = approval;
+    if (decision.kind === 'approve') {
+      const blockedRepeat = state.failedApproaches.includes(proposalSignature(proposal, state));
+      const exhaustedCodex = proposal.action === 'CALL_CODEX' && state.codexCalls >= MAX_CODEX_CALLS;
+      const exhaustedClaude = proposal.action === 'CALL_CLAUDE' && state.claudeCalls >= MAX_CLAUDE_CALLS;
+      if (blockedRepeat || exhaustedCodex || exhaustedClaude ||
+        (state.evidence?.repoRefreshRequired && proposal.action !== 'ASK_USER')) {
+        decision = {
+          kind: 'reject',
+          reason: blockedRepeat
+            ? 'The resolved candidate already failed with the same relevant evidence.'
+            : 'Repository inspection or a worker call limit prevents execution.',
+        };
+        approval.decisions.push(decision);
+      }
+    }
     let toolResult: ToolResult | null = null;
     let nextState = state;
     let terminalStatus: Extract<OrchestrationStatus, 'finished' | 'stopped'> | undefined;
@@ -435,14 +582,40 @@ export async function runOrchestration(
         (await dependencies.askForInformation(state)).trim(),
         MAX_OBSERVATION_LENGTH,
       );
-      nextState = {
+      nextState = withClarification({
         ...state,
         observations: [
           ...state.observations,
           information ? `User supplied information: ${information}` : 'User supplied no additional information.',
         ],
         currentGoal: 'Reassess the task with the user response.',
-      };
+      }, information);
+      // Recovery requires the approved user-input boundary as well as a fresh
+      // snapshot. Rejection, stop, and alternative selection never reach here.
+      if (nextState.evidence?.repoRefreshRequired) {
+        try {
+          const refreshed = await inspect(state.repo.root);
+          const modified = modifiedFiles(refreshed);
+          nextState = {
+            ...nextState,
+            repo: refreshed,
+            filesModified: modified,
+            evidence: {
+              ...nextState.evidence,
+              repoRefreshRequired: false,
+              ...(nextState.evidence.worker ? {
+                worker: { ...nextState.evidence.worker, modifiedFiles: modified.slice(0, 8) },
+              } : {}),
+            },
+            observations: [...nextState.observations, 'Repository inspection recovered after user intervention.'],
+          };
+        } catch {
+          nextState = {
+            ...nextState,
+            observations: [...nextState.observations, 'Repository inspection still requires recovery after user intervention.'],
+          };
+        }
+      }
     } else if (proposal.action === 'FINISH') {
       terminalStatus = 'finished';
       const completionObservation = policy.selected === 'FINISH'
@@ -457,10 +630,12 @@ export async function runOrchestration(
       toolResult = await safelyExecute(proposal, execute);
       if (proposal.action === 'SEARCH_REPO' && toolResult.ok) searchResults = toolResult.files;
       let refreshedRepo: RepoSnapshot | undefined;
+      let refreshFailed = false;
       if (isCodingAgentProposal(proposal)) {
         try {
           refreshedRepo = await inspect(state.repo.root);
         } catch {
+          refreshFailed = true;
           toolResult = {
             ...toolResult,
             ok: false,
@@ -468,7 +643,7 @@ export async function runOrchestration(
           };
         }
       }
-      nextState = applyToolResult(state, proposal, toolResult, refreshedRepo);
+      nextState = applyToolResult(state, proposal, toolResult, refreshedRepo, refreshFailed);
     }
 
     const reachedLimit = terminalStatus === undefined && iteration === maxIterations;
@@ -490,6 +665,26 @@ export async function runOrchestration(
       toolInput: decision.kind === 'stop' ? null : proposal.input,
       toolResult,
       stateAfter: nextState,
+      ...(isCodingAgentProposal(proposal) ? {
+        workerRequest: {
+          id: proposalSignature(proposal, state),
+          evidenceRevision: state.evidence?.revision ?? 0,
+          validationGeneration: state.evidence?.validationGeneration ?? 0,
+          clarificationIterations: proposal.input.context.clarifications.map((item) => item.iteration),
+          findingPaths: proposal.input.context.findings.flatMap((item) => item.paths).slice(0, 8),
+          retryReason: decision.kind !== 'approve'
+            ? 'Worker proposal was not executed.'
+            : state.evidence?.validation?.passed === false
+              ? 'Repair after failed independent validation.'
+              : state.evidence?.worker?.ok === false
+                ? state.evidence.worker.agent !== (proposal.action === 'CALL_CODEX' ? 'codex' : 'claude')
+                  ? 'User selected another agent after a failed worker.'
+                  : state.evidence.revision > state.evidence.worker.evidenceRevision
+                    ? `New ${state.evidence.lastRevisionSource ?? 'repository'} evidence after a failed worker.`
+                    : 'Approved worker request after prior failure.'
+                : 'Approved worker request.',
+        },
+      } : {}),
     });
     state = nextState;
 

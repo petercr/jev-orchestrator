@@ -116,6 +116,32 @@ describe('inspectRepo', () => {
     expect(snapshot.gitStatus).toHaveLength(MAX_GIT_STATUS_ENTRIES);
   });
 
+  it('preserves the first unstaged tracked status row and its exact file path', async () => {
+    const root = await createRepositoryDirectory();
+    const git = async (...args: string[]): Promise<void> => {
+      await execFile('git', [
+        '-c', 'core.hooksPath=/dev/null',
+        '-c', 'commit.gpgsign=false',
+        '-c', 'user.name=Jev Test Fixture',
+        '-c', 'user.email=jev-test@example.invalid',
+        ...args,
+      ], { cwd: root });
+    };
+    await git('init', '--quiet', '--initial-branch=main');
+    await mkdir(path.join(root, 'src'));
+    const source = path.join(root, 'src', 'add.js');
+    await writeFile(source, 'export const add = (a, b) => 0;\n');
+    await git('add', '--', 'src/add.js');
+    await git('commit', '--quiet', '-m', 'Create tracked fixture');
+    await writeFile(source, 'export const add = (a, b) => a - b;\n');
+
+    const snapshot = await inspectRepo(root);
+
+    expect(snapshot.root).toBe(root);
+    expect(snapshot.gitBranch).toBe('main');
+    expect(snapshot.gitStatus).toEqual([' M src/add.js']);
+  });
+
   it('reports exact paths for untracked files below directories', async () => {
     const root = await createRepositoryDirectory();
     await execFile('git', ['init', '--quiet'], { cwd: root });

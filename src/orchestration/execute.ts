@@ -165,6 +165,7 @@ export async function executeCandidate(
     const result = await createCodexAdapter(runner)({
       root: proposal.input.root,
       task: proposal.input.task,
+      context: proposal.input.context,
     });
     return codingAgentToolResult(proposal.action, result);
   }
@@ -172,6 +173,7 @@ export async function executeCandidate(
     const result = await createClaudeAdapter(runner)({
       root: proposal.input.root,
       task: proposal.input.task,
+      context: proposal.input.context,
     });
     return codingAgentToolResult(proposal.action, result);
   }

@@ -51,9 +51,9 @@ const ACTION_CRITERIA = {
 } as const;
 
 export function boundAgentStateForEvaluation(state: AgentState): AgentState {
-  const { repo } = state;
+  const { repo, evidence: _evidence, ...boundedState } = state;
   return {
-    ...state,
+    ...boundedState,
     task: truncateText(state.task, MAX_TASK_LENGTH),
     currentGoal: truncateText(state.currentGoal, MAX_EVALUATION_TEXT_LENGTH),
     repo: {

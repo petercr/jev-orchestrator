@@ -7,6 +7,7 @@ import { evaluateAgentState } from './ai/evaluate.js';
 import { requireGatewayApiKey } from './config.js';
 import { requireBoundedTask } from './limits.js';
 import { writeTrace } from './logging/trace.js';
+import { redactSensitiveText } from './logging/trace.js';
 import { mockEvaluation } from './mock.js';
 import {
   createInitialState,
@@ -278,7 +279,7 @@ export function parseApprovalChoice(
   return undefined;
 }
 
-function printApprovalProposal(context: ApprovalContext): void {
+export function printApprovalProposal(context: ApprovalContext): void {
   const { evaluation, policy, proposal } = context;
   const { assessment } = evaluation;
   console.log(`\nIteration ${context.state.iteration}`);
@@ -289,12 +290,18 @@ function printApprovalProposal(context: ApprovalContext): void {
   console.log(`Reason: ${policy.reason}`);
   console.log(`Safe candidate: ${proposal.action}`);
   console.log(`Tool: ${proposal.tool ?? 'none'}`);
-  console.log(`Parameters: ${JSON.stringify(proposal.input)}`);
+  const parameters = JSON.stringify(proposal.input, (_key, value: unknown) =>
+    typeof value === 'string' ? redactSensitiveText(value) : value);
+  console.log(`Parameters: ${parameters}`);
   if ('reason' in proposal) console.log(`Candidate reason: ${proposal.reason}`);
   console.log(`Allowed alternatives: ${context.allowedAlternatives.join(', ')}`);
   console.log('Enter stop to end the run without marking the task complete; the trace is kept.');
   if (proposal.action === 'ASK_USER' && context.allowedAlternatives.includes('FINISH')) {
     console.log('Validated finish override: enter FINISH, review it, then enter approve.');
+  }
+  if (proposal.action === 'ASK_USER') {
+    console.log('To provide context, enter approve and then a plain-language answer.');
+    console.log('To choose an action, enter its name now and review its resolved candidate.');
   }
 }
 
@@ -321,7 +328,7 @@ export async function runCliOrchestration(options: CliOptions): Promise<Orchestr
 
   console.log('\nJev Orchestrator — approval-gated orchestration');
   console.log(`Repo: ${repo.root}`);
-  console.log(`Task: ${options.task}`);
+  console.log(`Task: ${redactSensitiveText(options.task)}`);
   console.log(`Mode: ${options.mock ? 'mock' : 'live Jev'}`);
   console.log('No repository action runs without approval.');
 

@@ -7,6 +7,7 @@ import {
   deriveSearchTerms,
   MAX_CLAUDE_CALLS,
   MAX_CODEX_CALLS,
+  proposalSignature,
   resolveSafeRepoFile,
   selectCandidate,
 } from './candidate.js';
@@ -195,5 +196,24 @@ describe('candidate selection', () => {
       action: 'ASK_USER',
       reason: expect.stringContaining('call limit'),
     });
+  });
+
+  it('requires user information or a new work generation to retry failed validation', async () => {
+    const root = await temporaryRoot();
+    const current = state(root, {
+      evidence: {
+        revision: 0, validationGeneration: 1, clarifications: [], findings: [], failures: [],
+      },
+    });
+    const candidate = await selectCandidate('RUN_TESTS', current);
+    const failedKey = proposalSignature(candidate, current);
+    current.evidence!.revision += 1;
+    current.evidence!.lastRevisionSource = 'diagnostic';
+    expect(proposalSignature(candidate, current)).toBe(failedKey);
+    current.evidence!.clarifications.push({ iteration: 2, text: 'Dependencies are now installed.' });
+    expect(proposalSignature(candidate, current)).not.toBe(failedKey);
+    current.evidence!.clarifications = [];
+    current.evidence!.validationGeneration += 1;
+    expect(proposalSignature(candidate, current)).not.toBe(failedKey);
   });
 });

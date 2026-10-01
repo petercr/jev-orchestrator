@@ -75,7 +75,8 @@ async function git(root: string, args: string[]): Promise<string> {
       outputBytes += chunk.length;
     });
     child.on('error', () => finish(''));
-    child.on('close', (code) => finish(code === 0 && !interrupted ? output.trim() : ''));
+    child.on('close', (code) => // Leading spaces are fixed-width Git status columns, not padding.
+      finish(code === 0 && !interrupted ? output.replace(/\r?\n$/u, '') : ''));
   });
 }
 

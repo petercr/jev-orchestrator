@@ -16,7 +16,7 @@ const MAX_TRACE_WRITE_ATTEMPTS = 3;
 const REDACTED = '[REDACTED]';
 const TRUNCATED = '[TRUNCATED]';
 const SENSITIVE_KEY = /api[-_ ]?key|authorization|token|secret|password|credential|cookie|session/i;
-const KEY_VALUE_SECRET = /((?:api[-_ ]?key|authorization|token|secret|password|credential|cookie|session)\s*[:=]\s*)(?:(?:Bearer\s+)[^\s,;]+|"[^"]*"|'[^']*'|[^\s,;]+)/gi;
+const KEY_VALUE_SECRET = /((?:api[-_ ]?key|authorization|token|secret|password|credential|cookie|session)\s*[:=]\s*)(?:(?:Bearer\s+)[^\s,;\\]+|"[^"]*"|'[^']*'|[^\s,;\\]+)/gi;
 const BEARER_TOKEN = /(\bBearer\s+)[A-Za-z0-9._~+/=-]+/gi;
 
 export type TraceValue =
@@ -51,6 +51,7 @@ export type OrchestrationTracePayload = {
   toolInput: unknown;
   toolResult: unknown;
   stateAfter: AgentState;
+  workerRequest?: unknown;
 };
 
 export class TraceWriteError extends Error {
@@ -75,7 +76,10 @@ function configuredSecretValues(): string[] {
   return gatewayKey ? [gatewayKey] : [];
 }
 
-function redactText(value: string, secretValues: string[]): string {
+export function redactSensitiveText(
+  value: string,
+  secretValues: string[] = configuredSecretValues(),
+): string {
   let redacted = value;
   for (const secret of secretValues) {
     redacted = redacted.replaceAll(secret, REDACTED);
@@ -86,7 +90,7 @@ function redactText(value: string, secretValues: string[]): string {
 }
 
 function takeText(value: string, context: SanitizationContext): string {
-  const redacted = redactText(value, context.secretValues);
+  const redacted = redactSensitiveText(value, context.secretValues);
   const available = Math.min(MAX_TRACE_STRING_LENGTH, context.remainingText);
   if (available <= 0) return TRUNCATED;
   context.remainingText -= Math.min(redacted.length, available);
@@ -165,7 +169,7 @@ function makeTraceRecord(
     state: sanitizeTraceValue(payload.state, secretValues),
     evaluation: {
       assessment: sanitizeTraceValue(payload.evaluation.assessment, secretValues),
-      model: redactText(payload.evaluation.model, secretValues),
+      model: redactSensitiveText(payload.evaluation.model, secretValues),
       latencyMs: Number.isFinite(payload.evaluation.latencyMs) ? payload.evaluation.latencyMs : 0,
       rawAnswers: sanitizeTraceValue(payload.evaluation.rawAnswers, secretValues),
     },
@@ -239,7 +243,7 @@ export async function appendOrchestrationTrace(
     stateBefore: sanitizeTraceValue(payload.stateBefore, secretValues),
     evaluation: {
       assessment: sanitizeTraceValue(payload.evaluation.assessment, secretValues),
-      model: redactText(payload.evaluation.model, secretValues),
+      model: redactSensitiveText(payload.evaluation.model, secretValues),
       latencyMs: Number.isFinite(payload.evaluation.latencyMs) ? payload.evaluation.latencyMs : 0,
       rawAnswers: sanitizeTraceValue(payload.evaluation.rawAnswers, secretValues),
     },
@@ -248,6 +252,9 @@ export async function appendOrchestrationTrace(
     approval: sanitizeTraceValue(payload.approval, secretValues),
     toolInput: sanitizeTraceValue(payload.toolInput, secretValues),
     toolResult: sanitizeTraceValue(payload.toolResult, secretValues),
+    ...(payload.workerRequest === undefined
+      ? {}
+      : { workerRequest: sanitizeTraceValue(payload.workerRequest, secretValues) }),
     stateAfter: sanitizeTraceValue(payload.stateAfter, secretValues),
   };
 

@@ -1,5 +1,8 @@
 import { lstat, realpath } from 'node:fs/promises';
+import { createHash } from 'node:crypto';
 import path from 'node:path';
+import { buildWorkerContext, workerEvidenceKey, type WorkerContext } from '../agents/context.js';
+import { MAX_CLAUDE_CALLS, MAX_CODEX_CALLS } from '../agents/types.js';
 import { requireBoundedTask } from '../limits.js';
 import type { Action, AgentState } from '../types.js';
 import { selectDiagnosticCommand, type DiagnosticCommandId } from './diagnostics.js';
@@ -15,8 +18,7 @@ export const EXECUTABLE_ACTIONS = [
   'FINISH',
 ] as const satisfies readonly Action[];
 
-export const MAX_CODEX_CALLS = 2;
-export const MAX_CLAUDE_CALLS = 2;
+export { MAX_CODEX_CALLS, MAX_CLAUDE_CALLS } from '../agents/types.js';
 
 export type ExecutableAction = (typeof EXECUTABLE_ACTIONS)[number];
 
@@ -67,6 +69,7 @@ export type CodexProposal = {
   input: {
     root: string;
     task: string;
+    context: WorkerContext;
   };
 };
 
@@ -76,6 +79,7 @@ export type ClaudeProposal = {
   input: {
     root: string;
     task: string;
+    context: WorkerContext;
   };
 };
 
@@ -321,6 +325,7 @@ export async function selectCandidate(
         input: {
           root: state.repo.root,
           task: requireBoundedTask(state.task),
+          context: buildWorkerContext(state),
         },
       };
     case 'CALL_CLAUDE':
@@ -338,6 +343,7 @@ export async function selectCandidate(
         input: {
           root: state.repo.root,
           task: requireBoundedTask(state.task),
+          context: buildWorkerContext(state),
         },
       };
     case 'ASK_USER':
@@ -370,6 +376,16 @@ export async function selectCandidate(
   }
 }
 
-export function proposalSignature(proposal: CandidateProposal): string {
-  return JSON.stringify({ action: proposal.action, input: proposal.input });
+export function proposalSignature(proposal: CandidateProposal, state: AgentState): string {
+  const semantic = proposal.action === 'CALL_CODEX' || proposal.action === 'CALL_CLAUDE'
+    ? { action: proposal.action, evidence: workerEvidenceKey(state) }
+    : {
+      action: proposal.action,
+      input: proposal.input,
+      generation: proposal.action === 'RUN_TESTS' ? state.evidence?.validationGeneration ?? 0 : 0,
+      evidence: proposal.action === 'RUN_TESTS'
+        ? state.evidence?.clarifications.map((item) => item.text) ?? []
+        : state.evidence?.revision ?? 0,
+    };
+  return createHash('sha256').update(JSON.stringify(semantic)).digest('hex');
 }

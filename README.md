@@ -16,6 +16,7 @@ approval.
 
 - Node.js 22+
 - pnpm
+- ripgrep (`rg`) for approved repository search actions
 - A Vercel AI Gateway key for live mode
 - An installed and authenticated Codex CLI for approved `CALL_CODEX` actions
 - An installed and authenticated Claude Code CLI for approved `CALL_CLAUDE`
@@ -70,6 +71,21 @@ The mock flag applies only to Jev evaluation. If you choose `CALL_CODEX` or
 `CALL_CLAUDE` as an alternative and approve its resolved candidate, the
 installed coding-agent CLI makes a real call, may edit the selected repository,
 and may consume tokens. Reject the candidate to execute nothing.
+
+Each approved worker request includes a bounded, labeled packet of prior user
+clarifications, repository findings, the latest independent validation result,
+and the previous worker outcome. The exact packet is shown before approval.
+The original task remains separate, and repository or worker text in the packet
+is treated as untrusted evidence. Known credential patterns and the configured
+Gateway key are redacted from the packet.
+
+If validation fails, the loop presents `ASK_USER`. You can enter `approve` and
+provide a plain-language clarification, or enter `CALL_CODEX` or `CALL_CLAUDE`
+at that first prompt. An agent choice displays its resolved repair request for
+a second approval. After a worker attempt, validation must be approved again
+before completion, even if Git shows the same modified paths. The same failed
+worker request or validation script cannot be repeated without relevant new
+evidence or a new validation generation.
 
 Then run the live Jev evaluation with the key from `.env`:
 
@@ -134,7 +150,9 @@ and the before/after state. A rejection records an observation and executes no
 repository tool. Alternative selections and their final confirmation are kept
 as an approval-history array so manual completion overrides remain auditable.
 
-Trace recording is part of the default auditable run. If the trace directory
+Worker iterations additionally record a bounded request identity, evidence
+revision, validation generation, context references, and repair reason. Trace
+recording is part of the default auditable run. If the trace directory
 cannot be created or written, the CLI returns operational exit code `1` and
 does not print a decision. Use `--no-trace` only when an unrecorded
 decision-only result is acceptable; the execution loop cannot disable traces.
@@ -179,7 +197,9 @@ observation. Each orchestration run permits at most two calls to each agent.
 After every attempt the loop refreshes repository metadata with exact untracked
 paths; generated trace files are excluded from the modified-source list, and
 detected source changes invalidate prior validation and must pass a separately
-approved validation script before completion.
+approved validation script before completion. If repository refresh fails, the
+loop requires an approved `ASK_USER` response and a successful refresh before
+further execution; rejecting or stopping does not trigger a recovery attempt.
 
 After exporting `AI_GATEWAY_API_KEY`, the shorter command works as well. Against
 another repository:
@@ -202,6 +222,24 @@ live Jev evaluation. Pull-request CI runs the same typecheck, test, and build
 commands for maintainers.
 
 ## Live coding-agent verification
+
+The worker-context and controlled-repair milestone completed on 2026-10-01.
+Real Codex CLI 0.159.3 (`gpt-5.6-terra`, high) and Claude Code 2.1.287 (Sonnet,
+medium) repaired separate disposable fixtures using mock Jev routing; no new
+live Gateway evaluation was made. Calls took 16,128 ms and 5,707 ms respectively.
+Each run finished in seven iterations with one worker call: approved search,
+read, failing validation, user clarification, user-selected and approved repair,
+separate passing validation, and completion approval.
+
+Both workers received the exact approved context packet with the real failure,
+clarification, and search/read provenance. Each edited only an already-dirty
+`src/add.js`; fixed test, package, lockfile, README, and `.gitignore` hashes
+remained unchanged. Validation was invalidated after the worker and advanced
+from generation 0 failure to generation 1 with all three tests passing. The
+live audit found and fixed a Git status whitespace bug; corrected runs recorded
+`src/add.js` exactly, with a real-Git regression covering that provenance.
+The final offline gate passed typecheck, all 136 tests, build, mock decision
+smoke, and whitespace checks. Versioned verification details are in `PLAN.md`.
 
 On 2026-09-20, the routed Claude and Codex paths were both exercised against
 separate disposable Git fixtures containing the same missing `src/add.js`
