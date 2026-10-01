@@ -1,0 +1,94 @@
+{
+  "cli_version": "0.10.7-nightly.202609190623.ae303f31d",
+  "checkpoint_id": "01M3WWTN71N1NKQENBPKDV9B9J",
+  "session_id": "01a0f9c5-99f9-7330-a8ff-5cae78141de4",
+  "strategy": "manual-commit",
+  "created_at": "2026-10-01T23:29:41.530998272Z",
+  "branch": "feat/active-process-cancellation",
+  "checkpoints_count": 1,
+  "save_step_count": 1,
+  "files_touched": [
+    "AGENTS.md",
+    "PLAN.md",
+    "README.md",
+    "src/agents/claude.ts",
+    "src/agents/codex.ts",
+    "src/agents/types.ts",
+    "src/ai/evaluate.test.ts",
+    "src/ai/evaluate.ts",
+    "src/cli.ts",
+    "src/logging/trace.ts",
+    "src/orchestration/execute.ts",
+    "src/orchestration/loop.ts",
+    "src/process.ts"
+  ],
+  "agent": "Codex",
+  "model": "gpt-6.1-sol",
+  "turn_id": "bd32a316f594",
+  "compact_transcript_start": 0,
+  "token_usage": {
+    "input_tokens": 52241,
+    "cache_creation_tokens": 0,
+    "cache_read_tokens": 350848,
+    "output_tokens": 2754,
+    "api_call_count": 11,
+    "subagent_tokens_complete": true
+  },
+  "session_metrics": {
+    "turn_count": 1
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-10-01T23:29:41.503389519Z",
+    "agent_lines": 0,
+    "agent_removed": 3,
+    "human_added": 0,
+    "human_modified": 0,
+    "human_removed": 227,
+    "total_committed": 46,
+    "total_lines_changed": 230,
+    "agent_percentage": 1.3043478260869565,
+    "metric_version": 2
+  },
+  "prompt_attributions": [
+    {
+      "checkpoint_number": 1,
+      "user_lines_added": 1075,
+      "user_lines_removed": 227,
+      "agent_lines_added": 0,
+      "agent_lines_removed": 0,
+      "user_added_per_file": {
+        "AGENTS.md": 3,
+        "PLAN.md": 62,
+        "README.md": 30,
+        "src/agents/cancellation.test.ts": 43,
+        "src/agents/claude.ts": 8,
+        "src/agents/codex.ts": 8,
+        "src/agents/types.ts": 3,
+        "src/ai/evaluate.test.ts": 25,
+        "src/ai/evaluate.ts": 8,
+        "src/cancellation.ts": 30,
+        "src/cli.cancellation.test.ts": 107,
+        "src/cli.ts": 48,
+        "src/logging/trace.ts": 7,
+        "src/orchestration/cancellation.test.ts": 256,
+        "src/orchestration/execute.ts": 12,
+        "src/orchestration/loop.ts": 278,
+        "src/process.test.ts": 98,
+        "src/process.ts": 49
+      },
+      "user_removed_per_file": {
+        "AGENTS.md": 2,
+        "README.md": 1,
+        "src/agents/claude.ts": 4,
+        "src/agents/codex.ts": 4,
+        "src/agents/types.ts": 1,
+        "src/ai/evaluate.ts": 2,
+        "src/cli.ts": 16,
+        "src/logging/trace.ts": 3,
+        "src/orchestration/execute.ts": 6,
+        "src/orchestration/loop.ts": 172,
+        "src/process.ts": 16
+      }
+    }
+  ]
+}
