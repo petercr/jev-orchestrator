@@ -561,9 +561,9 @@ a model, or claim passing orchestrator validation.
 
 The milestone is complete when gathered evidence reaches the approved worker,
 a validation failure can lead to one justified repair and fresh validation,
-and every failure path remains bounded and traceable. Durable resume, active
-process cancellation, model-tier routing, and approval automation remain
-separate future milestones.
+and every failure path remains bounded and traceable. Active process
+cancellation is completed below; durable resume, model-tier routing, and
+approval automation remain separate future milestones.
 
 Offline verification (2026-09-22): `pnpm check`, `pnpm test` (126 tests),
 `pnpm build`, and the documented mock decision smoke passed. An interactive
@@ -602,6 +602,96 @@ column and shortened the recorded path. Preserving status columns and adding
 a real-Git regression fixed it; both corrected runs recorded `src/add.js`
 exactly. Fixture manifests and traces are local disposable verification
 artifacts, not repository contents or durable evidence storage.
+
+## Active process cancellation
+
+Implementation, offline verification, and live worker signal verification
+status (2026-10-01): complete.
+
+Ctrl+C/SIGINT and SIGTERM interrupt approval-gated runs at pending Jev,
+approval, information, or approved execution boundaries. First-signal latching
+preserves exit codes 130/143 through repeated signals and cleanup; typed
+stop/quit retains exit 0 and existing validation semantics. Decision-only
+behavior, policy authority, manual approval, fixed direct invocations,
+eight iterations, and two calls per adapter remain unchanged.
+
+Cancellation is a separate execution option, never part of the approved
+CandidateProposal, worker context packet, or signature. Pre-aborted execution
+spawns nothing. Active POSIX process groups receive TERM and KILL escalation
+after one second; escalation survives early parent exit so TERM-resistant
+descendants cannot continue in that group. Windows uses Node-supported child
+termination and does not guarantee independent descendant-tree cleanup.
+Existing deadlines and output bounds remain intact; cancelled results are
+unsuccessful even with exit zero and are distinct from timeouts.
+
+Pending read-only boundaries can return promptly with late responses fenced
+from execution. Side-effecting executors are awaited through cleanup, never
+abandoned through a race. Every begun worker attempt is counted once, then
+repository inspection drains independently of the aborted run signal and
+invalidates prior validation with a new generation, including partial edits or
+refresh failure. Initial read-only inspection drains its existing bounded
+operations before the stopped run is recorded, without evaluation or approval.
+
+Schema-v2 interruption records contain only fixed phase/reason text, bounded
+state, actual approved execution inputs/results when begun, and pre-attempt
+worker identity metadata. Unreached evaluation/policy/approval fields are null;
+actual alternative history is retained. An interruption during trace writing
+adds one terminal interruption record after any ordinary record already
+written. No arbitrary AbortSignal reasons or provider error bodies enter the
+record, and cancellation at the last iteration or finish finalization returns
+stopped.
+
+Deterministic coverage includes pre-abort/no spawn, active abort, parent-exit
+with TERM-resistant descendants, unchanged deadlines, both adapters, pending
+evaluation/approval/information with late responses, approval-to-execution
+cancellation, partial edits and exact refreshed paths, call/generation counts,
+refresh failure, non-passing interrupted validation, final-iteration/finish
+interruption, approved worker trace identity, alternative history, and CLI
+signal latching, listener restoration, trace contents, and exit codes.
+
+Earlier independent coordinator subprocess verification used five disposable
+fixtures with mock Jev and local fake workers, without live model calls: pending
+approval SIGINT (130), pending information SIGTERM (143), partial worker edits
+with SIGINT followed by SIGTERM (130), interrupted validation (130), and typed
+stop (0). It verified exact refreshed `src/add.js`, one worker call, generation
+invalidation, TERM-resistant descendant cleanup, non-passing interrupted tests,
+and exactly one interruption record per cancelled run. These offline checks
+did not spend model tokens; separate real coding-worker signal verification
+is recorded below.
+
+Offline verification (2026-10-01): `pnpm check`, `pnpm test` (171 tests),
+`pnpm build`, the documented mock decision smoke, and `git diff --check` passed.
+No live Jev or coding-agent calls were made during that offline gate. A
+process-test readiness race exposed by the full suite was corrected to wait
+for output flush before announcing readiness; output bounds are asserted for
+both streams.
+
+Live signal verification (2026-10-01) used real product workers in separate
+disposable fixtures with mock Jev routing and no new live Gateway evaluation.
+Each fixture first passed a separately approved `pnpm` validation script
+(three Node tests), then the user selected and approved a worker. Each worker
+saved its first edit before a real signal interrupted its active execution.
+
+| Worker version | Configured model / effort | Signals to orchestrator | CLI exit | Worker exit | Worker duration | Signal to CLI exit |
+| --- | --- | --- | --- | --- | --- | --- |
+| Codex CLI 0.159.3 | `gpt-5.6-terra` / high | SIGINT, then SIGTERM during cleanup | 130 | `null` | 14,561 ms | 1,044 ms |
+| Claude Code 2.1.287 | Sonnet / medium | SIGTERM | 143 | 143 | 5,485 ms | 1,033 ms |
+
+Both runs returned `stopped` after two orchestration iterations and one worker
+call, with `cancelled: true` and `timedOut: false`. Each retained exactly
+`src/add.js`, with protected fixture hashes unchanged. The approved context
+packet matched trace `toolInput`; worker metadata retained pre-attempt
+generation 0, while refreshed state advanced to generation 1 with
+`tests: { ran: false }` and `repoRefreshRequired: false`. Prior independent
+validation was invalidated, and neither run claimed task completion. Trace,
+approval, and local process identity/group checks found no subsequent action,
+late edits, or surviving observed worker processes; no emergency harness
+cleanup was required. The coordinator independently reviewed the assertions
+against local summaries, cleanup audits, manifests, approved request captures,
+and per-fixture traces. These disposable artifacts remain local. The checks
+establish local process cleanup, without establishing remote model termination
+or portability across all operating systems; the Windows descendant cleanup
+limit above still applies.
 
 ## Reference, not a template
 

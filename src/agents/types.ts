@@ -1,3 +1,4 @@
+import type { ExecutionOptions } from '../cancellation.js';
 import type { WorkerContext } from './context.js';
 
 export const MAX_CODEX_CALLS = 2;
@@ -15,8 +16,9 @@ export type CodingAgentResult = {
   exitCode: number | null;
   durationMs: number;
   timedOut: boolean;
+  cancelled?: boolean;
   stdout: string;
   stderr: string;
 };
 
-export type CodingAgentAdapter = (request: CodingAgentRequest) => Promise<CodingAgentResult>;
+export type CodingAgentAdapter = (request: CodingAgentRequest, options?: ExecutionOptions) => Promise<CodingAgentResult>;

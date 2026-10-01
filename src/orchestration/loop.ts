@@ -1,6 +1,8 @@
+import { interruptible, throwIfInterrupted, RunInterruptedError, type ExecutionOptions } from '../cancellation.js';
 import {
   appendOrchestrationTrace,
   createOrchestrationTrace,
+  type InterruptionPhase,
 } from '../logging/trace.js';
 import { applyPolicy, DEFAULT_THRESHOLDS } from '../policy.js';
 import { truncateText } from '../limits.js';
@@ -49,10 +51,11 @@ export type OrchestrationResult = {
   state: AgentState;
   tracePath: string;
   iterations: number;
+  exitCode?: number;
 };
 
 export type OrchestrationDependencies = {
-  evaluate: (state: AgentState) => Promise<EvaluationResult>;
+  evaluate: (state: AgentState, options?: ExecutionOptions) => Promise<EvaluationResult>;
   approve: (context: ApprovalContext) => Promise<ApprovalDecision>;
   askForInformation: (state: AgentState) => Promise<string>;
   execute?: typeof executeCandidate;
@@ -61,6 +64,8 @@ export type OrchestrationDependencies = {
 
 export type OrchestrationOptions = {
   maxIterations?: number;
+  signal?: AbortSignal;
+  initialPhase?: 'inspection';
 };
 
 export function createInitialState(repo: RepoSnapshot, task: string): AgentState {
@@ -284,6 +289,8 @@ function isToolResult(value: unknown, action: CandidateProposal['action']): valu
     (result.exitCode === null || Number.isInteger(result.exitCode)) &&
     (!result.ok || (result.exitCode === 0 || (action === 'SEARCH_REPO' && result.exitCode === 1))) &&
     (!result.timedOut || !result.ok) &&
+    (!result.cancelled || !result.ok) &&
+    (result.cancelled === undefined || typeof result.cancelled === 'boolean') &&
     typeof result.durationMs === 'number' &&
     Number.isFinite(result.durationMs) &&
     result.durationMs >= 0 &&
@@ -305,14 +312,17 @@ function modifiedFiles(repo: RepoSnapshot): string[] {
 async function safelyExecute(
   proposal: Exclude<CandidateProposal, { action: 'ASK_USER' | 'FINISH' }>,
   execute: typeof executeCandidate,
+  options: ExecutionOptions,
 ): Promise<ToolResult> {
   const startedAt = performance.now();
   try {
-    const result: unknown = await execute(proposal);
+    const result: unknown = await (options.signal ? execute(proposal, undefined, options) : execute(proposal));
     if (!isToolResult(result, proposal.action)) {
       throw new Error('The tool executor returned a malformed result.');
     }
-    return result;
+    return options.signal?.aborted
+      ? { ...result, ok: false, cancelled: true }
+      : result;
   } catch (error) {
     return {
       action: proposal.action,
@@ -320,8 +330,9 @@ async function safelyExecute(
       exitCode: null,
       durationMs: Math.round(performance.now() - startedAt),
       timedOut: false,
+      ...(options.signal?.aborted ? { cancelled: true } : {}),
       output: truncateText(
-        error instanceof Error ? error.message : 'Tool execution failed.',
+        options.signal?.aborted ? 'Tool execution interrupted.' : error instanceof Error ? error.message : 'Tool execution failed.',
         MAX_OBSERVATION_LENGTH,
       ),
       files: [],
@@ -446,6 +457,8 @@ async function resolveApproval(
   policy: PolicyDecision,
   approve: OrchestrationDependencies['approve'],
   searchResults: string[],
+  signal?: AbortSignal,
+  onProgress?: (proposals: CandidateProposal[], decisions: ApprovalDecision[]) => void,
 ): Promise<{
   proposals: CandidateProposal[];
   proposal: CandidateProposal;
@@ -457,15 +470,17 @@ async function resolveApproval(
   let proposal = initialProposal;
 
   for (let attempt = 0; attempt <= MAX_APPROVAL_ALTERNATIVES; attempt += 1) {
+    onProgress?.(proposals, decisions);
     const alternatives = allowedAlternatives(state, evaluation, policy);
-    const decision = await approve({
+    const decision = await interruptible(() => approve({
       state,
       evaluation,
       policy,
       proposal: structuredClone(proposal),
       allowedAlternatives: [...alternatives],
-    });
+    }), signal);
     decisions.push(decision);
+    onProgress?.(proposals, decisions);
     if (decision.kind !== 'alternative') return { proposals, proposal, decision, decisions };
     if (!alternatives.includes(decision.action)) {
       const rejection: ApprovalDecision = {
@@ -481,7 +496,7 @@ async function resolveApproval(
       };
     }
     proposal = repeatedFailureProposal(
-      await selectCandidate(decision.action, state, searchResults),
+      await interruptible(() => selectCandidate(decision.action, state, searchResults), signal),
       state,
     );
     proposals.push(proposal);
@@ -510,6 +525,31 @@ function repeatedFailureProposal(proposal: CandidateProposal, state: AgentState)
   };
 }
 
+function workerTraceRequest(
+  proposal: CodingAgentProposal,
+  state: AgentState,
+  decision: ApprovalDecision,
+): unknown {
+  return {
+    id: proposalSignature(proposal, state),
+    evidenceRevision: state.evidence?.revision ?? 0,
+    validationGeneration: state.evidence?.validationGeneration ?? 0,
+    clarificationIterations: proposal.input.context.clarifications.map((item) => item.iteration),
+    findingPaths: proposal.input.context.findings.flatMap((item) => item.paths).slice(0, 8),
+    retryReason: decision.kind !== 'approve'
+      ? 'Worker proposal was not executed.'
+      : state.evidence?.validation?.passed === false
+        ? 'Repair after failed independent validation.'
+        : state.evidence?.worker?.ok === false
+          ? state.evidence.worker.agent !== (proposal.action === 'CALL_CODEX' ? 'codex' : 'claude')
+            ? 'User selected another agent after a failed worker.'
+            : state.evidence.revision > state.evidence.worker.evidenceRevision
+              ? `New ${state.evidence.lastRevisionSource ?? 'repository'} evidence after a failed worker.`
+              : 'Approved worker request after prior failure.'
+          : 'Approved worker request.',
+  };
+}
+
 export async function runOrchestration(
   initialState: AgentState,
   dependencies: OrchestrationDependencies,
@@ -525,183 +565,249 @@ export async function runOrchestration(
   const inspect = dependencies.inspect ?? inspectRepo;
   let state = initialState;
   let searchResults: string[] = [];
-
-  for (let iteration = 1; iteration <= maxIterations; iteration += 1) {
-    state = { ...state, iteration };
-    const stateBefore = state;
-    const evaluation = await dependencies.evaluate(state);
-    const policy = applyPolicy(state, evaluation.assessment);
-    const selected = repeatedFailureProposal(
-      await selectCandidate(policy.selected, state, searchResults),
-      state,
-    );
-    const approval = await resolveApproval(
-      selected,
-      state,
-      evaluation,
-      policy,
-      dependencies.approve,
-      searchResults,
-    );
-    const { proposal } = approval;
-    let { decision } = approval;
-    if (decision.kind === 'approve') {
-      const blockedRepeat = state.failedApproaches.includes(proposalSignature(proposal, state));
-      const exhaustedCodex = proposal.action === 'CALL_CODEX' && state.codexCalls >= MAX_CODEX_CALLS;
-      const exhaustedClaude = proposal.action === 'CALL_CLAUDE' && state.claudeCalls >= MAX_CLAUDE_CALLS;
-      if (blockedRepeat || exhaustedCodex || exhaustedClaude ||
-        (state.evidence?.repoRefreshRequired && proposal.action !== 'ASK_USER')) {
-        decision = {
-          kind: 'reject',
-          reason: blockedRepeat
-            ? 'The resolved candidate already failed with the same relevant evidence.'
-            : 'Repository inspection or a worker call limit prevents execution.',
-        };
-        approval.decisions.push(decision);
-      }
-    }
-    let toolResult: ToolResult | null = null;
-    let nextState = state;
-    let terminalStatus: Extract<OrchestrationStatus, 'finished' | 'stopped'> | undefined;
-
-    if (decision.kind === 'stop') {
-      terminalStatus = 'stopped';
-      nextState = {
-        ...state,
-        observations: [...state.observations, stopObservation(decision)],
-        currentGoal: 'Run stopped by user without claiming completion.',
-      };
-    } else if (decision.kind === 'reject') {
-      nextState = {
-        ...state,
-        observations: [...state.observations, rejectionObservation(decision)],
-        currentGoal: 'Choose a permitted alternative after user rejection.',
-      };
-    } else if (proposal.action === 'ASK_USER') {
-      const information = truncateText(
-        (await dependencies.askForInformation(state)).trim(),
-        MAX_OBSERVATION_LENGTH,
-      );
-      nextState = withClarification({
-        ...state,
-        observations: [
-          ...state.observations,
-          information ? `User supplied information: ${information}` : 'User supplied no additional information.',
-        ],
-        currentGoal: 'Reassess the task with the user response.',
-      }, information);
-      // Recovery requires the approved user-input boundary as well as a fresh
-      // snapshot. Rejection, stop, and alternative selection never reach here.
-      if (nextState.evidence?.repoRefreshRequired) {
-        try {
-          const refreshed = await inspect(state.repo.root);
-          const modified = modifiedFiles(refreshed);
-          nextState = {
-            ...nextState,
-            repo: refreshed,
-            filesModified: modified,
-            evidence: {
-              ...nextState.evidence,
-              repoRefreshRequired: false,
-              ...(nextState.evidence.worker ? {
-                worker: { ...nextState.evidence.worker, modifiedFiles: modified.slice(0, 8) },
-              } : {}),
-            },
-            observations: [...nextState.observations, 'Repository inspection recovered after user intervention.'],
-          };
-        } catch {
-          nextState = {
-            ...nextState,
-            observations: [...nextState.observations, 'Repository inspection still requires recovery after user intervention.'],
-          };
-        }
-      }
-    } else if (proposal.action === 'FINISH') {
-      terminalStatus = 'finished';
-      const completionObservation = policy.selected === 'FINISH'
-        ? 'User approved completion.'
-        : 'User explicitly overrode completion confidence after passing validation.';
-      nextState = {
-        ...state,
-        observations: [...state.observations, completionObservation],
-        currentGoal: 'Task complete.',
-      };
-    } else {
-      toolResult = await safelyExecute(proposal, execute);
-      if (proposal.action === 'SEARCH_REPO' && toolResult.ok) searchResults = toolResult.files;
-      let refreshedRepo: RepoSnapshot | undefined;
-      let refreshFailed = false;
-      if (isCodingAgentProposal(proposal)) {
-        try {
-          refreshedRepo = await inspect(state.repo.root);
-        } catch {
-          refreshFailed = true;
-          toolResult = {
-            ...toolResult,
-            ok: false,
-            output: `${toolResult.output}\nUnable to inspect the repository after ${codingAgentName(proposal)} execution.`,
-          };
-        }
-      }
-      nextState = applyToolResult(state, proposal, toolResult, refreshedRepo, refreshFailed);
-    }
-
-    const reachedLimit = terminalStatus === undefined && iteration === maxIterations;
-    if (reachedLimit) {
-      nextState = {
-        ...nextState,
-        observations: [...nextState.observations, `Stopped at the ${maxIterations}-iteration limit.`],
-        currentGoal: 'Ask the user how to continue after the iteration limit.',
-      };
-    }
-
+  let phase: InterruptionPhase = options.initialPhase ?? 'evaluation';
+  let interruptedPhase: InterruptionPhase | undefined;
+  const latchPhase = (): void => { interruptedPhase ??= phase; };
+  options.signal?.addEventListener('abort', latchPhase, { once: true });
+  let stateBefore = state;
+  let evaluation: EvaluationResult | null = null;
+  let policy: PolicyDecision | null = null;
+  let interruptedProposal: unknown = null;
+  let interruptedApproval: unknown = null;
+  let interruptedInput: unknown = null;
+  let interruptedResult: ToolResult | null = null;
+  let interruptedWorkerRequest: unknown;
+  let interruptedIteration = 0;
+  const executionOptions: ExecutionOptions = options.signal ? { signal: options.signal } : {};
+  const stop = async (): Promise<OrchestrationResult> => {
+    state = {
+      ...state,
+      currentGoal: 'Run interrupted without claiming completion.',
+      observations: [...state.observations, 'Run interrupted by a signal.'],
+    };
     await appendOrchestrationTrace(trace, {
-      iteration,
+      iteration: interruptedIteration,
       stateBefore,
       evaluation,
       policy,
-      proposal: { considered: approval.proposals, selected: structuredClone(proposal) },
-      approval: { ...decision, history: approval.decisions },
-      toolInput: decision.kind === 'stop' ? null : proposal.input,
-      toolResult,
-      stateAfter: nextState,
-      ...(isCodingAgentProposal(proposal) ? {
-        workerRequest: {
-          id: proposalSignature(proposal, state),
-          evidenceRevision: state.evidence?.revision ?? 0,
-          validationGeneration: state.evidence?.validationGeneration ?? 0,
-          clarificationIterations: proposal.input.context.clarifications.map((item) => item.iteration),
-          findingPaths: proposal.input.context.findings.flatMap((item) => item.paths).slice(0, 8),
-          retryReason: decision.kind !== 'approve'
-            ? 'Worker proposal was not executed.'
-            : state.evidence?.validation?.passed === false
-              ? 'Repair after failed independent validation.'
-              : state.evidence?.worker?.ok === false
-                ? state.evidence.worker.agent !== (proposal.action === 'CALL_CODEX' ? 'codex' : 'claude')
-                  ? 'User selected another agent after a failed worker.'
-                  : state.evidence.revision > state.evidence.worker.evidenceRevision
-                    ? `New ${state.evidence.lastRevisionSource ?? 'repository'} evidence after a failed worker.`
-                    : 'Approved worker request after prior failure.'
-                : 'Approved worker request.',
-        },
-      } : {}),
+      proposal: interruptedProposal,
+      approval: interruptedApproval,
+      toolInput: interruptedInput,
+      toolResult: interruptedResult,
+      stateAfter: state,
+      interruption: { phase: interruptedPhase ?? phase, reason: 'signal' },
+      ...(interruptedWorkerRequest === undefined ? {} : { workerRequest: interruptedWorkerRequest }),
     });
-    state = nextState;
-
-    if (terminalStatus !== undefined) {
-      return {
-        status: terminalStatus,
-        state,
-        tracePath: trace.path,
-        iterations: iteration,
-      };
-    }
-  }
-
-  return {
-    status: 'iteration_limit',
-    state,
-    tracePath: trace.path,
-    iterations: maxIterations,
+    return { status: 'stopped', state, tracePath: trace.path, iterations: interruptedIteration };
   };
+  try {
+    throwIfInterrupted(options.signal);
+
+    for (let iteration = 1; iteration <= maxIterations; iteration += 1) {
+      state = { ...state, iteration };
+      interruptedIteration = iteration;
+      stateBefore = state;
+      evaluation = null;
+      policy = null;
+      interruptedProposal = null;
+      interruptedApproval = null;
+      interruptedInput = null;
+      interruptedResult = null;
+      interruptedWorkerRequest = undefined;
+      phase = 'evaluation';
+      evaluation = await interruptible(() => dependencies.evaluate(state, executionOptions), options.signal);
+      throwIfInterrupted(options.signal);
+      const evaluatedPolicy = applyPolicy(state, evaluation.assessment);
+      policy = evaluatedPolicy;
+      phase = 'candidate';
+      const selected = repeatedFailureProposal(
+        await interruptible(() => selectCandidate(evaluatedPolicy.selected, state, searchResults), options.signal),
+        state,
+      );
+      interruptedProposal = { considered: [selected], selected: structuredClone(selected) };
+      phase = 'approval';
+      const approval = await resolveApproval(
+        selected,
+        state,
+        evaluation,
+        policy,
+        dependencies.approve,
+        searchResults,
+        options.signal,
+        (proposals, decisions) => {
+          interruptedProposal = { considered: structuredClone(proposals), selected: structuredClone(proposals.at(-1)) };
+          const decision = decisions.at(-1);
+          interruptedApproval = decision ? { ...decision, history: structuredClone(decisions) } : null;
+        },
+      );
+      const { proposal } = approval;
+      interruptedProposal = { considered: approval.proposals, selected: structuredClone(proposal) };
+      interruptedApproval = { ...approval.decision, history: approval.decisions };
+      throwIfInterrupted(options.signal);
+      let { decision } = approval;
+      if (decision.kind === 'approve') {
+        const blockedRepeat = state.failedApproaches.includes(proposalSignature(proposal, state));
+        const exhaustedCodex = proposal.action === 'CALL_CODEX' && state.codexCalls >= MAX_CODEX_CALLS;
+        const exhaustedClaude = proposal.action === 'CALL_CLAUDE' && state.claudeCalls >= MAX_CLAUDE_CALLS;
+        if (blockedRepeat || exhaustedCodex || exhaustedClaude ||
+          (state.evidence?.repoRefreshRequired && proposal.action !== 'ASK_USER')) {
+          decision = {
+            kind: 'reject',
+            reason: blockedRepeat
+              ? 'The resolved candidate already failed with the same relevant evidence.'
+              : 'Repository inspection or a worker call limit prevents execution.',
+          };
+          approval.decisions.push(decision);
+        }
+      }
+      let toolResult: ToolResult | null = null;
+      let nextState = state;
+      let terminalStatus: Extract<OrchestrationStatus, 'finished' | 'stopped'> | undefined;
+
+      if (decision.kind === 'stop') {
+        terminalStatus = 'stopped';
+        nextState = {
+          ...state,
+          observations: [...state.observations, stopObservation(decision)],
+          currentGoal: 'Run stopped by user without claiming completion.',
+        };
+      } else if (decision.kind === 'reject') {
+        nextState = {
+          ...state,
+          observations: [...state.observations, rejectionObservation(decision)],
+          currentGoal: 'Choose a permitted alternative after user rejection.',
+        };
+      } else if (proposal.action === 'ASK_USER') {
+        phase = 'information';
+        const information = truncateText(
+          (await interruptible(() => dependencies.askForInformation(state), options.signal)).trim(),
+          MAX_OBSERVATION_LENGTH,
+        );
+        nextState = withClarification({
+          ...state,
+          observations: [
+            ...state.observations,
+            information ? `User supplied information: ${information}` : 'User supplied no additional information.',
+          ],
+          currentGoal: 'Reassess the task with the user response.',
+        }, information);
+        // Recovery requires the approved user-input boundary as well as a fresh
+        // snapshot. Rejection, stop, and alternative selection never reach here.
+        if (nextState.evidence?.repoRefreshRequired) {
+          phase = 'refresh';
+          try {
+            const refreshed = await inspect(state.repo.root);
+            const modified = modifiedFiles(refreshed);
+            nextState = {
+              ...nextState,
+              repo: refreshed,
+              filesModified: modified,
+              evidence: {
+                ...nextState.evidence,
+                repoRefreshRequired: false,
+                ...(nextState.evidence.worker ? {
+                  worker: { ...nextState.evidence.worker, modifiedFiles: modified.slice(0, 8) },
+                } : {}),
+              },
+              observations: [...nextState.observations, 'Repository inspection recovered after user intervention.'],
+            };
+          } catch {
+            nextState = {
+              ...nextState,
+              observations: [...nextState.observations, 'Repository inspection still requires recovery after user intervention.'],
+            };
+          }
+        }
+      } else if (proposal.action === 'FINISH') {
+        terminalStatus = 'finished';
+        const completionObservation = policy.selected === 'FINISH'
+          ? 'User approved completion.'
+          : 'User explicitly overrode completion confidence after passing validation.';
+        nextState = {
+          ...state,
+          observations: [...state.observations, completionObservation],
+          currentGoal: 'Task complete.',
+        };
+      } else {
+        phase = 'execution';
+        throwIfInterrupted(options.signal);
+        interruptedInput = proposal.input;
+        if (isCodingAgentProposal(proposal)) interruptedWorkerRequest = workerTraceRequest(proposal, stateBefore, decision);
+        toolResult = await safelyExecute(proposal, execute, executionOptions);
+        interruptedResult = toolResult;
+        if (proposal.action === 'SEARCH_REPO' && toolResult.ok) searchResults = toolResult.files;
+        let refreshedRepo: RepoSnapshot | undefined;
+        let refreshFailed = false;
+        if (isCodingAgentProposal(proposal)) {
+          phase = 'refresh';
+          try {
+            refreshedRepo = await inspect(state.repo.root);
+          } catch {
+            refreshFailed = true;
+            toolResult = {
+              ...toolResult,
+              ok: false,
+              output: `${toolResult.output}\nUnable to inspect the repository after ${codingAgentName(proposal)} execution.`,
+            };
+          }
+        }
+        if (options.signal?.aborted) toolResult = { ...toolResult, ok: false, cancelled: true };
+        nextState = applyToolResult(state, proposal, toolResult, refreshedRepo, refreshFailed);
+        interruptedResult = toolResult;
+      }
+
+      if (options.signal?.aborted) {
+        state = nextState;
+        throwIfInterrupted(options.signal);
+      }
+      const reachedLimit = terminalStatus === undefined && iteration === maxIterations;
+      if (reachedLimit) {
+        nextState = {
+          ...nextState,
+          observations: [...nextState.observations, `Stopped at the ${maxIterations}-iteration limit.`],
+          currentGoal: 'Ask the user how to continue after the iteration limit.',
+        };
+      }
+
+      phase = 'trace';
+      await appendOrchestrationTrace(trace, {
+        iteration,
+        stateBefore,
+        evaluation,
+        policy,
+        proposal: { considered: approval.proposals, selected: structuredClone(proposal) },
+        approval: { ...decision, history: approval.decisions },
+        toolInput: decision.kind === 'stop' ? null : proposal.input,
+        toolResult,
+        stateAfter: nextState,
+        ...(isCodingAgentProposal(proposal) ? {
+          workerRequest: workerTraceRequest(proposal, stateBefore, decision),
+        } : {}),
+      });
+      state = nextState;
+      throwIfInterrupted(options.signal);
+
+      if (terminalStatus !== undefined) {
+        return {
+          status: terminalStatus,
+          state,
+          tracePath: trace.path,
+          iterations: iteration,
+        };
+      }
+    }
+
+    throwIfInterrupted(options.signal);
+    return {
+      status: 'iteration_limit',
+      state,
+      tracePath: trace.path,
+      iterations: maxIterations,
+    };
+  } catch (error) {
+    if (error instanceof RunInterruptedError || options.signal?.aborted) return await stop();
+    throw error;
+  } finally {
+    options.signal?.removeEventListener('abort', latchPhase);
+  }
 }
