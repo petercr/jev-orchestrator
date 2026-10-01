@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import {
   CliUsageError,
   createDecisionOutput,
@@ -6,7 +6,9 @@ import {
   exitCodeFor,
   parseArgs,
   parseApprovalChoice,
+  printApprovalProposal,
 } from './cli.js';
+import { buildWorkerContext } from './agents/context.js';
 import { mockEvaluation } from './mock.js';
 import type { AgentState, PolicyDecision } from './types.js';
 
@@ -111,6 +113,43 @@ describe('parseArgs', () => {
 });
 
 describe('CLI output contract', () => {
+  it('prints parseable approval parameters when credential phrases end string values', () => {
+    const workerContext = buildWorkerContext({
+      ...state,
+      evidence: {
+        revision: 1,
+        validationGeneration: 0,
+        clarifications: [],
+        findings: [{
+          iteration: 1, source: 'read', paths: ['src/auth.ts'], excerpt: 'password=[REDACTED]',
+        }],
+        failures: [],
+      },
+    });
+    const input = { root: '/repo', task: 'Fix password=fake-review-value', context: workerContext };
+    const originalInput = structuredClone(input);
+    const log = vi.spyOn(console, 'log').mockImplementation(() => {});
+    try {
+      printApprovalProposal({
+        state,
+        evaluation: mockEvaluation(),
+        policy,
+        proposal: { action: 'CALL_CODEX', tool: 'codex_cli', input },
+        allowedAlternatives: ['CALL_CODEX', 'ASK_USER'],
+      });
+      const parameters = log.mock.calls.map(([line]) => line)
+        .find((line): line is string => typeof line === 'string' && line.startsWith('Parameters: '));
+      expect(parameters).toBeDefined();
+      expect(parameters).not.toContain('fake-review-value');
+      expect(JSON.parse(parameters!.slice('Parameters: '.length))).toEqual({
+        ...input, task: 'Fix password=[REDACTED]',
+      });
+      expect(input).toEqual(originalInput);
+    } finally {
+      log.mockRestore();
+    }
+  });
+
   it('parses user-only stop controls independently of allowed action alternatives', () => {
     const evaluation = mockEvaluation();
     const context = {

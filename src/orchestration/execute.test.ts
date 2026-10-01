@@ -248,7 +248,11 @@ describe('constrained execution', () => {
     const result = await executeCandidate({
       action: 'CALL_CODEX',
       tool: 'codex_cli',
-      input: { root, task: 'Fix preview authentication' },
+      input: {
+        root,
+        task: 'Fix preview authentication',
+        context: { validationGeneration: 0, goal: 'Fix authentication', clarifications: [], findings: [], failures: [], remainingCalls: { codex: 2, claude: 2 } },
+      },
     }, runner);
 
     expect(result).toMatchObject({
@@ -278,7 +282,11 @@ describe('constrained execution', () => {
     const result = await executeCandidate({
       action: 'CALL_CLAUDE',
       tool: 'claude_code_cli',
-      input: { root, task: 'Fix preview authentication' },
+      input: {
+        root,
+        task: 'Fix preview authentication',
+        context: { validationGeneration: 0, goal: 'Fix authentication', clarifications: [], findings: [], failures: [], remainingCalls: { codex: 2, claude: 2 } },
+      },
     }, runner);
 
     expect(result).toMatchObject({

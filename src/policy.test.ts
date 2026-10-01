@@ -206,6 +206,36 @@ describe('applyPolicy', () => {
     expect(result).toMatchObject({ selected: 'ASK_USER', override: true });
   });
 
+  it('blocks routing while repository refresh is unresolved and restores it after recovery', () => {
+    const pending = {
+      ...state,
+      evidence: {
+        revision: 0,
+        validationGeneration: 1,
+        clarifications: [],
+        findings: [],
+        failures: [],
+        repoRefreshRequired: true,
+      },
+    };
+    const route = assessment({
+      nextAction: {
+        choice: 'CALL_CODEX',
+        probabilities: { CALL_CODEX: 0.9 },
+        confidence: 0.9,
+      },
+    });
+    expect(applyPolicy(pending, route)).toMatchObject({
+      selected: 'ASK_USER',
+      override: true,
+      reason: 'Repository inspection must recover before further execution.',
+    });
+    expect(applyPolicy({
+      ...pending,
+      evidence: { ...pending.evidence, repoRefreshRequired: false },
+    }, route)).toMatchObject({ selected: 'CALL_CODEX', override: false });
+  });
+
   it('does not treat an incomplete validation record as a passing result', () => {
     const incomplete = { ...state, tests: { ran: true } };
     const result = applyPolicy(incomplete, assessment({

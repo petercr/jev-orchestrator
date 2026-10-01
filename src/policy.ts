@@ -63,6 +63,15 @@ export function applyPolicy(
   const selectedProbability = assessment.nextAction.probabilities[requested] ?? 0;
   const confidence = assessment.nextAction.confidence ?? 0;
 
+  if (state.evidence?.repoRefreshRequired) {
+    return {
+      requested,
+      selected: 'ASK_USER',
+      override: requested !== 'ASK_USER',
+      reason: 'Repository inspection must recover before further execution.',
+    };
+  }
+
   if (assessment.needsMoreInformation.probability >= thresholds.askUser) {
     return {
       requested,

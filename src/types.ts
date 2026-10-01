@@ -22,6 +22,42 @@ export type RepoSnapshot = {
   topLevelFiles: string[];
 };
 
+export type EvidenceFinding = {
+  iteration: number;
+  source: 'search' | 'read' | 'diagnostic';
+  paths: string[];
+  excerpt?: string;
+};
+
+export type AgentEvidence = {
+  revision: number;
+  lastRevisionSource?: 'user' | 'search' | 'read' | 'diagnostic';
+  validationGeneration: number;
+  clarifications: Array<{ iteration: number; text: string }>;
+  findings: EvidenceFinding[];
+  failures: Array<{ iteration: number; action: Action; summary: string }>;
+  validation?: {
+    iteration: number;
+    generation: number;
+    script: string;
+    exitCode: number | null;
+    timedOut: boolean;
+    passed: boolean;
+    summary: string;
+  };
+  worker?: {
+    iteration: number;
+    agent: 'codex' | 'claude';
+    evidenceRevision: number;
+    exitCode: number | null;
+    timedOut: boolean;
+    ok: boolean;
+    summary: string;
+    modifiedFiles: string[];
+  };
+  repoRefreshRequired?: boolean;
+};
+
 export type AgentState = {
   task: string;
   iteration: number;
@@ -43,6 +79,7 @@ export type AgentState = {
   failedApproaches: string[];
   codexCalls: number;
   claudeCalls: number;
+  evidence?: AgentEvidence;
 };
 
 export type BooleanAssessment = {

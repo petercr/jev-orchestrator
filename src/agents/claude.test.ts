@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { MAX_TASK_LENGTH } from '../limits.js';
+import type { WorkerContext } from './context.js';
 import type { ProcessRunner } from '../process.js';
 import {
   buildClaudePrompt,
@@ -18,9 +19,22 @@ describe('Claude adapter', () => {
       stderr: '',
       timedOut: false,
     });
+    const context: WorkerContext = {
+      validationGeneration: 1,
+      goal: 'Repair failed validation',
+      clarifications: [{ iteration: 2, text: 'The user expects a 401 response.' }],
+      findings: [],
+      failures: [],
+      remainingCalls: { codex: 2, claude: 1 },
+      validation: {
+        iteration: 2, generation: 1, script: 'test', exitCode: 1,
+        timedOut: false, passed: false, summary: 'Expected 401, received 200',
+      },
+    };
     const result = await createClaudeAdapter(runner)({
       root: '/repo',
       task: '--dangerously-skip-permissions',
+      context,
     });
 
     expect(result).toMatchObject({
@@ -55,11 +69,12 @@ describe('Claude adapter', () => {
         '--tools',
         'Read,Write,Edit,Glob,Grep',
         '--',
-        buildClaudePrompt('--dangerously-skip-permissions'),
+        buildClaudePrompt('--dangerously-skip-permissions', context),
       ],
       cwd: '/repo',
       timeoutMs: CLAUDE_TIMEOUT_MS,
     });
+    expect(buildClaudePrompt('Fix the bug', context)).toContain('Expected 401, received 200');
   });
 
   it('normalizes failures and timeouts', async () => {

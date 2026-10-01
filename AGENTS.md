@@ -4,7 +4,7 @@
 
 This repository is a deliberately small TypeScript orchestrator. Jev evaluates a compact snapshot of a coding task and recommends the next action; deterministic local policy decides whether that recommendation is safe enough to execute. The intended destination is a bounded loop that can route implementation work to either Claude Code or the Codex CLI.
 
-The current milestone adds an explicit `--orchestrate` mode around the original decision-only CLI. Decision-only remains the default. Orchestration can search, read a bounded file, or run a detected validation script only after manual approval; it cannot run arbitrary commands, edit files, or invoke either coding agent. Preserve those distinctions in code, tests, and documentation.
+The packaged v0.2 CLI retains decision-only as the default. Explicit `--orchestrate` mode can search, read a bounded file, run fixed read-only Git diagnostics, run a detected validation script, or delegate bounded implementation work to Codex or Claude after manual approval. It cannot run arbitrary commands. The current milestone adds bounded worker context and controlled repair after failed validation; preserve manual approval, call limits, independent validation, and traceability.
 
 ## Repository map
 
@@ -19,6 +19,7 @@ The current milestone adds an explicit `--orchestrate` mode around the original 
 - `src/orchestration/candidate.ts`: deterministic safe-candidate selection.
 - `src/orchestration/execute.ts`: constrained search, read, and validation tools.
 - `src/orchestration/loop.ts`: approval, iteration bounds, state transitions, and loop traces.
+- `src/agents/context.ts`: bounded evidence for approved worker requests.
 - `README.md`: user-facing setup, commands, and milestone status.
 
 Generated or local-only paths such as `dist/`, `traces/`, `.env`, and `node_modules/` must not be committed or edited as source.

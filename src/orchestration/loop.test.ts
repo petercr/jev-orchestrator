@@ -2,6 +2,7 @@ import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { buildWorkerContext } from '../agents/context.js';
 import { mockEvaluation } from '../mock.js';
 import type { AgentAssessment, EvaluationResult, RepoSnapshot } from '../types.js';
 import { createInitialState, runOrchestration, type ApprovalDecision } from './loop.js';
@@ -160,6 +161,24 @@ describe('approval-gated orchestration loop', () => {
     expect(result.status).toBe('iteration_limit');
     expect(execute).not.toHaveBeenCalled();
     expect(result.state.observations).toContain('User rejected the proposal: Use another approach');
+  });
+
+  it('labels a rejected worker request as unexecuted in the trace', async () => {
+    const repo = await repository();
+    const execute = vi.fn();
+    const result = await runOrchestration(createInitialState(repo, 'Fix authentication'), {
+      evaluate: async () => clearAssessment('CALL_CODEX'),
+      approve: async () => ({ kind: 'reject' }),
+      askForInformation: async () => '',
+      execute,
+    }, { maxIterations: 1 });
+    expect(execute).not.toHaveBeenCalled();
+    const record = JSON.parse((await readFile(result.tracePath, 'utf8')).trim());
+    expect(record).toMatchObject({
+      approval: { kind: 'reject' },
+      workerRequest: { retryReason: 'Worker proposal was not executed.' },
+      toolResult: null,
+    });
   });
 
   it('lets the user stop without executing or claiming completion and records the terminal trace', async () => {
@@ -618,5 +637,303 @@ describe('approval-gated orchestration loop', () => {
       commandsRun: [{ command: 'codex exec', exitCode: 1 }],
     });
     expect(result.state.failedApproaches).toHaveLength(1);
+  });
+
+  it('carries failed validation into an approved repair and requires fresh validation', async () => {
+    const repo = await repository();
+    let workerCalls = 0;
+    let testCalls = 0;
+    const execute = vi.fn().mockImplementation(async (proposal): Promise<ToolResult> => {
+      if (proposal.action === 'CALL_CODEX') {
+        workerCalls += 1;
+        return {
+          action: 'CALL_CODEX', ok: true, exitCode: 0, durationMs: 1,
+          timedOut: false, output: `implementation ${workerCalls}`, files: [],
+        };
+      }
+      testCalls += 1;
+      return {
+        action: 'RUN_TESTS', ok: testCalls === 2, exitCode: testCalls === 2 ? 0 : 1,
+        durationMs: 1, timedOut: false,
+        output: testCalls === 2 ? 'all tests passed' : 'Expected 401, received 200', files: [],
+      };
+    });
+    const approvalHistory: string[] = [];
+    const result = await runOrchestration(createInitialState(repo, 'Fix authentication'), {
+      evaluate: async (state) => {
+        if (state.iteration === 1) return clearAssessment('CALL_CODEX');
+        if (state.iteration === 3) {
+          const request = clearAssessment('CALL_CODEX');
+          request.assessment.needsTesting.probability = 0.9;
+          return request;
+        }
+        if (state.iteration === 4) return clearAssessment('ASK_USER');
+        if (state.iteration === 2 || state.iteration === 5) return clearAssessment('RUN_TESTS');
+        return finishAssessment(0.99);
+      },
+      approve: async ({ state, proposal }) => {
+        approvalHistory.push(`${state.iteration}:${proposal.action}`);
+        if (state.iteration === 4 && proposal.action === 'ASK_USER') {
+          return { kind: 'alternative', action: 'CALL_CODEX' };
+        }
+        return { kind: 'approve' };
+      },
+      askForInformation: async () => 'Expired tokens must return 401.',
+      execute,
+      inspect: async () => ({ ...repo, gitStatus: [' M src/auth.ts'] }),
+    });
+
+    expect(result).toMatchObject({ status: 'finished', iterations: 6 });
+    expect(result.state).toMatchObject({
+      codexCalls: 2,
+      filesModified: ['src/auth.ts'],
+      tests: { ran: true, passed: true, summary: 'all tests passed' },
+      evidence: { validationGeneration: 2 },
+    });
+    expect(approvalHistory).toEqual([
+      '1:CALL_CODEX', '2:RUN_TESTS', '3:ASK_USER', '4:ASK_USER',
+      '4:CALL_CODEX', '5:RUN_TESTS', '6:FINISH',
+    ]);
+    const repair = execute.mock.calls.filter(([proposal]) => proposal.action === 'CALL_CODEX')[1]?.[0];
+    expect(repair.input.context.validation).toMatchObject({
+      generation: 1, script: 'test', exitCode: 1, passed: false,
+      summary: 'Expected 401, received 200',
+    });
+    expect(repair.input.context.clarifications).toMatchObject([
+      { iteration: 3, text: 'Expired tokens must return 401.' },
+    ]);
+    const records = (await readFile(result.tracePath, 'utf8')).trim().split('\n')
+      .map((line) => JSON.parse(line));
+    expect(records[3]).toMatchObject({
+      workerRequest: { validationGeneration: 1, retryReason: 'Repair after failed independent validation.' },
+      approval: { history: [{ kind: 'alternative', action: 'CALL_CODEX' }, { kind: 'approve' }] },
+    });
+  });
+
+  it('blocks an unchanged failed worker even when chosen as an alternative', async () => {
+    const repo = await repository();
+    const execute = vi.fn().mockResolvedValue({
+      action: 'CALL_CODEX', ok: false, exitCode: null, durationMs: 1,
+      timedOut: true, output: 'worker timed out', files: [],
+    } satisfies ToolResult);
+    const proposals: string[] = [];
+    const result = await runOrchestration(createInitialState(repo, 'Fix authentication'), {
+      evaluate: async (state) => clearAssessment(state.iteration === 1 ? 'CALL_CODEX' : 'ASK_USER'),
+      approve: async ({ state, proposal }) => {
+        proposals.push(proposal.action);
+        return state.iteration === 2 && proposals.length === 2
+          ? { kind: 'alternative', action: 'CALL_CODEX' }
+          : { kind: 'approve' };
+      },
+      askForInformation: async () => '',
+      execute,
+      inspect: async () => repo,
+    }, { maxIterations: 2 });
+
+    expect(execute).toHaveBeenCalledTimes(1);
+    expect(proposals).toEqual(['CALL_CODEX', 'ASK_USER', 'ASK_USER']);
+    expect(result.state.codexCalls).toBe(1);
+    const records = (await readFile(result.tracePath, 'utf8')).trim().split('\n')
+      .map((line) => JSON.parse(line));
+    expect(records[1].proposal.selected.reason).toContain('already failed');
+  });
+
+  it('blocks unchanged failed validation, including through an alternative', async () => {
+    const repo = await repository();
+    const execute = vi.fn().mockResolvedValue({
+      action: 'RUN_TESTS', ok: false, exitCode: 1, durationMs: 1,
+      timedOut: false, output: 'still failing', files: [],
+    } satisfies ToolResult);
+    const result = await runOrchestration(createInitialState(repo, 'Check authentication'), {
+      evaluate: async (state) => clearAssessment(state.iteration === 1 ? 'RUN_TESTS' : 'ASK_USER'),
+      approve: async ({ state, proposal }) => state.iteration === 2 && proposal.action === 'ASK_USER' &&
+        (state.observations.at(-1) ?? '').includes('RUN_TESTS failed')
+        ? { kind: 'alternative', action: 'RUN_TESTS' }
+        : { kind: 'approve' },
+      askForInformation: async () => '',
+      execute,
+    }, { maxIterations: 2 });
+
+    expect(execute).toHaveBeenCalledTimes(1);
+    expect(result.state.tests).toMatchObject({ ran: true, passed: false });
+  });
+
+  it('does not accept a successful test result with a failing exit status', async () => {
+    const repo = await repository();
+    const result = await runOrchestration(createInitialState(repo, 'Check authentication'), {
+      evaluate: async () => clearAssessment('RUN_TESTS'),
+      approve,
+      askForInformation: async () => '',
+      execute: async () => ({
+        action: 'RUN_TESTS', ok: true, exitCode: 1, durationMs: 1,
+        timedOut: false, output: 'claimed success', files: [],
+      }),
+    }, { maxIterations: 1 });
+    expect(result.state.tests).toMatchObject({ ran: true, passed: false });
+    expect(result.state.failedApproaches).toHaveLength(1);
+  });
+
+  it('invalidates passing validation after a worker attempt with no visible file change', async () => {
+    const repo = await repository();
+    const initial = createInitialState(repo, 'Fix authentication');
+    initial.tests = { ran: true, passed: true, summary: 'previous pass' };
+    const result = await runOrchestration(initial, {
+      evaluate: async () => clearAssessment('CALL_CLAUDE'),
+      approve,
+      askForInformation: async () => '',
+      execute: async () => ({
+        action: 'CALL_CLAUDE', ok: true, exitCode: 0, durationMs: 1,
+        timedOut: false, output: 'no visible change', files: [],
+      }),
+      inspect: async () => repo,
+    }, { maxIterations: 1 });
+    expect(result.state.tests).toEqual({ ran: false });
+    expect(result.state.evidence?.validationGeneration).toBe(1);
+  });
+
+  it('allows an explicitly approved cross-agent repair with the prior failure as context', async () => {
+    const repo = await repository();
+    const execute = vi.fn().mockImplementation(async (proposal): Promise<ToolResult> => ({
+      action: proposal.action,
+      ok: proposal.action === 'CALL_CLAUDE',
+      exitCode: proposal.action === 'CALL_CLAUDE' ? 0 : 1,
+      durationMs: 1,
+      timedOut: false,
+      output: proposal.action === 'CALL_CLAUDE' ? 'repair completed' : 'Codex failed',
+      files: [],
+    }));
+    const result = await runOrchestration(createInitialState(repo, 'Fix authentication'), {
+      evaluate: async (state) => clearAssessment(state.iteration === 1 ? 'CALL_CODEX' : 'ASK_USER'),
+      approve: async ({ state, proposal }) => state.iteration === 2 && proposal.action === 'ASK_USER'
+        ? { kind: 'alternative', action: 'CALL_CLAUDE' }
+        : { kind: 'approve' },
+      askForInformation: async () => '',
+      execute,
+      inspect: async () => repo,
+    }, { maxIterations: 2 });
+    expect(execute).toHaveBeenCalledTimes(2);
+    expect(result.state).toMatchObject({ codexCalls: 1, claudeCalls: 1, tests: { ran: false } });
+    const claude = execute.mock.calls[1]?.[0];
+    expect(claude.input.context.previousWorker).toMatchObject({
+      agent: 'codex', ok: false, summary: 'Codex failed',
+    });
+  });
+
+  it('requires approved user intervention before transient refresh recovery permits validation', async () => {
+    const repo = await repository();
+    const initial = createInitialState(repo, 'Fix authentication');
+    initial.tests = { ran: true, passed: true };
+    const events: string[] = [];
+    const execute = vi.fn().mockImplementation(async (proposal): Promise<ToolResult> => {
+      events.push(proposal.action);
+      return {
+        action: proposal.action, ok: true, exitCode: 0, durationMs: 1,
+        timedOut: false, output: 'success', files: [],
+      };
+    });
+    const inspect = vi.fn().mockImplementation(async () => {
+      events.push('inspect');
+      if (inspect.mock.calls.length === 1) throw new Error('transient failure');
+      return { ...repo, gitStatus: [' M src/auth.ts'] };
+    });
+    const askForInformation = vi.fn().mockImplementation(async () => {
+      events.push('ask');
+      return '';
+    });
+    const proposals: string[] = [];
+    const result = await runOrchestration(initial, {
+      evaluate: async (state) => clearAssessment(state.iteration === 1 ? 'CALL_CODEX' : 'RUN_TESTS'),
+      approve: async ({ proposal, allowedAlternatives }) => {
+        proposals.push(proposal.action);
+        if (proposal.action === 'ASK_USER') expect(allowedAlternatives).toEqual(['ASK_USER']);
+        return { kind: 'approve' };
+      },
+      askForInformation,
+      execute,
+      inspect,
+    }, { maxIterations: 3 });
+    expect(proposals).toEqual(['CALL_CODEX', 'ASK_USER', 'RUN_TESTS']);
+    expect(events).toEqual(['CALL_CODEX', 'inspect', 'ask', 'inspect', 'RUN_TESTS']);
+    expect(result.state.codexCalls).toBe(1);
+    expect(result.state.evidence?.validationGeneration).toBe(1);
+    expect(result.state.evidence?.repoRefreshRequired).toBe(false);
+    expect(result.state.failedApproaches).toHaveLength(1);
+    expect(result.state.evidence?.failures).toHaveLength(1);
+    expect(result.state.evidence?.clarifications).toEqual([]);
+    expect(buildWorkerContext(result.state).previousWorker?.modifiedFiles).toEqual(['src/auth.ts']);
+    const records = (await readFile(result.tracePath, 'utf8')).trim().split('\n')
+      .map((line) => JSON.parse(line));
+    expect(records[1].stateBefore.evidence.repoRefreshRequired).toBe(true);
+    expect(records[1].stateBefore.tests).toEqual({ ran: false });
+    expect(records[1].stateAfter.evidence.repoRefreshRequired).toBe(false);
+    expect(records[1].stateAfter.tests).toEqual({ ran: false });
+    expect(records[1].stateAfter.observations).toContain('Repository inspection recovered after user intervention.');
+    expect(records[2].toolResult.action).toBe('RUN_TESTS');
+  });
+
+  it.each<ApprovalDecision>([
+    { kind: 'reject' },
+    { kind: 'stop' },
+    { kind: 'alternative', action: 'RUN_TESTS' },
+    { kind: 'alternative', action: 'CALL_CLAUDE' },
+  ])('keeps refresh blocked after a $kind decision without approved user input', async (decision) => {
+    const repo = await repository();
+    const execute = vi.fn().mockResolvedValue({
+      action: 'CALL_CODEX', ok: true, exitCode: 0, durationMs: 1,
+      timedOut: false, output: 'partial change', files: [],
+    } satisfies ToolResult);
+    const inspect = vi.fn().mockRejectedValueOnce(new Error('transient failure')).mockResolvedValue(repo);
+    const askForInformation = vi.fn().mockResolvedValue('');
+    const result = await runOrchestration(createInitialState(repo, 'Fix authentication'), {
+      evaluate: async (state) => clearAssessment(state.iteration === 1 ? 'CALL_CODEX' : 'RUN_TESTS'),
+      approve: async ({ state, proposal, allowedAlternatives }) => {
+        if (state.iteration === 1) return { kind: 'approve' };
+        expect(proposal.action).toBe('ASK_USER');
+        expect(allowedAlternatives).toEqual(['ASK_USER']);
+        return decision;
+      },
+      askForInformation,
+      execute,
+      inspect,
+    }, { maxIterations: 3 });
+    expect(inspect).toHaveBeenCalledTimes(1);
+    expect(execute).toHaveBeenCalledTimes(1);
+    expect(askForInformation).not.toHaveBeenCalled();
+    expect(result.state.evidence?.repoRefreshRequired).toBe(true);
+    expect(result.state.codexCalls).toBe(1);
+    expect(result.state.tests).toEqual({ ran: false });
+  });
+
+  it('blocks further execution until repository inspection recovers', async () => {
+    const repo = await repository();
+    let inspectionCalls = 0;
+    const execute = vi.fn().mockResolvedValue({
+      action: 'CALL_CODEX', ok: true, exitCode: 0, durationMs: 1,
+      timedOut: false, output: 'partial change', files: [],
+    } satisfies ToolResult);
+    const alternatives: string[][] = [];
+    const askForInformation = vi.fn().mockResolvedValue('');
+    const result = await runOrchestration(createInitialState(repo, 'Fix authentication'), {
+      evaluate: async () => clearAssessment('CALL_CODEX'),
+      approve: async ({ allowedAlternatives }) => {
+        alternatives.push(allowedAlternatives);
+        return { kind: 'approve' };
+      },
+      askForInformation,
+      execute,
+      inspect: async () => {
+        inspectionCalls += 1;
+        throw new Error('inspection failed');
+      },
+    }, { maxIterations: 3 });
+    expect(execute).toHaveBeenCalledTimes(1);
+    expect(result.state.evidence?.repoRefreshRequired).toBe(true);
+    expect(alternatives[1]).toEqual(['ASK_USER']);
+    expect(inspectionCalls).toBe(3);
+    expect(askForInformation).toHaveBeenCalledTimes(2);
+    expect(result.state.observations).toContain('Repository inspection still requires recovery after user intervention.');
+    const records = (await readFile(result.tracePath, 'utf8')).trim().split('\n')
+      .map((line) => JSON.parse(line));
+    expect(records[1].policy.reason).toContain('Repository inspection must recover');
   });
 });
