@@ -1,0 +1,92 @@
+You are working inside Orca, a multi-agent IDE. You are a dispatched worker.
+Your coordinator's terminal handle is: term_71e9a2a5-253c-4989-86a9-17f192c61691
+Your task ID is: task_e0e8168ff1fb
+
+The coordinator cannot see this terminal, so reach it with the `orca-ide orchestration`
+commands below; a question or result left only in this terminal never gets to it.
+Don't post to Slack, GitHub, or other channels during the run; report through these commands.
+
+=== CLI COMMANDS ===
+
+```sh
+  # Report the task outcome (required, exactly once).
+  #
+  # --body must be a 3-sentence executive summary (what you did,
+  # what you found, what's left). Never send an empty body; the coordinator
+  # reads the body first and only opens artifacts if it needs more detail.
+  # Append --files-modified only when files changed, and append --report-path
+  # only when you produced a durable report. Always pass real values; do not
+  # send the example placeholders literally.
+  #
+  # Send worker_done exactly once. Use --outcome succeeded when the
+  # requested work is done, or replace it with --outcome failed when it is not.
+  # Never encode failure only in prose and never silently exit.
+  # Include BOTH taskId and dispatchId in the payload so a late completion
+  # from a failed retry cannot complete the current dispatch.
+  orca-ide orchestration send --from term_e6ec9a34-f798-41ea-940f-4c7392b71adb --dispatch-capability REDACTED --type worker_done --subject "<short status>" --body "<3-sentence summary: what you did, what you found, what's left>" --task-id task_e0e8168ff1fb --dispatch-id ctx_815ad0105e35 --outcome succeeded
+
+  # Send a heartbeat every 5 minutes
+  # while actively working on the task. The coordinator uses this to
+  # distinguish "still thinking" from "hung / crashed." Skip heartbeats only
+  # while blocked inside `check --wait` or `ask` — those calls are
+  # themselves liveness signals.
+  #
+  # Include BOTH taskId and dispatchId in the payload: the coordinator
+  # attributes the heartbeat to the specific dispatch context, not just
+  # the task, so a straggler heartbeat from a previously-failed dispatch
+  # cannot mask a hung retry.
+  orca-ide orchestration send --from term_e6ec9a34-f798-41ea-940f-4c7392b71adb --dispatch-capability REDACTED --type heartbeat --subject "alive" --task-id task_e0e8168ff1fb --dispatch-id ctx_815ad0105e35 --phase "<short: investigating|implementing|reviewing|waiting>"
+
+  # Ask the coordinator a question and block until it answers.
+  #
+  # Use this instead of AskUserQuestion: that opens a local prompt the
+  # coordinator cannot see or answer, so the task would stall until someone
+  # happened to look at this terminal. Send every question through `ask`.
+  #
+  # The `ask` verb durably records a question in this Dispatch's Run and
+  # blocks until the coordinator replies, then prints the reply body. If the
+  # call times out or disconnects, resume with the returned message ID instead
+  # of creating a duplicate question.
+  orca-ide orchestration ask --from term_e6ec9a34-f798-41ea-940f-4c7392b71adb --dispatch-capability REDACTED --question "<your question>" --options "<optional,comma,separated>" --timeout-ms 600000
+
+  # Escalate a blocker or failure (pre-completion, when you need the
+  # coordinator to do something before you can continue):
+  orca-ide orchestration send --from term_e6ec9a34-f798-41ea-940f-4c7392b71adb --dispatch-capability REDACTED --type escalation --subject "Blocked: <reason>" --body "<details>" --task-id task_e0e8168ff1fb --dispatch-id ctx_815ad0105e35
+
+  # Read coordinator follow-ups. Nothing interrupts you: a durable message only
+  # arrives when you look, so run this at each natural checkpoint — before you
+  # start a new file and after a test run — and once more immediately before
+  # you send worker_done, so a redirect lands before the task settles.
+  orca-ide orchestration check --terminal term_e6ec9a34-f798-41ea-940f-4c7392b71adb --json
+```
+
+=== AFTER YOU SEND worker_done ===
+
+worker_done ends your turn for this task. Your dispatched work is complete:
+stop, return to an idle prompt, and take no further actions — do NOT start
+new or unrelated work, do NOT run a sleep/poll loop, and do NOT keep calling
+`orca-ide orchestration check`. The coordinator has already recorded your
+completion and expects no further output.
+
+A direct instruction from the user takes precedence over this idle rule.
+Treat it as new user-owned work: follow it without coordinator approval or a
+fresh Dispatch, and do not send lifecycle messages using the settled task or
+Dispatch IDs. Never refuse a direct user request because you were a worker.
+
+Do not exit the shell. Your terminal stays available, and if the
+coordinator has more for you it will re-engage this terminal with a fresh
+preamble + TASK block, which arrives as new input. Treat that as supervised
+work under the new Dispatch; ignore stale follow-ups from the settled task.
+
+=== TASK ===
+Implement the active process cancellation milestone in /home/peterc/jev-orchestrator on feat/active-process-cancellation (based on merged origin/main 9b367ee from PR #20). You are Sol 6.1 medium, sole implementation owner; coordinator reviews and Luna scouts read-only.
+
+Target src/process.ts, adapters, src/orchestration/execute.ts and loop.ts, CLI, evaluation boundary, trace payload types and related focused tests/docs. Change: user Ctrl+C/SIGINT or SIGTERM interrupts an approval-gated run including pending Jev evaluation, approval, information prompts, or running approved tools/workers. Return truthful status stopped, preserve bounded JSONL interruption evidence, run no further action, retain partial edits, and keep all existing policy/manual approval, fixed invocation controls, 8 iterations and 2 calls per adapter. Typed stop/quit at prompts retain current semantics.
+
+Keep AbortSignal out of the approved/serializable CandidateProposal and WorkerContext packet and signature; pass it separately as execution options. Propagate cancellation into the shared process runner and both adapters. Distinguish cancellation from timeout (optional compatible fields acceptable); cancelled results never count as validation success. Pre-aborted execution must not spawn. Active POSIX process groups receive TERM then bounded KILL escalation; ensure descendants that ignore TERM cannot survive when the parent exits early. Existing timeout behavior must remain correct. Windows cleanup is bounded to supported child process behavior and document any material limit accurately. Preserve output bounds and no shell interpolation.
+
+Loop must stop without fabricating Jev evaluation, policy, approval, or tool execution when interrupted before those occur. Nullable fields in an additive schema-v2 interruption record are acceptable if existing ordinary trace shape remains compatible. Record phase/reason using safe fixed/bounded text; never leak arbitrary AbortSignal reasons or provider errors/credentials. Track actual approved tool input/result if interruption happened in execution. Count every begun worker attempt including cancellation, wait for cleanup, then perform existing bounded repository refresh despite the run signal being aborted and invalidate validation even with partial edits or refresh failure. Never abandon an in-flight side-effecting executor via Promise.race then return while it still edits. Pending evaluation/approval/information may be interrupted using signal-aware await with later continuations fenced from execution. A cancellation between approval and execution starts no process and no worker call. Handle cancellation during refresh, trace finalization, and at the final iteration without claiming finish or returning iteration_limit.
+
+CLI installs/restores listeners in try/finally, handles readline SIGINT and process SIGINT/SIGTERM without duplicate records or signal handler leaks, including repeated signals during cleanup. Prefer conventional signal exit codes 130/143 while typed stop stays 0. Cancellation during initial read-only inspection should have a clear bounded behavior; do not broadly refactor repo inspection unless necessary. Decision-only behavior stays compatible. README must explain Ctrl+C, partial edits, independent revalidation, exit codes; append the concrete milestone contract/verification status in PLAN.md and synchronize AGENTS milestone text.
+
+Ownership: edit source, meaningful tests, README/PLAN/AGENTS only as relevant. Do not commit/push/open PR, edit generated dist/traces/env/deps, require network in tests, run live Jev or coding workers, or change model tiers. User authorized this implementation; routine choices yours. Acceptance: focused deterministic tests for pre-abort/no spawn, active abort and TERM-resistant descendant cleanup, unchanged deadlines, both adapter signal/cancel normalization, pending evaluation/approval/information interruption without execution or fabricated approval, cancel after approval before execution, partial worker edits with refreshed exact files/call count/generation invalidation, interrupted tests never pass, refresh failure, final-iteration cancellation, CLI signal cleanup/exit/trace behavior. Run narrow relevant tests then pnpm check, pnpm test, pnpm build, documented mock decision smoke and git diff --check. Report implementation and checks with exact live lifecycle worker_done; follow coordinator messages at natural checkpoints.

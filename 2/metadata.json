@@ -1,0 +1,66 @@
+{
+  "cli_version": "0.10.7-nightly.202609190623.ae303f31d",
+  "checkpoint_id": "01M3WWTN71N1NKQENBPKDV9B9J",
+  "session_id": "01a0f9a9-6352-7a81-bc48-233db373abb5",
+  "strategy": "manual-commit",
+  "created_at": "2026-10-01T23:29:41.105333046Z",
+  "branch": "feat/active-process-cancellation",
+  "checkpoints_count": 1,
+  "save_step_count": 1,
+  "files_touched": [
+    "AGENTS.md",
+    "PLAN.md",
+    "README.md",
+    "src/agents/cancellation.test.ts",
+    "src/agents/claude.ts",
+    "src/agents/codex.ts",
+    "src/agents/types.ts",
+    "src/ai/evaluate.test.ts",
+    "src/ai/evaluate.ts",
+    "src/cancellation.ts",
+    "src/cli.cancellation.test.ts",
+    "src/cli.ts",
+    "src/logging/trace.ts",
+    "src/orchestration/cancellation.test.ts",
+    "src/orchestration/execute.ts",
+    "src/orchestration/loop.ts",
+    "src/process.test.ts",
+    "src/process.ts"
+  ],
+  "agent": "Codex",
+  "model": "gpt-6.1-sol",
+  "turn_id": "5ce2d3710544",
+  "compact_transcript_start": 0,
+  "token_usage": {
+    "input_tokens": 100746,
+    "cache_creation_tokens": 0,
+    "cache_read_tokens": 2041216,
+    "output_tokens": 24411,
+    "api_call_count": 28,
+    "subagent_tokens_complete": true
+  },
+  "session_metrics": {
+    "turn_count": 1
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-10-01T23:29:41.049789715Z",
+    "agent_lines": 1121,
+    "agent_removed": 230,
+    "human_added": 0,
+    "human_modified": 0,
+    "human_removed": 0,
+    "total_committed": 1121,
+    "total_lines_changed": 1351,
+    "agent_percentage": 100,
+    "metric_version": 2
+  },
+  "prompt_attributions": [
+    {
+      "checkpoint_number": 1,
+      "user_lines_added": 0,
+      "user_lines_removed": 0,
+      "agent_lines_added": 0,
+      "agent_lines_removed": 0
+    }
+  ]
+}

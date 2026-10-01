@@ -3,7 +3,7 @@
   "checkpoint_id": "01M3WWTN71N1NKQENBPKDV9B9J",
   "strategy": "manual-commit",
   "branch": "feat/active-process-cancellation",
-  "checkpoints_count": 5,
+  "checkpoints_count": 6,
   "files_touched": [
     "AGENTS.md",
     "PLAN.md",
@@ -38,14 +38,21 @@
       "compact_transcript": "/1/transcript.jsonl",
       "content_hash": "/1/content_hash.txt",
       "prompt": "/1/prompt.txt"
+    },
+    {
+      "metadata": "/2/metadata.json",
+      "transcript": "/2/full.jsonl",
+      "compact_transcript": "/2/transcript.jsonl",
+      "content_hash": "/2/content_hash.txt",
+      "prompt": "/2/prompt.txt"
     }
   ],
   "token_usage": {
-    "input_tokens": 341000,
+    "input_tokens": 441746,
     "cache_creation_tokens": 0,
-    "cache_read_tokens": 10932352,
-    "output_tokens": 55085,
-    "api_call_count": 104,
+    "cache_read_tokens": 12973568,
+    "output_tokens": 79496,
+    "api_call_count": 132,
     "subagent_tokens_complete": false
   }
 }
