@@ -1,0 +1,44 @@
+{
+  "cli_version": "0.10.7-nightly.202609190623.ae303f31d",
+  "checkpoint_id": "01M3WWTN71N1NKQENBPKDV9B9J",
+  "strategy": "manual-commit",
+  "branch": "feat/active-process-cancellation",
+  "checkpoints_count": 4,
+  "files_touched": [
+    "AGENTS.md",
+    "PLAN.md",
+    "README.md",
+    "src/agents/cancellation.test.ts",
+    "src/agents/claude.ts",
+    "src/agents/codex.ts",
+    "src/agents/types.ts",
+    "src/ai/evaluate.test.ts",
+    "src/ai/evaluate.ts",
+    "src/cancellation.ts",
+    "src/cli.cancellation.test.ts",
+    "src/cli.ts",
+    "src/logging/trace.ts",
+    "src/orchestration/cancellation.test.ts",
+    "src/orchestration/execute.ts",
+    "src/orchestration/loop.ts",
+    "src/process.test.ts",
+    "src/process.ts"
+  ],
+  "sessions": [
+    {
+      "metadata": "/0/metadata.json",
+      "transcript": "/0/full.jsonl",
+      "compact_transcript": "/0/transcript.jsonl",
+      "content_hash": "/0/content_hash.txt",
+      "prompt": "/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 248648,
+    "cache_creation_tokens": 0,
+    "cache_read_tokens": 10365056,
+    "output_tokens": 47425,
+    "api_call_count": 92,
+    "subagent_tokens_complete": false
+  }
+}
