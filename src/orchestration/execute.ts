@@ -1,3 +1,4 @@
+import { throwIfInterrupted, type ExecutionOptions } from '../cancellation.js';
 import { open } from 'node:fs/promises';
 import path from 'node:path';
 import { createCodexAdapter } from '../agents/codex.js';
@@ -36,6 +37,7 @@ export type ToolResult = {
   exitCode: number | null;
   durationMs: number;
   timedOut: boolean;
+  cancelled?: boolean;
   output: string;
   files: string[];
   stdout?: string;
@@ -51,14 +53,14 @@ export class ToolExecutionError extends Error {
 
 function normalizedOutput(result: ProcessResult): string {
   const combined = [result.stdout.trim(), result.stderr.trim()].filter(Boolean).join('\n');
-  return combined || (result.timedOut ? 'Process timed out.' : 'Process produced no output.');
+  return combined || (result.cancelled ? 'Process interrupted.' : result.timedOut ? 'Process timed out.' : 'Process produced no output.');
 }
 
 function normalizedAgentOutput(result: ProcessResult): string {
   const finalMessage = result.stdout.trim();
   if (finalMessage) return finalMessage;
   const diagnostics = result.stderr.trim();
-  return diagnostics || (result.timedOut ? 'Process timed out.' : 'Process produced no output.');
+  return diagnostics || (result.cancelled ? 'Process interrupted.' : result.timedOut ? 'Process timed out.' : 'Process produced no output.');
 }
 
 function codingAgentToolResult(
@@ -71,6 +73,7 @@ function codingAgentToolResult(
     exitCode: result.exitCode,
     durationMs: result.durationMs,
     timedOut: result.timedOut,
+    ...(result.cancelled === undefined ? {} : { cancelled: result.cancelled }),
     output: normalizedAgentOutput(result),
     files: [],
     stdout: result.stdout,
@@ -156,7 +159,9 @@ async function executeRead(proposal: Extract<CandidateProposal, { action: 'READ_
 export async function executeCandidate(
   proposal: CandidateProposal,
   runner: ProcessRunner = runProcess,
+  options: ExecutionOptions = {},
 ): Promise<ToolResult> {
+  throwIfInterrupted(options.signal);
   if (proposal.action === 'ASK_USER' || proposal.action === 'FINISH') {
     throw new ToolExecutionError(`${proposal.action} does not execute a repository tool.`);
   }
@@ -166,7 +171,7 @@ export async function executeCandidate(
       root: proposal.input.root,
       task: proposal.input.task,
       context: proposal.input.context,
-    });
+    }, options);
     return codingAgentToolResult(proposal.action, result);
   }
   if (proposal.action === 'CALL_CLAUDE') {
@@ -174,7 +179,7 @@ export async function executeCandidate(
       root: proposal.input.root,
       task: proposal.input.task,
       context: proposal.input.context,
-    });
+    }, options);
     return codingAgentToolResult(proposal.action, result);
   }
 
@@ -224,7 +229,7 @@ export async function executeCandidate(
       timeoutMs: VALIDATION_TIMEOUT_MS,
     };
   }
-  const result = await runner(request);
+  const result = await (options.signal ? runner(request, options) : runner(request));
   try {
     validateProcessResult(result);
   } catch (error) {
@@ -240,10 +245,11 @@ export async function executeCandidate(
 
   return {
     action: proposal.action,
-    ok: !result.timedOut && (result.exitCode === 0 || successfulSearch),
+    ok: !result.cancelled && !result.timedOut && (result.exitCode === 0 || successfulSearch),
     exitCode: result.exitCode,
     durationMs: Math.round(performance.now() - startedAt),
     timedOut: result.timedOut,
+    ...(result.cancelled === undefined ? {} : { cancelled: result.cancelled }),
     output: normalizedOutput(result),
     files,
   };

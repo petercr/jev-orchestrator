@@ -41,11 +41,14 @@ export type TraceRecord = {
   policy: TraceValue;
 };
 
+export type InterruptionPhase = 'inspection' | 'evaluation' | 'candidate' | 'approval' | 'information' | 'execution' | 'refresh' | 'trace';
+
 export type OrchestrationTracePayload = {
   iteration: number;
   stateBefore: AgentState;
-  evaluation: EvaluationResult;
-  policy: PolicyDecision;
+  evaluation: EvaluationResult | null;
+  policy: PolicyDecision | null;
+  interruption?: { phase: InterruptionPhase; reason: 'signal' };
   proposal: unknown;
   approval: unknown;
   toolInput: unknown;
@@ -241,7 +244,7 @@ export async function appendOrchestrationTrace(
     timestamp: new Date().toISOString(),
     iteration: payload.iteration,
     stateBefore: sanitizeTraceValue(payload.stateBefore, secretValues),
-    evaluation: {
+    evaluation: payload.evaluation === null ? null : {
       assessment: sanitizeTraceValue(payload.evaluation.assessment, secretValues),
       model: redactSensitiveText(payload.evaluation.model, secretValues),
       latencyMs: Number.isFinite(payload.evaluation.latencyMs) ? payload.evaluation.latencyMs : 0,
@@ -256,6 +259,7 @@ export async function appendOrchestrationTrace(
       ? {}
       : { workerRequest: sanitizeTraceValue(payload.workerRequest, secretValues) }),
     stateAfter: sanitizeTraceValue(payload.stateAfter, secretValues),
+    ...(payload.interruption ? { interruption: payload.interruption } : {}),
   };
 
   try {

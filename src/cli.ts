@@ -1,4 +1,6 @@
 #!/usr/bin/env node
+import type { ExecutionOptions } from './cancellation.js';
+import { throwIfInterrupted } from './cancellation.js';
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { createInterface, type Interface } from 'node:readline/promises';
@@ -100,7 +102,9 @@ Environment:
 Exit codes:
   0  A decision, help text, or version was printed.
   1  An operational error prevented a decision.
-  2  Invalid command-line usage.`;
+  2  Invalid command-line usage.
+  130  Approval-gated run interrupted by Ctrl+C / SIGINT.
+  143  Approval-gated run interrupted by SIGTERM.`;
 }
 
 function usageError(message: string): CliUsageError {
@@ -308,12 +312,15 @@ export function printApprovalProposal(context: ApprovalContext): void {
 async function promptForApproval(
   terminal: Interface,
   context: ApprovalContext,
+  options: ExecutionOptions = {},
 ): Promise<ApprovalDecision> {
   printApprovalProposal(context);
   while (true) {
     const answer = await terminal.question(
       'Choose approve, reject, stop, or an allowed action name: ',
+      options,
     );
+    throwIfInterrupted(options.signal);
     const decision = parseApprovalChoice(answer, context);
     if (decision) return decision;
     console.log('Invalid choice. No repository action has run.');
@@ -321,27 +328,51 @@ async function promptForApproval(
 }
 
 export async function runCliOrchestration(options: CliOptions): Promise<OrchestrationResult> {
-  const repo = await inspectRepo(options.repoPath);
-  if (!options.mock) requireGatewayApiKey();
-  const state = createInitialState(repo, options.task);
-  const terminal = createInterface({ input: process.stdin, output: process.stdout });
-
-  console.log('\nJev Orchestrator — approval-gated orchestration');
-  console.log(`Repo: ${repo.root}`);
-  console.log(`Task: ${redactSensitiveText(options.task)}`);
-  console.log(`Mode: ${options.mock ? 'mock' : 'live Jev'}`);
-  console.log('No repository action runs without approval.');
-
+  const controller = new AbortController();
+  let exitCode: number | undefined;
+  const interrupt = (signal: 'SIGINT' | 'SIGTERM'): void => {
+    if (controller.signal.aborted) return;
+    exitCode = signal === 'SIGINT' ? 130 : 143;
+    controller.abort();
+  };
+  const sigint = (): void => interrupt('SIGINT');
+  const sigterm = (): void => interrupt('SIGTERM');
+  process.on('SIGINT', sigint);
+  process.on('SIGTERM', sigterm);
+  let terminal: Interface | undefined;
+  const executionOptions = { signal: controller.signal };
   try {
-    return await runOrchestration(state, {
+    // Inspection is read-only and already bounded. Drain it before returning;
+    // an initial interruption never enters evaluation or approval.
+    const repo = await inspectRepo(options.repoPath);
+    const state = createInitialState(repo, options.task);
+    if (!options.mock && !controller.signal.aborted) requireGatewayApiKey();
+    terminal = createInterface({ input: process.stdin, output: process.stdout });
+    terminal.on('SIGINT', sigint);
+    const prompts = terminal;
+
+    console.log('\nJev Orchestrator — approval-gated orchestration');
+    console.log(`Repo: ${repo.root}`);
+    console.log(`Task: ${redactSensitiveText(options.task)}`);
+    console.log(`Mode: ${options.mock ? 'mock' : 'live Jev'}`);
+    console.log('No repository action runs without approval.');
+
+    const result = await runOrchestration(state, {
       evaluate: async (currentState) => options.mock
         ? mockEvaluation(currentState)
-        : evaluateAgentState(currentState),
-      approve: async (context) => promptForApproval(terminal, context),
-      askForInformation: async () => terminal.question('Provide the required information: '),
+        : evaluateAgentState(currentState, undefined, executionOptions),
+      approve: async (context) => promptForApproval(prompts, context, executionOptions),
+      askForInformation: async () => prompts.question('Provide the required information: ', executionOptions),
+    }, {
+      signal: controller.signal,
+      ...(controller.signal.aborted ? { initialPhase: 'inspection' as const } : {}),
     });
+    return { ...result, ...(exitCode === undefined ? {} : { exitCode }) };
   } finally {
-    terminal.close();
+    terminal?.removeListener('SIGINT', sigint);
+    terminal?.close();
+    process.removeListener('SIGINT', sigint);
+    process.removeListener('SIGTERM', sigterm);
   }
 }
 
@@ -424,6 +455,7 @@ export async function main(argv: string[] = process.argv.slice(2)): Promise<void
 
   if (command.options.orchestrate) {
     const result = await runCliOrchestration(command.options);
+    if (result.exitCode !== undefined) process.exitCode = result.exitCode;
     console.log(`\nLoop status: ${result.status}`);
     console.log(`Iterations: ${result.iterations}`);
     console.log(`Trace: ${path.relative(process.cwd(), result.tracePath)}`);

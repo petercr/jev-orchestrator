@@ -1,3 +1,4 @@
+import { interruptible, throwIfInterrupted, type ExecutionOptions } from '../cancellation.js';
 import {
   APICallError,
   experimental_evaluate as evaluate,
@@ -199,7 +200,9 @@ export function normalizeJevEvaluationError(error: unknown): JevEvaluationError 
 export async function evaluateAgentState(
   state: AgentState,
   model: EvaluationModel = process.env.ROUTER_MODEL ?? 'typesafe-ai/jev',
+  options: ExecutionOptions = {},
 ): Promise<EvaluationResult> {
+  throwIfInterrupted(options.signal);
   const startedAt = performance.now();
   const evaluation = evaluate({
     model,
@@ -232,7 +235,9 @@ export async function evaluateAgentState(
       },
     },
     maxRetries: JEV_EVALUATION_MAX_RETRIES,
-    abortSignal: AbortSignal.timeout(JEV_EVALUATION_TIMEOUT_MS),
+    abortSignal: options.signal
+      ? AbortSignal.any([options.signal, AbortSignal.timeout(JEV_EVALUATION_TIMEOUT_MS)])
+      : AbortSignal.timeout(JEV_EVALUATION_TIMEOUT_MS),
     providerOptions: {
       gateway: {
         zeroDataRetention: false,
@@ -242,8 +247,9 @@ export async function evaluateAgentState(
   let result: Awaited<typeof evaluation>;
 
   try {
-    result = await evaluation;
+    result = await interruptible(() => evaluation, options.signal);
   } catch (error) {
+    throwIfInterrupted(options.signal);
     throw normalizeJevEvaluationError(error);
   }
 

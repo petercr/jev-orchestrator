@@ -198,3 +198,28 @@ describe('normalizeJevEvaluationError', () => {
     );
   });
 });
+
+
+describe('Jev user cancellation', () => {
+  it('does not invoke the provider when already aborted', async () => {
+    vi.mocked(evaluate).mockClear();
+    const controller = new AbortController();
+    controller.abort('secret reason');
+    await expect(evaluateAgentState(state, undefined, { signal: controller.signal })).rejects.toThrow('Run interrupted.');
+    expect(evaluate).not.toHaveBeenCalled();
+  });
+
+  it('aborts pending evaluation without normalizing it as a timeout or exposing provider errors', async () => {
+    const controller = new AbortController();
+    let rejectProvider!: (reason: unknown) => void;
+    vi.mocked(evaluate).mockReturnValueOnce(new Promise((_resolve, reject) => { rejectProvider = reject; }) as ReturnType<typeof evaluate>);
+    const running = evaluateAgentState(state, undefined, { signal: controller.signal });
+    const invocation = vi.mocked(evaluate).mock.calls.at(-1)?.[0];
+    expect(invocation?.abortSignal?.aborted).toBe(false);
+    controller.abort('secret reason');
+    await expect(running).rejects.toThrow('Run interrupted.');
+    expect(invocation?.abortSignal?.aborted).toBe(true);
+    rejectProvider(new Error('provider credential details'));
+    await new Promise((resolve) => setImmediate(resolve));
+  });
+});

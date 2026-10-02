@@ -61,6 +61,23 @@ Enter `stop` (or `quit`) at any approval prompt to end the run without marking
 the task complete. No repository tool executes for that iteration, the result
 status is `stopped`, and the terminal decision remains in the JSONL trace.
 
+Ctrl+C (`SIGINT`) or `SIGTERM` also stops an approval-gated run while Jev,
+approval, information input, or an approved tool or worker is pending. The
+first signal wins; repeated signals during cleanup do not start another action.
+The loop waits for active execution to stop, keeps partial worker edits and
+bounded output, refreshes repository status, and invalidates previous validation
+after every begun worker attempt. Review those edits and run separately approved
+validation on a later run before claiming completion. Cancellation never passes
+validation or starts another tool, and returns `stopped` rather than `finished`
+or `iteration_limit`.
+
+On POSIX, active process groups receive TERM followed by KILL after a one-second
+grace period, including descendants that ignore TERM after their parent exits.
+On Windows, Node's supported child termination is used; this does not guarantee
+cleanup of an independently running descendant process tree. Initial read-only
+repository inspection drains its existing bounded reads and Git diagnostics
+before returning a stopped trace; it does not enter evaluation or approval.
+
 After validation passes, a clear Jev `FINISH` recommendation can be completed
 manually even when the separate task-completion probability remains below the
 95% automatic threshold. Enter `FINISH` at the approval prompt, review the
@@ -129,7 +146,9 @@ pnpm dev -- . "Inspect this repo and choose the safest useful first action" \
 
 Exit code `0` means a decision, completed loop status, help text, or version was
 printed. Exit code `1` means an operational failure prevented progress; exit
-code `2` means invalid command-line usage. In `--json` mode, errors are one JSON
+code `2` means invalid command-line usage. Interrupted approval-gated runs use
+`130` for Ctrl+C / `SIGINT` and `143` for `SIGTERM`; typed `stop` / `quit` stays
+`0`. In `--json` mode, errors are one JSON
 object on stderr with the same exit code.
 
 ## Traces
@@ -149,6 +168,16 @@ candidates, approval decision, tool input and result, exit status, duration,
 and the before/after state. A rejection records an observation and executes no
 repository tool. Alternative selections and their final confirmation are kept
 as an approval-history array so manual completion overrides remain auditable.
+
+A signal interruption adds a schema-v2 terminal record with a fixed phase and
+reason. Evaluation, policy, candidate, approval, and tool fields are null when
+those boundaries did not complete or execution did not begin. Begun executions
+retain the actual approved input and normalized result, including an optional
+`cancelled` flag distinct from `timedOut`. Worker metadata identifies the
+approved request and its pre-attempt validation generation. If interruption
+arrives during an ordinary trace write, that record is followed by one terminal
+interruption record. Arbitrary signal reasons and provider error bodies are
+never interruption evidence.
 
 Worker iterations additionally record a bounded request identity, evidence
 revision, validation generation, context references, and repair reason. Trace
@@ -222,6 +251,21 @@ live Jev evaluation. Pull-request CI runs the same typecheck, test, and build
 commands for maintainers.
 
 ## Live coding-agent verification
+
+The active process cancellation milestone completed implementation, offline
+verification (171 tests, typecheck, build, and mock smoke), and live signal
+verification on 2026-10-01. Real Codex CLI 0.159.3 (`gpt-5.6-terra`, high) and
+Claude Code 2.1.287 (Sonnet, medium) used mock Jev routing with no new live
+Gateway evaluation. After separately approved validation passed three Node
+tests, each approved worker saved an edit and was interrupted while executing:
+Codex received SIGINT then SIGTERM during cleanup (CLI exit 130), and Claude
+received SIGTERM (143). Both stopped after two iterations and one worker call,
+retained only `src/add.js`, and invalidated prior validation. Approval/trace
+and local process checks found no subsequent action, late edits, surviving
+observed workers, or emergency harness cleanup. Neither run claimed task
+completion; remote model termination and all-platform cleanup were not
+established. Exact results are in `PLAN.md`; the Windows descendant cleanup
+limit documented above remains.
 
 The worker-context and controlled-repair milestone completed on 2026-10-01.
 Real Codex CLI 0.159.3 (`gpt-5.6-terra`, high) and Claude Code 2.1.287 (Sonnet,
