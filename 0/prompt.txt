@@ -1,0 +1,9 @@
+commit push and pr
+
+---
+
+ok pr merged, what more do you tink we need to do both this is ready to test in a real test repo
+
+---
+
+ok step by step instructs
