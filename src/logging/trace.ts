@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { appendFile, mkdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
-import type { AgentState, EvaluationResult, PolicyDecision } from '../types.js';
+import type { AgentState, EvaluationAttribution, EvaluationResult, PolicyDecision } from '../types.js';
 
 export const TRACE_SCHEMA_VERSION = 1;
 export const ORCHESTRATION_TRACE_SCHEMA_VERSION = 2;
@@ -32,7 +32,7 @@ export type TraceRecord = {
   runId: string;
   timestamp: string;
   state: TraceValue;
-  evaluation: {
+  evaluation: EvaluationAttribution & {
     assessment: TraceValue;
     model: string;
     latencyMs: number;
@@ -75,8 +75,18 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 function configuredSecretValues(): string[] {
-  const gatewayKey = process.env.AI_GATEWAY_API_KEY?.trim();
-  return gatewayKey ? [gatewayKey] : [];
+  return ['AI_GATEWAY_API_KEY', 'OPENROUTER_API_KEY', 'OPENROUTE_API_KEY', 'TYPESAFE_API_KEY', 'TYPESAFE_AI_API_KEY']
+    .map((name) => process.env[name]?.trim())
+    .filter((value): value is string => Boolean(value))
+    .sort((a, b) => b.length - a.length);
+}
+
+export function evaluationAttribution(evaluation: EvaluationAttribution): EvaluationAttribution {
+  return {
+    ...(evaluation.provider === undefined ? {} : { provider: evaluation.provider }),
+    ...(evaluation.requestedModel === undefined ? {} : { requestedModel: redactSensitiveText(evaluation.requestedModel) }),
+    ...(evaluation.servedModel === undefined ? {} : { servedModel: redactSensitiveText(evaluation.servedModel) }),
+  };
 }
 
 export function redactSensitiveText(
@@ -125,7 +135,7 @@ function sanitizeValue(value: unknown, context: SanitizationContext, depth: numb
   const entries: { [key: string]: TraceValue } = {};
   const objectEntries = Object.entries(value).slice(0, MAX_TRACE_OBJECT_ENTRIES);
   for (const [key, entry] of objectEntries) {
-    entries[key] = SENSITIVE_KEY.test(key)
+    entries[redactSensitiveText(key, context.secretValues)] = SENSITIVE_KEY.test(key)
       ? REDACTED
       : sanitizeValue(entry, context, depth + 1);
   }
@@ -171,6 +181,7 @@ function makeTraceRecord(
     timestamp: date.toISOString(),
     state: sanitizeTraceValue(payload.state, secretValues),
     evaluation: {
+      ...evaluationAttribution(payload.evaluation),
       assessment: sanitizeTraceValue(payload.evaluation.assessment, secretValues),
       model: redactSensitiveText(payload.evaluation.model, secretValues),
       latencyMs: Number.isFinite(payload.evaluation.latencyMs) ? payload.evaluation.latencyMs : 0,
@@ -245,6 +256,7 @@ export async function appendOrchestrationTrace(
     iteration: payload.iteration,
     stateBefore: sanitizeTraceValue(payload.stateBefore, secretValues),
     evaluation: payload.evaluation === null ? null : {
+      ...evaluationAttribution(payload.evaluation),
       assessment: sanitizeTraceValue(payload.evaluation.assessment, secretValues),
       model: redactSensitiveText(payload.evaluation.model, secretValues),
       latencyMs: Number.isFinite(payload.evaluation.latencyMs) ? payload.evaluation.latencyMs : 0,

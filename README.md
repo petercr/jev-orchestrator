@@ -4,7 +4,7 @@ A deliberately small Node/TypeScript experiment for testing whether
 `typesafe-ai/jev` can make useful next-step decisions around a coding agent.
 
 The default mode remains **decision-only**: it inspects a repository, sends a
-compact state object to Jev through Vercel AI Gateway, applies deterministic
+compact state object to Jev through the selected evaluation provider, applies deterministic
 policy thresholds, prints the result, and records a JSONL trace. The explicit
 `--orchestrate` mode adds a bounded, manually approved loop for safe repository
 searches, bounded file reads, fixed read-only Git diagnostics, detected
@@ -17,7 +17,7 @@ approval.
 - Node.js 22+
 - pnpm
 - ripgrep (`rg`) for approved repository search actions
-- A Vercel AI Gateway key for live mode
+- A key and Jev model access for the selected live evaluation provider
 - An installed and authenticated Codex CLI for approved `CALL_CODEX` actions
 - An installed and authenticated Claude Code CLI for approved `CALL_CLAUDE`
   actions
@@ -37,6 +37,85 @@ pnpm exec node --env-file=.env --import tsx src/cli.ts -- \
 ```
 
 Never commit `.env`; it is ignored by git.
+
+## Evaluation providers
+
+`JEV_PROVIDER` explicitly selects one provider. Unset selection uses direct TypeSafe
+with `jev-latest` and `TYPESAFE_API_KEY` (or `TYPESAFE_AI_API_KEY`);
+there is no automatic cross-provider failover. Only the selected credential is
+required. `ROUTER_MODEL` overrides its model; leave it blank to use the default.
+`OPENROUTE_API_KEY` and `TYPESAFE_AI_API_KEY` are accepted credential aliases;
+nonblank canonical names take precedence. `OPENROUTE_MODEL` supplies an
+OpenRouter-only model fallback when `ROUTER_MODEL` is blank. Keep a global
+override in the namespace of the selected provider.
+
+| `JEV_PROVIDER` | Credential | Default model | Transport |
+| --- | --- | --- | --- |
+| `typesafe` | `TYPESAFE_API_KEY` | `jev-latest` | `POST https://api.typesafe.ai/v1/systemone` |
+| `vercel` | `AI_GATEWAY_API_KEY` | `typesafe-ai/jev` | Existing Vercel AI SDK evaluation API |
+| `openrouter` | `OPENROUTER_API_KEY` | `typesafe/jev-1.13` | `POST https://openrouter.ai/api/alpha/decisions` |
+
+Create a [Vercel Gateway key](https://vercel.com/ai-gateway), an
+[OpenRouter key](https://openrouter.ai/settings/keys), or a key in your
+[TypeSafe account](https://typesafe.ai). Set the selector and its key in `.env`,
+then use the env-file command above. For example, `JEV_PROVIDER=openrouter`
+needs `OPENROUTER_API_KEY` and does not need a Gateway key.
+For the previous Gateway behavior, explicitly set `JEV_PROVIDER=vercel`.
+When switching providers, clear a previous provider's `ROUTER_MODEL` override
+or replace it with a model in the new provider's namespace.
+
+Model namespaces differ: keep `typesafe-ai/jev` on Vercel; OpenRouter documents
+`typesafe/jev-1.13` and the moving alias `~typesafe/jev-latest`; direct TypeSafe
+uses `jev-latest` or pinned `jev-1.13.0`. These are typed decision APIs, with
+four Noul yes probabilities and a fixed Choice on native transports. They are
+not chat completion endpoints. See the [OpenRouter Jev guide](https://openrouter.ai/blog/insights/what-is-jev/),
+[TypeSafe API](https://docs.typesafe.ai/api), and [TypeSafe models](https://docs.typesafe.ai/models)
+(verified 2026-10-03).
+
+The account must have access to the selected model and sufficient credits or
+billing capacity. Authentication and a positive balance alone do not establish
+model/plan eligibility. A `401` means credential rejection; a `403` reports an
+access restriction without claiming the key is invalid; billing, rate limits,
+model availability, malformed answers, and timeouts have separate safe errors.
+Account eligibility must be verified with that account; public model listings
+do not guarantee it. Unknown selectors and missing selected keys fail before
+any evaluation request. `--mock` ignores provider configuration and stays
+offline and keyless.
+
+Each provider shares one 10-second deadline across request, response reading,
+and retry backoff, with at most one transient retry (two HTTP attempts). SDK
+retries are disabled; responses are capped at 64 KiB, including error bodies.
+Credentials go only to the selected fixed endpoint, with redirects disabled.
+All configured provider keys are redacted from evaluation snapshots, errors,
+CLI output, traces, and worker context. No raw upstream error body is logged.
+Missing Choice confidence remains absent and cannot authorize a worker.
+
+CLI results and both existing trace schemas add `provider`, `requestedModel`,
+and optional `servedModel`, while retaining the existing `model` field and
+schema versions. Native responses report their served version. The Gateway SDK
+echoes the requested model ID, so `servedModel` is omitted there instead of
+claiming a verified upstream version.
+
+For separate opt-in live verification from this repository checkout, build
+first and export only authorized
+credentials, then run one synthetic evaluation per selected provider:
+
+```bash
+pnpm build
+pnpm verify:jev --live openrouter
+pnpm verify:jev --live typesafe
+```
+
+Each check sends a small synthetic state, performs at most two attempts within
+10 seconds, executes no repository tool, and emits only sanitized provider,
+requested/served model, and normalized outcome or error code. It does not load
+`.env` automatically; to use that file run
+`node --env-file=.env scripts/verify-jev.mjs --live openrouter` (or `typesafe`).
+The live opt-in is required and is never part of automated tests. Implementation
+and verification are tracked in `PLAN.md`. Authorized checks passed on
+2026-10-03: OpenRouter served `typesafe/jev-1.13-20260917` and direct TypeSafe
+served `jev-1.13.0`, with both responses normalized. These checks establish
+access for the tested accounts; other accounts must verify their own access.
 
 ## Run
 
@@ -94,7 +173,7 @@ clarifications, repository findings, the latest independent validation result,
 and the previous worker outcome. The exact packet is shown before approval.
 The original task remains separate, and repository or worker text in the packet
 is treated as untrusted evidence. Known credential patterns and the configured
-Gateway key are redacted from the packet.
+provider keys are redacted from the packet.
 
 If validation fails, the loop presents `ASK_USER`. You can enter `approve` and
 provide a plain-language clarification, or enter `CALL_CODEX` or `CALL_CLAUDE`
@@ -111,10 +190,8 @@ pnpm exec node --env-file=.env --import tsx src/cli.ts -- \
   . "Inspect this repo and choose the safest useful first action"
 ```
 
-Each live evaluation has a 10-second deadline and at most one retry for a
-transient Gateway failure. The CLI reports authentication, rate-limit,
-unavailable-model, timeout, and malformed-response failures without printing
-Gateway response data.
+Each live evaluation uses the provider budget and safe error classifications
+described above.
 
 ## CLI contract
 
@@ -130,7 +207,8 @@ jev-agent <repo-path> <task> [--mock] [--no-trace] [--json] [--orchestrate]
 - `--no-trace` suppresses a decision-only JSONL trace file.
 - `--json` writes exactly one normalized, machine-readable decision object to
   stdout. It includes the repository snapshot, task, assessment, deterministic
-  policy decision, model name, latency, and optional trace path. It omits raw
+  policy decision, provider, requested/served model attribution, model name,
+  latency, and optional trace path. It omits raw
   provider answers and provider metadata.
 - `--orchestrate` enters the interactive loop. It cannot be combined with
   `--json` or `--no-trace`; orchestration always records its safety trace.
@@ -156,7 +234,8 @@ object on stderr with the same exit code.
 Unless `--no-trace` is set, each successful decision writes one JSONL record
 under `./traces/`. Decision records use trace schema version `1` and a
 timestamp-plus-UUID run ID, so concurrent runs do not share a file. A record contains a
-sanitized state snapshot, normalized assessment, policy decision, model,
+sanitized state snapshot, normalized assessment, policy decision, provider,
+requested/served model attribution, model,
 latency, and bounded raw Jev answers. It deliberately excludes raw provider
 metadata and upstream error bodies; known credential values and common
 credential-shaped fields are redacted before writing.
@@ -230,7 +309,8 @@ approved validation script before completion. If repository refresh fails, the
 loop requires an approved `ASK_USER` response and a successful refresh before
 further execution; rejecting or stopping does not trigger a recovery attempt.
 
-After exporting `AI_GATEWAY_API_KEY`, the shorter command works as well. Against
+After exporting `TYPESAFE_API_KEY` (or `TYPESAFE_AI_API_KEY`), the shorter
+command uses the default TypeSafe provider. Against
 another repository:
 
 ```bash
@@ -246,7 +326,7 @@ pnpm build
 ```
 
 The test suite is offline: it uses temporary repositories and mocked AI SDK
-boundaries, so it does not require `AI_GATEWAY_API_KEY`, a coding agent, or a
+boundaries, so it does not require a provider key, a coding agent, or a
 live Jev evaluation. Pull-request CI runs the same typecheck, test, and build
 commands for maintainers.
 
@@ -344,6 +424,13 @@ must not edit the target project or require an API key. On 2026-09-21, the
 `0.2.0`, returned that mock result, and created no trace. Do not pack or publish
 `.env`, traces, build cache, or `node_modules`.
 
+Initial provider milestone verification on 2026-10-03 passed typecheck, all 269 tests,
+build, and keyless mock smoke. An exact `0.2.0` archive was installed offline
+into a disposable consumer and verified all three selectors: mock remained
+keyless, missing selected credentials failed before evaluation, and no trace
+was written. Separate authorized live checks subsequently passed for both
+new providers, as recorded above and in `PLAN.md`.
+
 ## Continuous integration
 
 The `Verify` workflow runs on pull requests targeting `main` from the trusted
@@ -401,9 +488,18 @@ adapter explicitly forbids deployment, publishing, pushing, commits,
 destructive Git, secret reads, and writes outside the selected repository; its
 workspace sandbox and fixed direct arguments provide the local execution
 boundary.
-Live Jev evaluations allow standard Gateway data retention
-(`zeroDataRetention: false`); run them only with repository data you authorize
-for that service.
+Live evaluation sends the bounded task, repository metadata, and gathered
+observations to the selected service. Vercel retains the existing
+`zeroDataRetention: false` setting and routes to TypeSafe through its Gateway.
+OpenRouter's Decisions API routes through OpenRouter to TypeSafe; this client
+does not request a retention override, so account and provider privacy settings
+apply. Direct TypeSafe bypasses both intermediaries and uses its account terms.
+[OpenRouter's retention documentation](https://github.com/OpenRouterTeam/docs/blob/main/guides/features/zdr.mdx)
+describes its account controls and upstream retention policies.
+[TypeSafe's legal documentation](https://docs.typesafe.ai/legal) states that it
+does not train on user data and offers enterprise zero data retention. This
+client does not guarantee zero retention for any provider. Review the selected
+service's terms and send only repository data you authorize for that service.
 
 ## v0.2 orchestration release
 

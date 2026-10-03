@@ -21,7 +21,8 @@
     "dev": "node --import tsx src/cli.ts",
     "prepack": "pnpm build",
     "start": "node dist/cli.js",
-    "test": "vitest run"
+    "test": "vitest run",
+    "verify:jev": "node scripts/verify-jev.mjs"
   },
   "engines": {
     "node": ">=22"

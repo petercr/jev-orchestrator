@@ -32,9 +32,9 @@ tool arguments.
   populated and `main` contains subsequent work; do not treat the remote or the
   original scaffold's file list as current state.
 - Node.js 22+, TypeScript, pnpm, Vitest, JSONL traces, and AI SDK `7.0.106`.
-- Jev is evaluated with `experimental_evaluate()` through Vercel AI Gateway,
-  defaulting to `typesafe-ai/jev`; `.env.example` defines
-  `AI_GATEWAY_API_KEY` and `ROUTER_MODEL`.
+- Jev defaults to direct TypeSafe with `jev-latest`; `JEV_PROVIDER` can also
+  select OpenRouter or the existing Vercel AI SDK evaluation transport.
+  `.env.example` documents each provider's credential and model namespace.
 - The CLI gathers an `AgentState`, asks independent completion, information,
   testing, stuck, and next-action questions, normalizes Jev probabilities and
   confidence metadata, and applies deterministic local policy.
@@ -692,6 +692,85 @@ and per-fixture traces. These disposable artifacts remain local. The checks
 establish local process cleanup, without establishing remote model termination
 or portability across all operating systems; the Windows descendant cleanup
 limit above still applies.
+
+## Jev evaluation providers — issue #22
+
+Implementation, offline verification, and authorized live account checks
+status (2026-10-03): complete.
+
+- [x] Explicit `JEV_PROVIDER=vercel|openrouter|typesafe`, direct TypeSafe default,
+  provider-specific credentials/defaults, and `ROUTER_MODEL` override.
+- [x] Shared bounded state and five unchanged questions, Vercel SDK boundary,
+  OpenRouter native Decisions API, and direct TypeSafe System One API.
+- [x] Native Noul/Choice normalization, finite probabilities, allowed actions,
+  valid distributions/confidence, and absent confidence preserved for policy.
+- [x] One overall 10-second deadline, at most one transient retry with SDK
+  retries disabled, bounded response streams, abortable backoff, and late
+  response fencing. Selected credentials use fixed endpoints without redirects.
+- [x] Credential-safe authentication, authorization/model-plan, billing,
+  availability, rate-limit, timeout, and malformed-response classifications;
+  pilot `403` restriction fixture does not call a valid key necessarily invalid.
+- [x] Redaction of all three configured keys in evaluation snapshots, CLI
+  output, errors, both trace formats, and worker evidence; additive provider
+  and requested/served model attribution, with existing `model` retained.
+- [x] Setup, model namespaces, account prerequisites, retention differences,
+  `.env.example`, and separate bounded opt-in live verification command.
+- [x] Live OpenRouter check using authorized credentials, with only sanitized
+  provider/model/outcome evidence recorded.
+- [x] Live direct TypeSafe check using authorized credentials, with only
+  sanitized provider/model/outcome evidence recorded.
+
+Deterministic tests exercise each actual SDK/HTTP boundary through mocked
+fetch, successful and malformed answers, confident routes, missing/ambiguous
+confidence, premature completion, retry limits, billing/access failures,
+stream bounds, deadlines, cancellation in requests/backoff, no post-abort
+approval/execution, redaction, and trace attribution. Mock mode remains
+keyless and offline even with an invalid selector. Worker routing, manual
+approval, eight iterations, two calls per worker adapter, controlled repair,
+and independent validation are unchanged.
+
+Offline verification (2026-10-03): focused provider tests (93 tests),
+`pnpm check`, `pnpm test` (269 tests), `pnpm build`, the keyless mock decision
+smoke with an invalid selector, and `git diff --check` passed. The exact
+`0.2.0` archive was packed and installed offline into a disposable consumer;
+all three selections produced keyless mock decisions and actionable missing
+selected-credential errors before a live request, with no traces written.
+The opt-in checker rejects a missing live flag and records only a sanitized
+configuration outcome for either missing new-provider credential. No live
+Jev, Codex, or Claude call occurred in these checks.
+
+Authorized live verification (2026-10-03): the user supplied
+`OPENROUTE_API_KEY`, `OPENROUTE_MODEL`, and `TYPESAFE_AI_API_KEY` in local
+`.env` and explicitly requested the checks. Credential aliases are supported
+and redacted alongside canonical keys; canonical keys take precedence, and
+`OPENROUTE_MODEL` is an OpenRouter-only fallback beneath `ROUTER_MODEL`.
+The existing global Gateway model override was replaced in process for the
+OpenRouter check and cleared in process for the TypeSafe default. `.env` was
+not changed. Each opt-in run sent only the checker's synthetic fixture and
+used the shared ten-second/two-attempt cap; no repository tool or coding
+worker ran. Both commands exited 0. Sanitized evidence:
+
+| Provider | Requested model | Served model | Outcome |
+| --- | --- | --- | --- |
+| OpenRouter | `typesafe/jev-1.13` | `typesafe/jev-1.13-20260917` | normalized |
+| TypeSafe | `jev-latest` | `jev-1.13.0` | normalized |
+
+Alias follow-up verification passed focused config/provider tests, typecheck,
+all 273 tests, and build. Regression coverage includes both live credential
+aliases, canonical-name precedence, the OpenRouter model fallback, and
+redaction of canonical and alias values in requests, output, traces, and
+worker evidence.
+
+Default-provider follow-up (2026-10-03): at the user's request, an unset
+`JEV_PROVIDER` now selects direct TypeSafe with `jev-latest`. Explicit Vercel
+and OpenRouter selection and the global model override remain available.
+The local `.env` old Gateway model override was cleared without changing
+credentials, so its supplied TypeSafe credential alias works with the default.
+Help, setup instructions, `.env.example`, and default-route tests were updated.
+Focused tests, `pnpm check`, all 274 tests, `pnpm build`, and
+`git diff --check` passed. Loading the local `.env` with the built configuration
+resolved to `typesafe` / `jev-latest` with a configured selected credential;
+this verification made no additional live request.
 
 ## Reference, not a template
 
