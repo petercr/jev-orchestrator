@@ -1,9 +1,1 @@
-issue 22
-
----
-
-ok were ready to test the live api keys. they are TYPESAFE_AI_API_KEY, OPENROUTE_API_KEY, OPENROUTE_MODEL all set in .env vars
-
----
-
-let's change the default to be typesafe for the cli
+ok commit pusj and pr
