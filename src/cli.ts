@@ -6,10 +6,10 @@ import path from 'node:path';
 import { createInterface, type Interface } from 'node:readline/promises';
 import { pathToFileURL } from 'node:url';
 import { evaluateAgentState } from './ai/evaluate.js';
-import { requireGatewayApiKey } from './config.js';
+import { resolveJevConfiguration } from './config.js';
 import { requireBoundedTask } from './limits.js';
 import { writeTrace } from './logging/trace.js';
-import { redactSensitiveText } from './logging/trace.js';
+import { evaluationAttribution, redactSensitiveText } from './logging/trace.js';
 import { mockEvaluation } from './mock.js';
 import {
   createInitialState,
@@ -25,6 +25,7 @@ import type {
   AgentAssessment,
   AgentState,
   EvaluationResult,
+  EvaluationAttribution,
   PolicyDecision,
   RepoSnapshot,
 } from './types.js';
@@ -49,7 +50,7 @@ export type CliCommand =
   | { kind: 'version' }
   | { kind: 'run'; options: CliOptions };
 
-export type DecisionOutput = {
+export type DecisionOutput = EvaluationAttribution & {
   schemaVersion: 1;
   status: 'unexecuted';
   mode: 'mock' | 'live';
@@ -96,8 +97,14 @@ Examples:
   pnpm dev -- ../my-app "Investigate preview auth" --mock --orchestrate
 
 Environment:
-  AI_GATEWAY_API_KEY   Vercel AI Gateway key
-  ROUTER_MODEL         Defaults to typesafe-ai/jev
+  JEV_PROVIDER        typesafe (default), vercel, or openrouter
+  AI_GATEWAY_API_KEY  Vercel AI Gateway key (vercel only)
+  OPENROUTER_API_KEY  OpenRouter key (openrouter only)
+  OPENROUTE_API_KEY   Accepted OpenRouter key alias
+  TYPESAFE_API_KEY    TypeSafe AI key (typesafe only)
+  TYPESAFE_AI_API_KEY Accepted TypeSafe key alias
+  ROUTER_MODEL        Selected provider's model override
+  OPENROUTE_MODEL     OpenRouter model fallback when ROUTER_MODEL is blank
 
 Exit codes:
   0  A decision, help text, or version was printed.
@@ -222,13 +229,23 @@ export function createDecisionOutput(
     schemaVersion: 1,
     status: 'unexecuted',
     mode,
-    repo: state.repo,
-    task: state.task,
+    repo: {
+      ...state.repo,
+      root: redactSensitiveText(state.repo.root),
+      ...(state.repo.packageName === undefined ? {} : { packageName: redactSensitiveText(state.repo.packageName) }),
+      ...(state.repo.gitBranch === undefined ? {} : { gitBranch: redactSensitiveText(state.repo.gitBranch) }),
+      scripts: state.repo.scripts.map((value) => redactSensitiveText(value)),
+      validationScripts: state.repo.validationScripts.map((value) => redactSensitiveText(value)),
+      gitStatus: state.repo.gitStatus.map((value) => redactSensitiveText(value)),
+      topLevelFiles: state.repo.topLevelFiles.map((value) => redactSensitiveText(value)),
+    },
+    task: redactSensitiveText(state.task),
     assessment: evaluation.assessment,
-    policy,
-    model: evaluation.model,
+    policy: { ...policy, reason: redactSensitiveText(policy.reason) },
+    model: redactSensitiveText(evaluation.model),
+    ...evaluationAttribution(evaluation),
     latencyMs: evaluation.latencyMs,
-    ...(tracePath === undefined ? {} : { tracePath }),
+    ...(tracePath === undefined ? {} : { tracePath: redactSensitiveText(tracePath) }),
   };
 }
 
@@ -240,7 +257,7 @@ export async function runDecision(
   const state = createInitialState(repo, options.task);
   const mode: DecisionOutput['mode'] = options.mock ? 'mock' : 'live';
 
-  if (!options.mock) requireGatewayApiKey();
+  if (!options.mock) resolveJevConfiguration();
   const evaluation = options.mock ? mockEvaluation() : await evaluateAgentState(state);
   const policy = applyPolicy(state, evaluation.assessment);
   const tracePath = options.noTrace
@@ -288,16 +305,17 @@ export function printApprovalProposal(context: ApprovalContext): void {
   const { assessment } = evaluation;
   console.log(`\nIteration ${context.state.iteration}`);
   console.log(`Jev requested: ${policy.requested}`);
+  printEvaluationAttribution(evaluation);
   console.log('Next-action distribution');
   printDistribution(assessment.nextAction.probabilities);
   console.log(`Policy selected: ${policy.selected}${policy.override ? ' (override)' : ''}`);
-  console.log(`Reason: ${policy.reason}`);
+  console.log(`Reason: ${redactSensitiveText(policy.reason)}`);
   console.log(`Safe candidate: ${proposal.action}`);
   console.log(`Tool: ${proposal.tool ?? 'none'}`);
   const parameters = JSON.stringify(proposal.input, (_key, value: unknown) =>
     typeof value === 'string' ? redactSensitiveText(value) : value);
   console.log(`Parameters: ${parameters}`);
-  if ('reason' in proposal) console.log(`Candidate reason: ${proposal.reason}`);
+  if ('reason' in proposal) console.log(`Candidate reason: ${redactSensitiveText(proposal.reason)}`);
   console.log(`Allowed alternatives: ${context.allowedAlternatives.join(', ')}`);
   console.log('Enter stop to end the run without marking the task complete; the trace is kept.');
   if (proposal.action === 'ASK_USER' && context.allowedAlternatives.includes('FINISH')) {
@@ -346,13 +364,13 @@ export async function runCliOrchestration(options: CliOptions): Promise<Orchestr
     // an initial interruption never enters evaluation or approval.
     const repo = await inspectRepo(options.repoPath);
     const state = createInitialState(repo, options.task);
-    if (!options.mock && !controller.signal.aborted) requireGatewayApiKey();
+    if (!options.mock && !controller.signal.aborted) resolveJevConfiguration();
     terminal = createInterface({ input: process.stdin, output: process.stdout });
     terminal.on('SIGINT', sigint);
     const prompts = terminal;
 
     console.log('\nJev Orchestrator — approval-gated orchestration');
-    console.log(`Repo: ${repo.root}`);
+    console.log(`Repo: ${redactSensitiveText(repo.root)}`);
     console.log(`Task: ${redactSensitiveText(options.task)}`);
     console.log(`Mode: ${options.mock ? 'mock' : 'live Jev'}`);
     console.log('No repository action runs without approval.');
@@ -393,7 +411,14 @@ function printHumanDecision(decision: DecisionOutput): void {
   console.log(`Policy selected (unexecuted): ${policy.selected}${policy.override ? ' (override)' : ''}`);
   console.log(`Reason: ${policy.reason}`);
   console.log(`Latency: ${decision.latencyMs}ms`);
+  printEvaluationAttribution(decision);
   if (decision.tracePath !== undefined) console.log(`Trace: ${decision.tracePath}`);
+}
+
+function printEvaluationAttribution(evaluation: EvaluationAttribution): void {
+  if (evaluation.provider) console.log(`Provider: ${evaluation.provider}`);
+  if (evaluation.requestedModel) console.log(`Requested model: ${redactSensitiveText(evaluation.requestedModel)}`);
+  if (evaluation.servedModel) console.log(`Served model: ${redactSensitiveText(evaluation.servedModel)}`);
 }
 
 async function packageVersion(): Promise<string> {
@@ -423,7 +448,7 @@ function errorOutput(error: unknown): ErrorOutput {
     status: 'error',
     error: {
       kind: usage ? 'usage' : 'operational',
-      message: error instanceof Error ? error.message : String(error),
+      message: redactSensitiveText(error instanceof Error ? error.message : String(error)),
     },
     exitCode: exitCodeFor(error),
   };
@@ -458,7 +483,7 @@ export async function main(argv: string[] = process.argv.slice(2)): Promise<void
     if (result.exitCode !== undefined) process.exitCode = result.exitCode;
     console.log(`\nLoop status: ${result.status}`);
     console.log(`Iterations: ${result.iterations}`);
-    console.log(`Trace: ${path.relative(process.cwd(), result.tracePath)}`);
+    console.log(`Trace: ${redactSensitiveText(path.relative(process.cwd(), result.tracePath))}`);
     return;
   }
 
@@ -480,7 +505,7 @@ if (isDirectInvocation()) {
     if (wantsJsonError(process.argv.slice(2))) {
       console.error(JSON.stringify(errorOutput(error)));
     } else {
-      console.error(`\nError: ${error instanceof Error ? error.message : String(error)}`);
+      console.error(`\nError: ${redactSensitiveText(error instanceof Error ? error.message : String(error))}`);
     }
     process.exitCode = exitCodeFor(error);
   });

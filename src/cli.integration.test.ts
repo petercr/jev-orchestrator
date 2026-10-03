@@ -41,6 +41,9 @@ describe('offline CLI integration', () => {
   it('inspects a temporary repository and emits one JSON decision in mock mode', async () => {
     const root = await temporaryRepository();
     const log = vi.spyOn(console, 'log').mockImplementation(() => undefined);
+    vi.stubEnv('JEV_PROVIDER', 'unknown');
+    for (const name of ['AI_GATEWAY_API_KEY', 'OPENROUTER_API_KEY', 'OPENROUTE_API_KEY', 'TYPESAFE_API_KEY', 'TYPESAFE_AI_API_KEY']) vi.stubEnv(name, '');
+    const fetch = vi.spyOn(globalThis, 'fetch').mockRejectedValue(new Error('Unexpected network request'));
 
     await main([root, 'Inspect the fixture repository', '--mock', '--no-trace', '--json']);
 
@@ -62,6 +65,8 @@ describe('offline CLI integration', () => {
     expect(output).not.toHaveProperty('tracePath');
     expect(output).not.toHaveProperty('rawAnswers');
     expect(output).not.toHaveProperty('providerMetadata');
+    expect(output).toMatchObject({ provider: 'mock', requestedModel: 'mock/jev', servedModel: 'mock/jev' });
+    expect(fetch).not.toHaveBeenCalled();
   });
 
   it('writes a versioned trace for an offline decision', async () => {
@@ -87,16 +92,18 @@ describe('offline CLI integration', () => {
     expect((record.evaluation as Record<string, unknown>)).not.toHaveProperty('providerMetadata');
   });
 
-  it('fails before live evaluation when the gateway key is missing', async () => {
+  it('fails before live evaluation when the default TypeSafe key is missing', async () => {
     const root = await temporaryRepository();
-    vi.stubEnv('AI_GATEWAY_API_KEY', '');
+    vi.stubEnv('JEV_PROVIDER', undefined);
+    vi.stubEnv('TYPESAFE_API_KEY', '');
+    vi.stubEnv('TYPESAFE_AI_API_KEY', '');
 
     await expect(runDecision({
       repoPath: root,
       task: 'Inspect the fixture repository',
       mock: false,
       noTrace: true,
-    }, root)).rejects.toThrow('AI_GATEWAY_API_KEY is required');
+    }, root)).rejects.toThrow('TYPESAFE_API_KEY is required');
   });
 
   it('returns the safe trace error when an otherwise valid decision cannot be recorded', async () => {

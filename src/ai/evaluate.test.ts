@@ -5,7 +5,7 @@ import {
   NoSuchModelError,
   RetryError,
 } from 'ai';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   boundAgentStateForEvaluation,
   evaluateAgentState,
@@ -26,6 +26,12 @@ vi.mock('ai', async () => {
   const actual = await vi.importActual<typeof import('ai')>('ai');
   return { ...actual, experimental_evaluate: vi.fn() };
 });
+
+beforeEach(() => {
+  vi.stubEnv('JEV_PROVIDER', 'vercel');
+  vi.stubEnv('AI_GATEWAY_API_KEY', 'test-gateway-key');
+});
+afterEach(() => vi.unstubAllEnvs());
 
 const state: AgentState = {
   task: 'Inspect the repository',
@@ -94,7 +100,8 @@ describe('evaluateAgentState', () => {
     const result = await evaluateAgentState(state);
 
     const request = evaluateMock.mock.calls[0]?.[0];
-    expect(request?.maxRetries).toBe(JEV_EVALUATION_MAX_RETRIES);
+    expect(request?.maxRetries).toBe(0);
+    expect(JEV_EVALUATION_MAX_RETRIES).toBe(1);
     expect(request?.abortSignal).toBeInstanceOf(AbortSignal);
     expect(request?.providerOptions).toEqual({ gateway: { zeroDataRetention: false } });
     expect(result.assessment.nextAction.confidence).toBe(0.73);
@@ -214,6 +221,7 @@ describe('Jev user cancellation', () => {
     let rejectProvider!: (reason: unknown) => void;
     vi.mocked(evaluate).mockReturnValueOnce(new Promise((_resolve, reject) => { rejectProvider = reject; }) as ReturnType<typeof evaluate>);
     const running = evaluateAgentState(state, undefined, { signal: controller.signal });
+    await new Promise((resolve) => setImmediate(resolve));
     const invocation = vi.mocked(evaluate).mock.calls.at(-1)?.[0];
     expect(invocation?.abortSignal?.aborted).toBe(false);
     controller.abort('secret reason');

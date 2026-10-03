@@ -47,6 +47,9 @@ export function mockEvaluation(state?: AgentState): EvaluationResult {
       },
     },
     model: 'mock/jev',
+    provider: 'mock',
+    requestedModel: 'mock/jev',
+    servedModel: 'mock/jev',
     latencyMs: 0,
     rawAnswers: { mock: true },
   };

@@ -100,7 +100,15 @@ export type AgentAssessment = {
   nextAction: ChoiceAssessment;
 };
 
-export type EvaluationResult = {
+export type JevProvider = 'vercel' | 'openrouter' | 'typesafe';
+
+export type EvaluationAttribution = {
+  provider?: JevProvider | 'mock';
+  requestedModel?: string;
+  servedModel?: string;
+};
+
+export type EvaluationResult = EvaluationAttribution & {
   assessment: AgentAssessment;
   model: string;
   latencyMs: number;

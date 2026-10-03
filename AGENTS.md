@@ -10,7 +10,7 @@ The packaged v0.2 CLI retains decision-only as the default. Explicit `--orchestr
 
 - `src/cli.ts`: command-line entry point and initial `AgentState` construction.
 - `src/types.ts`: shared action, state, assessment, and policy types.
-- `src/ai/evaluate.ts`: Jev/Vercel AI Gateway evaluation and response normalization.
+- `src/ai/evaluate.ts`: bounded Jev evaluation, with shared normalization in `src/ai/contract.ts` and Vercel/OpenRouter/TypeSafe transport boundaries.
 - `src/policy.ts`: deterministic safety and confidence rules. This is the final authority over model recommendations.
 - `src/policy.test.ts`: policy behavior tests.
 - `src/repo/inspect.ts`: read-only repository metadata collection.
@@ -47,7 +47,7 @@ Run the approval-gated mock loop interactively:
 pnpm dev -- . "Inspect this repo and choose the safest useful first action" --mock --orchestrate
 ```
 
-Live evaluation requires `AI_GATEWAY_API_KEY`. Do not require a live model call in automated tests. Never print, trace, or commit credentials.
+Live evaluation requires only the selected `JEV_PROVIDER` credential: `AI_GATEWAY_API_KEY`, `OPENROUTER_API_KEY`, or `TYPESAFE_API_KEY`. Unset selection defaults to direct TypeSafe (`jev-latest`); `TYPESAFE_AI_API_KEY` and `OPENROUTE_API_KEY` are accepted aliases. Do not require a live model call in automated tests. Never print, trace, or commit credentials.
 
 Before finishing a code change, run the narrowest relevant test first, then `pnpm check`, `pnpm test`, and `pnpm build` when practical. If a command cannot be run, state that explicitly.
 
