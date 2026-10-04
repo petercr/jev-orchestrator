@@ -1,4 +1,5 @@
 import type { AgentAssessment, AgentState, PolicyDecision } from './types.js';
+import { hasFailedValidation, hasPassedValidation, pendingValidationScripts } from './repo/validation.js';
 
 export type PolicyThresholds = {
   finish: number;
@@ -16,18 +17,16 @@ export const DEFAULT_THRESHOLDS: PolicyThresholds = {
   minChoiceConfidence: 0.35,
 };
 
-function hasPassedValidation(state: AgentState): boolean {
-  return (
-    state.repo.validationScripts.length > 0 &&
-    state.tests.ran &&
-    state.tests.passed === true
-  );
-}
-
 function requireValidation(
   state: AgentState,
   requested: PolicyDecision['requested'],
 ): PolicyDecision {
+  if (state.evidence?.issue?.validationRequirementsTruncated) {
+    return {
+      requested, selected: 'ASK_USER', override: requested !== 'ASK_USER',
+      reason: 'The bounded issue context omitted validation requirements; more context is needed before completion.',
+    };
+  }
   if (state.repo.validationScripts.length === 0) {
     return {
       requested,
@@ -37,7 +36,7 @@ function requireValidation(
     };
   }
 
-  if (state.tests.ran && state.tests.passed === false) {
+  if (hasFailedValidation(state)) {
     return {
       requested,
       selected: 'ASK_USER',
@@ -50,7 +49,7 @@ function requireValidation(
     requested,
     selected: 'RUN_TESTS',
     override: requested !== 'RUN_TESTS',
-    reason: 'Policy requires a passing validation run before completion.',
+    reason: `Policy requires passing independent validation before completion: ${pendingValidationScripts(state).join(', ')}.`,
   };
 }
 
@@ -62,6 +61,8 @@ export function applyPolicy(
   const requested = assessment.nextAction.choice;
   const selectedProbability = assessment.nextAction.probabilities[requested] ?? 0;
   const confidence = assessment.nextAction.confidence ?? 0;
+  const clearRouting = selectedProbability >= thresholds.minChoiceProbability &&
+    confidence >= thresholds.minChoiceConfidence;
 
   if (state.evidence?.repoRefreshRequired) {
     return {
@@ -116,21 +117,29 @@ export function applyPolicy(
         selected: 'ASK_USER',
         override: true,
         reason: 'Completion confidence does not clear the finish threshold.',
+        ...(clearRouting ? { completionReview: 'jev_finish' as const } : {}),
       };
     }
 
     return requireValidation(state, requested);
   }
 
-  if (
-    selectedProbability < thresholds.minChoiceProbability ||
-    confidence < thresholds.minChoiceConfidence
-  ) {
+  if (!clearRouting) {
     return {
       requested,
       selected: 'ASK_USER',
       override: requested !== 'ASK_USER',
       reason: 'The next-action distribution is too ambiguous for autonomous execution.',
+    };
+  }
+
+  if (requested === 'RUN_TESTS' && hasPassedValidation(state)) {
+    return {
+      requested,
+      selected: 'ASK_USER',
+      override: true,
+      reason: 'All required independent checks passed for the current generation; review whether the original task acceptance criteria are satisfied.',
+      completionReview: 'validation_complete',
     };
   }
 

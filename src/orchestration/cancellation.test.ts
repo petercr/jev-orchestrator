@@ -237,6 +237,7 @@ it('preserves actual alternative selections while interrupting a later approval 
 it('does not claim finish when the completion trace is interrupted', async () => {
   const state = await fixture();
   state.tests = { ran: true, passed: true };
+  state.evidence!.validations = [{ iteration: 0, generation: 0, script: 'test', exitCode: 0, timedOut: false, passed: true, summary: 'tests passed' }];
   const controller = new AbortController();
   const deps = dependencies('FINISH');
   const resultEvaluation = evaluation('FINISH');

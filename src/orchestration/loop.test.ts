@@ -254,6 +254,7 @@ describe('approval-gated orchestration loop', () => {
     const repo = await repository();
     const initial = createInitialState(repo, 'Inspect and validate fixture auth');
     initial.tests = { ran: true, passed: true, summary: 'tests passed' };
+    initial.evidence!.validations = [{ iteration: 0, generation: 0, script: 'test', exitCode: 0, timedOut: false, passed: true, summary: 'tests passed' }];
     const approvals: ApprovalDecision[] = [
       { kind: 'alternative', action: 'FINISH' },
       { kind: 'approve' },
@@ -426,7 +427,7 @@ describe('approval-gated orchestration loop', () => {
       { maxIterations: 1 },
     );
 
-    expect(result.state.tests).toEqual({ ran: true, passed: false, summary: 'tests failed' });
+    expect(result.state.tests).toEqual({ ran: true, passed: false, summary: expect.stringContaining('tests failed') });
     expect(result.state.commandsRun).toMatchObject([{ exitCode: 1 }]);
     expect(result.state.observations.at(-1)).toContain('iteration limit');
     await expect(runOrchestration(initial, {
@@ -687,7 +688,7 @@ describe('approval-gated orchestration loop', () => {
     expect(result.state).toMatchObject({
       codexCalls: 2,
       filesModified: ['src/auth.ts'],
-      tests: { ran: true, passed: true, summary: 'all tests passed' },
+      tests: { ran: true, passed: true, summary: expect.stringContaining('all tests passed') },
       evidence: { validationGeneration: 2 },
     });
     expect(approvalHistory).toEqual([

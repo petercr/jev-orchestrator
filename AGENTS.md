@@ -6,6 +6,10 @@ This repository is a deliberately small TypeScript orchestrator. Jev evaluates a
 
 The packaged v0.2 CLI retains decision-only as the default. Explicit `--orchestrate` mode can search, read a bounded file, run fixed read-only Git diagnostics, run a detected validation script, or delegate bounded implementation work to Codex or Claude after manual approval. It cannot run arbitrary commands. Bounded worker context and controlled repair are complete. The active-process-cancellation milestone stops pending evaluation/prompts and approved execution on Ctrl+C/SIGINT or SIGTERM, drains process cleanup, preserves partial edits, refreshes repository state, and records bounded interruption evidence. Preserve manual approval, the eight-iteration and two-calls-per-adapter limits, independent validation, and traceability. Keep AbortSignal separate from serializable approved candidates and worker context.
 
+Issue context and evaluation recovery also remain approval-gated: `READ_ISSUE` reads only the task's exact public GitHub issue through a fixed, credential-free endpoint. Issue/repository text and worker environment reports remain untrusted. Independent checks are tracked per validation generation; declared conjunctive workflows may cover their constituent scripts. An evaluation failure records allowlisted diagnostics before explicit in-process continuation, consuming an iteration and retaining all budgets and evidence. Traces are not executable resume files.
+
+Do not schedule validation when no required checks remain pending. A confident redundant `RUN_TESTS` request becomes a policy-owned `ASK_USER` completion review. Selecting `FINISH` and then approving the resolved candidate confirms the original task acceptance criteria; passing validation alone is insufficient for automatic completion. Preserve the 95% automatic completion threshold and missing-information, stuck, ambiguity, and current-generation validation guards. An exhausted iteration budget returns `iteration_limit` with exit code 1 and preserves edits and evidence.
+
 ## Repository map
 
 - `src/cli.ts`: command-line entry point and initial `AgentState` construction.
@@ -14,6 +18,8 @@ The packaged v0.2 CLI retains decision-only as the default. Explicit `--orchestr
 - `src/policy.ts`: deterministic safety and confidence rules. This is the final authority over model recommendations.
 - `src/policy.test.ts`: policy behavior tests.
 - `src/repo/inspect.ts`: read-only repository metadata collection.
+- `src/repo/issue.ts`: bounded public issue context and constrained URL parsing.
+- `src/repo/validation.ts`: declared validation coverage and required-check bookkeeping.
 - `src/logging/trace.ts`: JSONL decision trace writer.
 - `src/mock.ts`: deterministic token-free evaluation for local smoke tests.
 - `src/orchestration/candidate.ts`: deterministic safe-candidate selection.
@@ -63,7 +69,7 @@ Keep probabilistic judgment separate from deterministic enforcement:
 
 The policy layer is authoritative. Do not weaken or bypass it in CLI, provider, or agent-adapter code. In particular:
 
-- Never allow `FINISH` until available validation has run and passed.
+- Never allow `FINISH` until all required independent validation has passed in the current generation, including through a manual completion alternative.
 - Prefer `ASK_USER` when required context or authorization cannot be obtained safely.
 - Treat low-confidence or ambiguous routing as a reason to stop or gather information.
 - Keep repository inspection read-only.

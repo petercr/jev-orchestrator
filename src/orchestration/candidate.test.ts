@@ -89,6 +89,17 @@ describe('candidate selection', () => {
     });
   });
 
+  it('reads repository instructions before a searched source file', async () => {
+    const root = await temporaryRoot();
+    await writeFile(path.join(root, 'CONTRIBUTING.md'), 'Use npm run verify.');
+    await writeFile(path.join(root, 'source.ts'), 'export {};');
+    const initial = state(root);
+    initial.repo.topLevelFiles = ['source.ts', 'CONTRIBUTING.md'];
+    await expect(selectCandidate('READ_FILE', initial, ['source.ts'])).resolves.toMatchObject({ input: { path: 'CONTRIBUTING.md' } });
+    initial.filesRead = ['CONTRIBUTING.md'];
+    await expect(selectCandidate('READ_FILE', initial, ['source.ts'])).resolves.toMatchObject({ input: { path: 'source.ts' } });
+  });
+
   it('builds validation commands only from detected scripts and lockfiles', async () => {
     const root = await temporaryRoot();
     await expect(selectCandidate('RUN_TESTS', state(root))).resolves.toMatchObject({
@@ -101,7 +112,7 @@ describe('candidate selection', () => {
     });
     await expect(selectCandidate('RUN_TESTS', noScripts)).resolves.toMatchObject({
       action: 'ASK_USER',
-      reason: expect.stringContaining('No recognized validation script'),
+      reason: expect.stringContaining('No declared validation script'),
     });
   });
 

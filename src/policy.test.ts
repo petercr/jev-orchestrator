@@ -302,4 +302,46 @@ describe('applyPolicy', () => {
     }));
     expect(result.selected).toBe('ASK_USER');
   });
+
+  it('requests completion review instead of repeating successful validation', () => {
+    const validated = { ...state, tests: { ran: true, passed: true } };
+    const result = applyPolicy(validated, assessment({
+      needsTesting: { probability: 0.99 },
+      nextAction: { choice: 'RUN_TESTS', probabilities: { RUN_TESTS: 0.9 }, confidence: 0.8 },
+    }));
+
+    expect(result).toMatchObject({
+      requested: 'RUN_TESTS', selected: 'ASK_USER', override: true,
+      completionReview: 'validation_complete',
+    });
+    expect(result.reason).toContain('original task');
+  });
+
+  it.each(['needsMoreInformation', 'stuck'] as const)('withholds completion review when %s requires user input', (field) => {
+    const validated = { ...state, tests: { ran: true, passed: true } };
+    const result = applyPolicy(validated, assessment({
+      [field]: { probability: DEFAULT_THRESHOLDS.askUser },
+      nextAction: { choice: 'RUN_TESTS', probabilities: { RUN_TESTS: 0.9 }, confidence: 0.8 },
+    }));
+    expect(result.selected).toBe('ASK_USER');
+    expect(result).not.toHaveProperty('completionReview');
+  });
+
+  it('withholds manual completion on ambiguous redundant validation requests', () => {
+    const validated = { ...state, tests: { ran: true, passed: true } };
+    for (const nextAction of [
+      { choice: 'RUN_TESTS' as const, probabilities: { RUN_TESTS: 0.54 }, confidence: 0.8 },
+      { choice: 'RUN_TESTS' as const, probabilities: { RUN_TESTS: 0.9 }, confidence: 0.34 },
+    ]) {
+      expect(applyPolicy(validated, assessment({ nextAction }))).toMatchObject({ selected: 'ASK_USER' });
+      expect(applyPolicy(validated, assessment({ nextAction }))).not.toHaveProperty('completionReview');
+    }
+  });
+
+  it('retains the confidence threshold for automatic completion after redundant validation requests', () => {
+    const validated = { ...state, tests: { ran: true, passed: true } };
+    const route = { choice: 'RUN_TESTS' as const, probabilities: { RUN_TESTS: 0.9 }, confidence: 0.8 };
+    expect(applyPolicy(validated, assessment({ taskComplete: { probability: 0.949 }, nextAction: route })).selected).toBe('ASK_USER');
+    expect(applyPolicy(validated, assessment({ taskComplete: { probability: 0.95 }, nextAction: route })).selected).toBe('FINISH');
+  });
 });

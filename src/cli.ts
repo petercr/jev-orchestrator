@@ -17,6 +17,7 @@ import {
   type ApprovalContext,
   type ApprovalDecision,
   type OrchestrationResult,
+  type EvaluationRecoveryContext,
 } from './orchestration/loop.js';
 import { applyPolicy } from './policy.js';
 import { inspectRepo } from './repo/inspect.js';
@@ -236,6 +237,13 @@ export function createDecisionOutput(
       ...(state.repo.gitBranch === undefined ? {} : { gitBranch: redactSensitiveText(state.repo.gitBranch) }),
       scripts: state.repo.scripts.map((value) => redactSensitiveText(value)),
       validationScripts: state.repo.validationScripts.map((value) => redactSensitiveText(value)),
+      ...(state.repo.requiredValidationScripts ? {
+        requiredValidationScripts: state.repo.requiredValidationScripts.map((value) => redactSensitiveText(value)),
+      } : {}),
+      ...(state.repo.validationScriptCoverage ? {
+        validationScriptCoverage: Object.fromEntries(Object.entries(state.repo.validationScriptCoverage)
+          .map(([script, covered]) => [redactSensitiveText(script), covered.map((value) => redactSensitiveText(value))])),
+      } : {}),
       gitStatus: state.repo.gitStatus.map((value) => redactSensitiveText(value)),
       topLevelFiles: state.repo.topLevelFiles.map((value) => redactSensitiveText(value)),
     },
@@ -281,6 +289,8 @@ export function parseApprovalChoice(
     SEARCH_REPO: { kind: 'alternative', action: 'SEARCH_REPO' },
     READ: { kind: 'alternative', action: 'READ_FILE' },
     READ_FILE: { kind: 'alternative', action: 'READ_FILE' },
+    ISSUE: { kind: 'alternative', action: 'READ_ISSUE' },
+    READ_ISSUE: { kind: 'alternative', action: 'READ_ISSUE' },
     COMMAND: { kind: 'alternative', action: 'RUN_COMMAND' },
     RUN_COMMAND: { kind: 'alternative', action: 'RUN_COMMAND' },
     TEST: { kind: 'alternative', action: 'RUN_TESTS' },
@@ -319,6 +329,9 @@ export function printApprovalProposal(context: ApprovalContext): void {
   console.log(`Allowed alternatives: ${context.allowedAlternatives.join(', ')}`);
   console.log('Enter stop to end the run without marking the task complete; the trace is kept.');
   if (proposal.action === 'ASK_USER' && context.allowedAlternatives.includes('FINISH')) {
+    if (context.policy.completionReview === 'validation_complete') {
+      console.log('All required independent checks passed. Review the original task acceptance criteria before confirming completion.');
+    }
     console.log('Validated finish override: enter FINISH, review it, then enter approve.');
   }
   if (proposal.action === 'ASK_USER') {
@@ -342,6 +355,23 @@ async function promptForApproval(
     const decision = parseApprovalChoice(answer, context);
     if (decision) return decision;
     console.log('Invalid choice. No repository action has run.');
+  }
+}
+
+async function promptForEvaluationRecovery(
+  terminal: Interface,
+  context: EvaluationRecoveryContext,
+  options: ExecutionOptions,
+): Promise<'continue' | 'stop'> {
+  console.log(`\nEvaluation failed: ${context.failure.code} at ${context.failure.stage}/${context.failure.category}${context.failure.field ? ` (${context.failure.field})` : ''}.`);
+  console.log(`Edits and evidence are preserved. ${context.remainingIterations} iterations remain; worker calls used: Codex ${context.state.codexCalls}/2, Claude ${context.state.claudeCalls}/2.`);
+  console.log(`Trace: ${redactSensitiveText(context.tracePath)}`);
+  while (true) {
+    const answer = (await terminal.question('Enter continue to reevaluate this state, or stop: ', options)).trim().toLowerCase();
+    throwIfInterrupted(options.signal);
+    if (answer === 'continue') return 'continue';
+    if (answer === 'stop' || answer === 'quit') return 'stop';
+    console.log('Explicit continue or stop is required; no action has been approved.');
   }
 }
 
@@ -381,6 +411,7 @@ export async function runCliOrchestration(options: CliOptions): Promise<Orchestr
         : evaluateAgentState(currentState, undefined, executionOptions),
       approve: async (context) => promptForApproval(prompts, context, executionOptions),
       askForInformation: async () => prompts.question('Provide the required information: ', executionOptions),
+      recoverEvaluation: async (context) => promptForEvaluationRecovery(prompts, context, executionOptions),
     }, {
       signal: controller.signal,
       ...(controller.signal.aborted ? { initialPhase: 'inspection' as const } : {}),
@@ -484,6 +515,10 @@ export async function main(argv: string[] = process.argv.slice(2)): Promise<void
     console.log(`\nLoop status: ${result.status}`);
     console.log(`Iterations: ${result.iterations}`);
     console.log(`Trace: ${redactSensitiveText(path.relative(process.cwd(), result.tracePath))}`);
+    if (result.failure) console.log(`Failure: ${result.failure.code} at ${result.failure.stage}/${result.failure.category}${result.failure.field ? ` (${result.failure.field})` : ''}.`);
+    if (result.status === 'iteration_limit') {
+      console.log('Task completion was not approved before the iteration limit; edits and evidence are preserved. Exit code: 1.');
+    }
     return;
   }
 

@@ -8,7 +8,7 @@ compact state object to Jev through the selected evaluation provider, applies de
 policy thresholds, prints the result, and records a JSONL trace. The explicit
 `--orchestrate` mode adds a bounded, manually approved loop for safe repository
 searches, bounded file reads, fixed read-only Git diagnostics, detected
-validation scripts, and delegation to Codex CLI or Claude Code. It cannot run
+validation scripts, bounded public GitHub issue reads, and delegation to Codex CLI or Claude Code. It cannot run
 arbitrary commands, and every resolved executable candidate requires explicit
 approval.
 
@@ -140,6 +140,24 @@ Enter `stop` (or `quit`) at any approval prompt to end the run without marking
 the task complete. No repository tool executes for that iteration, the result
 status is `stopped`, and the terminal decision remains in the JSONL trace.
 
+For a task consisting of a GitHub issue URL, `READ_ISSUE` (or the `issue`
+alternative) presents a read of that exact issue for approval. It uses only
+the fixed public GitHub API, without credentials or redirects, with a
+10-second deadline and 64 KiB response limit. Title/body context is bounded
+and redacted; issue text remains untrusted. Private or unavailable issues need
+context through `ASK_USER`. Repository reads prefer `AGENTS.md`,
+`CONTRIBUTING.md`, and `CLAUDE.md` before other candidates. No issue fetch occurs in
+decision-only mode, or before approving `READ_ISSUE`.
+
+If evaluation fails, the loop records its safe code, validation stage, and
+category before asking for recovery. Enter `continue` to reevaluate the
+preserved state in the same run, or `stop` to return `evaluation_failed`
+(exit 1). Continuation retains edits, evidence, failed approaches, and call
+budgets. Each failed evaluation consumes an iteration within the existing
+eight-iteration ceiling; no continuation is offered at the limit. Continuing
+never approves a tool or executes a rejected recommendation. Recovery is
+in-process; saved traces are diagnostic records, not executable resume files.
+
 Ctrl+C (`SIGINT`) or `SIGTERM` also stops an approval-gated run while Jev,
 approval, information input, or an approved tool or worker is pending. The
 first signal wins; repeated signals during cleanup do not start another action.
@@ -159,14 +177,43 @@ before returning a stopped trace; it does not enter evaluation or approval.
 
 After validation passes, a clear Jev `FINISH` recommendation can be completed
 manually even when the separate task-completion probability remains below the
-95% automatic threshold. Enter `FINISH` at the approval prompt, review the
-resolved completion candidate, then enter `approve`. This twice-confirmed
-override is unavailable before passing validation and is recorded in the trace.
+95% automatic threshold. If Jev confidently requests `RUN_TESTS` after all
+required checks already passed, policy selects `ASK_USER` for completion review
+and makes the same manual path available. Review the original task acceptance
+criteria, enter `FINISH`, review the resolved candidate, then enter `approve`.
+The trace records whether policy offered review for a Jev finish request or
+completed validation, along with both approval decisions. Missing, failed, or
+stale checks, omitted issue requirements, unresolved repository inspection,
+ambiguous routing, and high missing-information/stuck assessments prevent
+this manual completion path. Passing baseline tests alone does not establish
+that the requested coding change exists.
+
+Completion requires all relevant independent checks since the latest worker
+attempt. Inspection recognizes `verify` alongside `test`, `check`, `typecheck`,
+`lint`, and `build`, including namespaced variants. Exact base names form the
+default required workflow when present; otherwise detected variants are
+required. Recognized validation commands named in the issue add required
+checks, including unavailable checks that need user intervention. The issue
+read retains at most eight script references; omitted requirements block
+completion and require more context instead of silently counting as satisfied.
+Each approved `RUN_TESTS` selects a script covering pending checks. A comprehensive script
+counts toward other checks only when its declared command is a conjunction of
+plain calls through the detected package manager, such as
+`npm run lint && npm run typecheck && npm test`; flags, ORs, pipelines, and
+opaque commands establish no extra coverage. Calls must use `run`, except for
+the `npm test` script shortcut; other bare commands may invoke package-manager
+builtins. Each script still needs approval. Once every required check passed,
+the orchestrator offers no duplicate validation candidate or `RUN_TESTS`
+alternative. A new worker attempt invalidates the previous checks and enables
+fresh validation. Jev receives an explicit current-generation
+`allRequiredPassed` summary; earlier worker sandbox reports cannot replace
+independent results.
 
 The mock flag applies only to Jev evaluation. If you choose `CALL_CODEX` or
 `CALL_CLAUDE` as an alternative and approve its resolved candidate, the
 installed coding-agent CLI makes a real call, may edit the selected repository,
 and may consume tokens. Reject the candidate to execute nothing.
+Approving `READ_ISSUE` also performs its real bounded GitHub read in mock mode.
 
 Each approved worker request includes a bounded, labeled packet of prior user
 clarifications, repository findings, the latest independent validation result,
@@ -174,6 +221,14 @@ and the previous worker outcome. The exact packet is shown before approval.
 The original task remains separate, and repository or worker text in the packet
 is treated as untrusted evidence. Known credential patterns and the configured
 provider keys are redacted from the packet.
+
+Jev receives the bounded issue, repository findings, previous worker claims,
+and an orchestrator-derived progress summary of required/pending checks and
+their independent results. The prior evidence packet remains capped at 6,000
+serialized characters; added evaluation progress is capped at 12,000.
+Worker-reported `listen EPERM` or `listen EACCES` is attributed as a reported
+loopback binding restriction, without marking validation passed or broadening
+worker permissions. Fresh approved orchestrator validation establishes results.
 
 If validation fails, the loop presents `ASK_USER`. You can enter `approve` and
 provide a plain-language clarification, or enter `CALL_CODEX` or `CALL_CLAUDE`
@@ -222,12 +277,16 @@ pnpm dev -- . "Inspect this repo and choose the safest useful first action" \
   --mock --no-trace --json
 ```
 
-Exit code `0` means a decision, completed loop status, help text, or version was
-printed. Exit code `1` means an operational failure prevented progress; exit
+Exit code `0` means a decision, approved completion, typed stop, help text, or
+version was printed. Exit code `1` means an operational failure or the
+eight-iteration limit prevented completion; `iteration_limit` preserves edits
+and evidence and prints an explicit incomplete-task message. Exit
 code `2` means invalid command-line usage. Interrupted approval-gated runs use
 `130` for Ctrl+C / `SIGINT` and `143` for `SIGTERM`; typed `stop` / `quit` stays
 `0`. In `--json` mode, errors are one JSON
 object on stderr with the same exit code.
+Stopping after an evaluation failure retains operational exit `1`; a later
+successful continuation uses the normal loop exit behavior.
 
 ## Traces
 
@@ -247,6 +306,14 @@ candidates, approval decision, tool input and result, exit status, duration,
 and the before/after state. A rejection records an observation and executes no
 repository tool. Alternative selections and their final confirmation are kept
 as an approval-history array so manual completion overrides remain auditable.
+
+A failed evaluation adds a schema-v2 record with null evaluation, policy,
+approval, and tool fields, plus allowlisted `failure` diagnostics and recovery
+availability. A separate record captures the explicit `continue`/`stop`
+decision; both share the consumed iteration number. Cancellation during that
+prompt adds the usual terminal interruption record with phase `recovery`.
+No exception message, rejected response body, headers, or cause is failure
+evidence. Consumers should use iteration numbers rather than counting lines.
 
 A signal interruption adds a schema-v2 terminal record with a fixed phase and
 reason. Evaluation, policy, candidate, approval, and tool fields are null when
@@ -278,7 +345,7 @@ arguments, literal bounded terms derived from the task, bounded file results,
 and exclusions for Git metadata, dependencies, build output, traces, and common
 secret files. Reads are limited to regular files below the selected root,
 reject traversal and symlink escape, block common credential paths, and cap
-content at 64 KiB. Validation can invoke only a recognized `test`, `check`,
+content at 64 KiB. Validation can invoke only a recognized `verify`, `test`, `check`,
 `typecheck`, `lint`, or `build` package script through the package manager
 detected from a lockfile. Process output and runtime are bounded.
 
@@ -304,8 +371,8 @@ recorded as separate trace fields; only final stdout becomes the loop
 observation. Each orchestration run permits at most two calls to each agent.
 After every attempt the loop refreshes repository metadata with exact untracked
 paths; generated trace files are excluded from the modified-source list, and
-detected source changes invalidate prior validation and must pass a separately
-approved validation script before completion. If repository refresh fails, the
+every worker attempt invalidates prior validation and requires fresh approved
+checks before completion. If repository refresh fails, the
 loop requires an approved `ASK_USER` response and a successful refresh before
 further execution; rejecting or stopping does not trigger a recovery attempt.
 
@@ -474,8 +541,11 @@ information.
 
 Automatic completion still requires the configured 95% task-completion
 threshold. Once validation has passed, a user may explicitly override that
-confidence threshold only when Jev itself clearly recommends `FINISH`; the
-resolved completion candidate must then be approved a second time.
+confidence threshold when Jev clearly recommends `FINISH`, or explicitly
+confirm task acceptance when a confident `RUN_TESTS` request repeats fully
+passed current-generation validation. Policy selects `ASK_USER` for this
+review; the resolved `FINISH` candidate requires a second approval. Validation
+passing on its own never selects automatic completion below the 95% threshold.
 
 Stopping is separate from completion. `stop` and `quit` are user-only approval
 controls, never Jev actions. They execute nothing, return status `stopped`, and

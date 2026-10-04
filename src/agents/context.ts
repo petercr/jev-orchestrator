@@ -4,7 +4,8 @@ import { ACTIONS } from '../types.js';
 import { MAX_CLAUDE_CALLS, MAX_CODEX_CALLS } from './types.js';
 import { truncateText } from '../limits.js';
 import { redactSensitiveText } from '../logging/trace.js';
-import type { Action, AgentState, EvidenceFinding } from '../types.js';
+import type { Action, AgentState, EvidenceFinding, IssueContext } from '../types.js';
+import { isIssueContext } from '../repo/issue.js';
 
 export const MAX_WORKER_CONTEXT_LENGTH = 6_000;
 export const MAX_WORKER_PROMPT_LENGTH = 16_000;
@@ -18,6 +19,7 @@ export type WorkerContext = {
   findings: EvidenceFinding[];
   failures: Array<{ iteration: number; action: Action; summary: string }>;
   remainingCalls: { codex: number; claude: number };
+  issue?: IssueContext;
   validation?: NonNullable<AgentState['evidence']>['validation'];
   previousWorker?: NonNullable<AgentState['evidence']>['worker'];
   truncated?: boolean;
@@ -92,6 +94,18 @@ export function buildWorkerContext(state: AgentState): WorkerContext {
   };
   if (!evidence) return context;
 
+  if (evidence.issue) {
+    const issue = {
+      ...evidence.issue,
+      url: bounded(evidence.issue.url, 300),
+      title: bounded(evidence.issue.title, 300),
+      body: '',
+      requestedValidationScripts: evidence.issue.requestedValidationScripts.slice(0, 8).map((script) => bounded(script, 200)),
+    };
+    if (isIssueContext(issue)) context.issue = issue;
+    else context.truncated = true;
+  }
+
   // Admit provenance first, then spend the text budget in priority order.
   if (evidence.validation) {
     context.validation = {
@@ -135,6 +149,11 @@ export function buildWorkerContext(state: AgentState): WorkerContext {
   if (context.validation && evidence.validation) {
     const validation = context.validation;
     addText(evidence.validation.summary, (text) => { validation.summary = text; }, MAX_WORKER_EXCERPT_LENGTH);
+  }
+  if (context.issue && evidence.issue) {
+    const issue = context.issue;
+    addText(evidence.issue.body, (text) => { issue.body = text; }, 1_800);
+    issue.truncated ||= issue.body !== evidence.issue.body;
   }
   if (context.previousWorker && evidence.worker) {
     const previousWorker = context.previousWorker;
@@ -224,7 +243,7 @@ export function assertWorkerContext(value: unknown): asserts value is WorkerCont
       typeof item === 'string' ? redactSensitiveText(item) : item) !== serialized ||
     !hasOnlyKeys(value, [
       'validationGeneration', 'goal', 'clarifications', 'findings', 'failures',
-      'remainingCalls', 'validation', 'previousWorker', 'truncated',
+      'remainingCalls', 'validation', 'previousWorker', 'truncated', 'issue',
     ]) ||
     !isIteration(value.validationGeneration) ||
     typeof value.goal !== 'string' || value.goal.length > 300 ||
@@ -252,6 +271,9 @@ export function assertWorkerContext(value: unknown): asserts value is WorkerCont
     (value.truncated !== undefined && typeof value.truncated !== 'boolean') ||
     !isRemainingCallCount(value.remainingCalls.codex, MAX_CODEX_CALLS) ||
     !isRemainingCallCount(value.remainingCalls.claude, MAX_CLAUDE_CALLS) ||
+    (value.issue !== undefined && (!isIssueContext(value.issue) ||
+      !hasOnlyKeys(value.issue, ['url', 'title', 'body', 'requestedValidationScripts', 'validationRequirementsTruncated', 'truncated']) ||
+      value.issue.body.length > 1_800)) ||
     (value.validation !== undefined && (
       !isRecord(value.validation) ||
       !hasOnlyKeys(value.validation, [
@@ -271,7 +293,7 @@ export function assertWorkerContext(value: unknown): asserts value is WorkerCont
       !isRecord(value.previousWorker) ||
       !hasOnlyKeys(value.previousWorker, [
         'iteration', 'agent', 'evidenceRevision', 'exitCode', 'timedOut',
-        'ok', 'summary', 'modifiedFiles',
+        'ok', 'summary', 'modifiedFiles', 'reportedEnvironmentLimitations',
       ]) ||
       !isIteration(value.previousWorker.iteration) ||
       !Number.isInteger(value.previousWorker.evidenceRevision) ||
@@ -284,7 +306,12 @@ export function assertWorkerContext(value: unknown): asserts value is WorkerCont
       value.previousWorker.summary.length > MAX_WORKER_EXCERPT_LENGTH ||
       !Array.isArray(value.previousWorker.modifiedFiles) ||
       value.previousWorker.modifiedFiles.length > MAX_WORKER_CONTEXT_ITEMS ||
-      value.previousWorker.modifiedFiles.some((entry) => safePath(entry) !== entry)
+      value.previousWorker.modifiedFiles.some((entry) => safePath(entry) !== entry) ||
+      (value.previousWorker.reportedEnvironmentLimitations !== undefined && (
+        !Array.isArray(value.previousWorker.reportedEnvironmentLimitations) ||
+        value.previousWorker.reportedEnvironmentLimitations.length > 1 ||
+        value.previousWorker.reportedEnvironmentLimitations.some((item) => item !== 'loopback_bind_denied')
+      ))
     ))
   ) throw new Error('Worker context is malformed or exceeds its limits.');
 }

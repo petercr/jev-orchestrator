@@ -6,10 +6,13 @@ import { MAX_CLAUDE_CALLS, MAX_CODEX_CALLS } from '../agents/types.js';
 import { requireBoundedTask } from '../limits.js';
 import type { Action, AgentState } from '../types.js';
 import { selectDiagnosticCommand, type DiagnosticCommandId } from './diagnostics.js';
+import { parseGitHubIssue } from '../repo/issue.js';
+import { hasPassedValidation, selectPendingValidation } from '../repo/validation.js';
 
 export const EXECUTABLE_ACTIONS = [
   'SEARCH_REPO',
   'READ_FILE',
+  'READ_ISSUE',
   'RUN_COMMAND',
   'RUN_TESTS',
   'CALL_CODEX',
@@ -38,6 +41,12 @@ export type ReadProposal = {
     root: string;
     path: string;
   };
+};
+
+export type IssueProposal = {
+  action: 'READ_ISSUE';
+  tool: 'github_issue';
+  input: { url: string };
 };
 
 export type TestProposal = {
@@ -100,6 +109,7 @@ export type FinishProposal = {
 export type CandidateProposal =
   | SearchProposal
   | ReadProposal
+  | IssueProposal
   | DiagnosticProposal
   | TestProposal
   | CodexProposal
@@ -210,7 +220,7 @@ function preferredReadCandidates(state: AgentState, searchResults: string[]): st
     .filter((entry) => !entry.endsWith('/'))
     .filter((candidate) => !searchedSet.has(candidate))
     .filter((candidate) => !state.filesRead.includes(candidate));
-  const preferences = ['README.md', 'package.json', 'PLAN.md'];
+  const preferences = ['AGENTS.md', 'CONTRIBUTING.md', 'CLAUDE.md', 'README.md', 'package.json', 'PLAN.md'];
 
   const sortedKnownPaths = knownPaths.sort((left, right) => {
     const leftIndex = preferences.indexOf(left);
@@ -219,7 +229,10 @@ function preferredReadCandidates(state: AgentState, searchResults: string[]): st
     const rightRank = rightIndex === -1 ? preferences.length : rightIndex;
     return leftRank - rightRank || left.localeCompare(right);
   });
-  return [...searched, ...sortedKnownPaths];
+  const instructions = ['AGENTS.md', 'CONTRIBUTING.md', 'CLAUDE.md']
+    .filter((file) => state.repo.topLevelFiles.includes(file) && !state.filesRead.includes(file));
+  return [...instructions, ...searched.filter((file) => !instructions.includes(file)),
+    ...sortedKnownPaths.filter((file) => !instructions.includes(file))];
 }
 
 function validationCommand(
@@ -238,17 +251,6 @@ function validationCommand(
   }
 }
 
-function selectValidationScript(scripts: string[]): string | undefined {
-  const priority = ['test', 'check', 'typecheck', 'lint', 'build'];
-  return [...scripts].sort((left, right) => {
-    const rank = (script: string): number => {
-      const index = priority.findIndex((name) => script === name || script.startsWith(`${name}:`));
-      return index === -1 ? priority.length : index;
-    };
-    return rank(left) - rank(right) || left.localeCompare(right);
-  })[0];
-}
-
 export async function selectCandidate(
   action: Action,
   state: AgentState,
@@ -259,8 +261,21 @@ export async function selectCandidate(
       return {
         action,
         tool: 'rg',
-        input: { root: state.repo.root, terms: deriveSearchTerms(state.task) },
+        input: { root: state.repo.root, terms: deriveSearchTerms(state.evidence?.issue?.title ?? state.task) },
       };
+    case 'READ_ISSUE': {
+      const issue = parseGitHubIssue(state.task);
+      return issue && !state.evidence?.issue ? {
+        action,
+        tool: 'github_issue',
+        input: { url: issue.url },
+      } : {
+        action: 'ASK_USER',
+        tool: null,
+        input: null,
+        reason: issue ? 'The linked issue is already available as untrusted context.' : 'The task is not a supported GitHub issue URL.',
+      };
+    }
     case 'READ_FILE': {
       for (const candidate of preferredReadCandidates(state, searchResults)) {
         try {
@@ -282,13 +297,15 @@ export async function selectCandidate(
       };
     }
     case 'RUN_TESTS': {
-      const script = selectValidationScript(state.repo.validationScripts);
+      const script = selectPendingValidation(state);
       if (!script) {
         return {
           action: 'ASK_USER',
           tool: null,
           input: null,
-          reason: 'No recognized validation script is available.',
+          reason: hasPassedValidation(state)
+            ? 'All required independent checks already passed; review the original task before completion.'
+            : 'No declared validation script can cover the pending required checks.',
         };
       }
       if (state.repo.packageManager === 'unknown') {
@@ -358,7 +375,7 @@ export async function selectCandidate(
         action,
         tool: null,
         input: null,
-        reason: 'Completion requires explicit user approval.',
+        reason: 'Approval confirms the original task acceptance criteria are satisfied, supported by passing independent validation.',
       };
     case 'RUN_COMMAND': {
       const diagnostic = selectDiagnosticCommand(state.repo.gitStatus);

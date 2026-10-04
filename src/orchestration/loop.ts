@@ -4,9 +4,12 @@ import {
   createOrchestrationTrace,
   type InterruptionPhase,
 } from '../logging/trace.js';
-import { applyPolicy, DEFAULT_THRESHOLDS } from '../policy.js';
+import { applyPolicy } from '../policy.js';
 import { truncateText } from '../limits.js';
 import { inspectRepo } from '../repo/inspect.js';
+import { isIssueContext, parseGitHubIssue } from '../repo/issue.js';
+import { hasFailedValidation, hasPassedValidation, pendingValidationScripts, selectPendingValidation } from '../repo/validation.js';
+import { evaluationFailure, type EvaluationFailure } from '../ai/errors.js';
 import type {
   Action,
   AgentEvidence,
@@ -44,7 +47,7 @@ export type ApprovalContext = {
   allowedAlternatives: ExecutableAction[];
 };
 
-export type OrchestrationStatus = 'finished' | 'stopped' | 'iteration_limit';
+export type OrchestrationStatus = 'finished' | 'stopped' | 'iteration_limit' | 'evaluation_failed';
 
 export type OrchestrationResult = {
   status: OrchestrationStatus;
@@ -52,12 +55,21 @@ export type OrchestrationResult = {
   tracePath: string;
   iterations: number;
   exitCode?: number;
+  failure?: EvaluationFailure;
+};
+
+export type EvaluationRecoveryContext = {
+  state: AgentState;
+  failure: EvaluationFailure;
+  remainingIterations: number;
+  tracePath: string;
 };
 
 export type OrchestrationDependencies = {
   evaluate: (state: AgentState, options?: ExecutionOptions) => Promise<EvaluationResult>;
   approve: (context: ApprovalContext) => Promise<ApprovalDecision>;
   askForInformation: (state: AgentState) => Promise<string>;
+  recoverEvaluation?: (context: EvaluationRecoveryContext) => Promise<'continue' | 'stop'>;
   execute?: typeof executeCandidate;
   inspect?: typeof inspectRepo;
 };
@@ -88,6 +100,7 @@ export function createInitialState(repo: RepoSnapshot, task: string): AgentState
       clarifications: [],
       findings: [],
       failures: [],
+      validations: [],
     },
   };
 }
@@ -189,8 +202,17 @@ function withToolEvidence(
       passed: result.ok,
       summary: truncateText(result.output, 1_000),
     };
+    evidence.validations = [...(previous.validations ?? []).filter((item) =>
+      item.generation === previous.validationGeneration && item.script !== proposal.input.script), evidence.validation].slice(-8);
+  }
+  if (proposal.action === 'READ_ISSUE' && result.ok && result.issue) {
+    evidence.issue = result.issue;
+    evidence.revision += 1;
+    evidence.lastRevisionSource = 'issue';
   }
   if (isCodingAgentProposal(proposal)) {
+    const reportedEnvironmentLimitations: Array<'loopback_bind_denied'> =
+      /\blisten\s+(?:EPERM|EACCES)\b/iu.test(result.output) ? ['loopback_bind_denied'] : [];
     evidence.validationGeneration = previous.validationGeneration + 1;
     evidence.worker = {
       iteration: state.iteration,
@@ -201,46 +223,25 @@ function withToolEvidence(
       ok: result.ok,
       summary: truncateText(result.output, 500),
       modifiedFiles: refreshFailed ? [] : modified.slice(0, 8),
+      ...(reportedEnvironmentLimitations.length ? { reportedEnvironmentLimitations } : {}),
     };
     evidence.repoRefreshRequired = refreshFailed;
   }
   return evidence;
 }
 
-function canUserOverrideFinish(
-  state: AgentState,
-  evaluation: EvaluationResult,
-  policy: PolicyDecision,
-): boolean {
-  if (
-    state.repo.validationScripts.length === 0 ||
-    state.tests.ran !== true ||
-    state.tests.passed !== true ||
-    policy.requested !== 'FINISH' ||
-    policy.selected !== 'ASK_USER' ||
-    evaluation.assessment.needsMoreInformation.probability >= DEFAULT_THRESHOLDS.askUser ||
-    evaluation.assessment.stuck.probability >= DEFAULT_THRESHOLDS.askUser
-  ) {
-    return false;
-  }
-
-  const finishProbability = evaluation.assessment.nextAction.probabilities.FINISH ?? 0;
-  const confidence = evaluation.assessment.nextAction.confidence ?? 0;
-  return finishProbability >= DEFAULT_THRESHOLDS.minChoiceProbability &&
-    confidence >= DEFAULT_THRESHOLDS.minChoiceConfidence;
-}
-
 function allowedAlternatives(
   state: AgentState,
-  evaluation: EvaluationResult,
   policy: PolicyDecision,
 ): ExecutableAction[] {
   if (state.evidence?.repoRefreshRequired) return ['ASK_USER'];
   return EXECUTABLE_ACTIONS.filter((action) => {
     if (action === 'FINISH') {
-      return policy.selected === 'FINISH' || canUserOverrideFinish(state, evaluation, policy);
+      return hasPassedValidation(state) && (policy.selected === 'FINISH' ||
+        (policy.selected === 'ASK_USER' && policy.completionReview !== undefined));
     }
-    if (action === 'RUN_TESTS') return state.repo.validationScripts.length > 0;
+    if (action === 'RUN_TESTS') return selectPendingValidation(state) !== undefined;
+    if (action === 'READ_ISSUE') return Boolean(parseGitHubIssue(state.task)) && !state.evidence?.issue;
     if (action === 'CALL_CODEX') return state.codexCalls < MAX_CODEX_CALLS;
     if (action === 'CALL_CLAUDE') return state.claudeCalls < MAX_CLAUDE_CALLS;
     return true;
@@ -281,9 +282,10 @@ function codingAgentCommand(proposal: CodingAgentProposal): string {
   return proposal.action === 'CALL_CODEX' ? 'codex exec' : 'claude -p';
 }
 
-function isToolResult(value: unknown, action: CandidateProposal['action']): value is ToolResult {
+function isToolResult(value: unknown, proposal: CandidateProposal): value is ToolResult {
   if (value === null || typeof value !== 'object') return false;
   const result = value as Partial<ToolResult>;
+  const action = proposal.action;
   return result.action === action &&
     typeof result.ok === 'boolean' &&
     (result.exitCode === null || Number.isInteger(result.exitCode)) &&
@@ -299,7 +301,9 @@ function isToolResult(value: unknown, action: CandidateProposal['action']): valu
     Array.isArray(result.files) &&
     result.files.every((file) => typeof file === 'string') &&
     (result.stdout === undefined || typeof result.stdout === 'string') &&
-    (result.stderr === undefined || typeof result.stderr === 'string');
+    (result.stderr === undefined || typeof result.stderr === 'string') &&
+    (proposal.action !== 'READ_ISSUE' || !result.ok ||
+      (isIssueContext(result.issue) && result.issue.url === proposal.input.url));
 }
 
 function modifiedFiles(repo: RepoSnapshot): string[] {
@@ -317,7 +321,7 @@ async function safelyExecute(
   const startedAt = performance.now();
   try {
     const result: unknown = await (options.signal ? execute(proposal, undefined, options) : execute(proposal));
-    if (!isToolResult(result, proposal.action)) {
+    if (!isToolResult(result, proposal)) {
       throw new Error('The tool executor returned a malformed result.');
     }
     return options.signal?.aborted
@@ -385,6 +389,9 @@ function applyToolResult(
     tests = { ran: true, passed: true, summary };
     observations.push(`Validation passed: ${summary}`);
     currentGoal = 'Determine whether the requested task is complete.';
+  } else if (proposal.action === 'READ_ISSUE') {
+    observations.push(`Read linked GitHub issue (untrusted context): ${result.issue?.title ?? ''}`);
+    currentGoal = 'Inspect repository instructions and implement the issue acceptance criteria.';
   } else if (isCodingAgentProposal(proposal)) {
     const summary = truncateText(result.output, MAX_OBSERVATION_LENGTH);
     commandsRun = [...state.commandsRun, {
@@ -434,7 +441,7 @@ function applyToolResult(
     tests = { ran: false };
   }
 
-  return {
+  const nextState: AgentState = {
     ...state,
     repo,
     currentGoal,
@@ -448,6 +455,16 @@ function applyToolResult(
     claudeCalls,
     evidence: withToolEvidence(state, proposal, result, filesModified, refreshFailed),
   };
+  if (proposal.action === 'RUN_TESTS') {
+    const pending = pendingValidationScripts(nextState);
+    nextState.tests = {
+      ran: true,
+      ...(hasFailedValidation(nextState) ? { passed: false } : pending.length === 0 ? { passed: true } : {}),
+      summary: truncateText(`Independent ${proposal.input.script}: ${result.ok ? 'passed' : 'failed'}. Pending: ${pending.join(', ') || 'none'}.\n${result.output}`, MAX_OBSERVATION_LENGTH),
+    };
+    nextState.currentGoal = pending.length ? `Validate remaining required checks: ${pending.join(', ')}.` : 'Determine whether the requested task is complete.';
+  }
+  return nextState;
 }
 
 async function resolveApproval(
@@ -471,7 +488,7 @@ async function resolveApproval(
 
   for (let attempt = 0; attempt <= MAX_APPROVAL_ALTERNATIVES; attempt += 1) {
     onProgress?.(proposals, decisions);
-    const alternatives = allowedAlternatives(state, evaluation, policy);
+    const alternatives = allowedAlternatives(state, policy);
     const decision = await interruptible(() => approve({
       state,
       evaluation,
@@ -615,7 +632,50 @@ export async function runOrchestration(
       interruptedResult = null;
       interruptedWorkerRequest = undefined;
       phase = 'evaluation';
-      evaluation = await interruptible(() => dependencies.evaluate(state, executionOptions), options.signal);
+      try {
+        evaluation = await interruptible(() => dependencies.evaluate(state, executionOptions), options.signal);
+      } catch (error) {
+        throwIfInterrupted(options.signal);
+        if (error instanceof RunInterruptedError) throw error;
+        const failure = evaluationFailure(error);
+        state = {
+          ...state,
+          currentGoal: 'Evaluation failed; explicit continuation is required.',
+          observations: [...state.observations, `Evaluation failed: ${failure.code} at ${failure.stage}/${failure.category}.`],
+        };
+        const recoverEvaluation = dependencies.recoverEvaluation;
+        const available = iteration < maxIterations && recoverEvaluation !== undefined;
+        const failurePayload = {
+          iteration, stateBefore, evaluation: null, policy: null, proposal: null,
+          approval: null, toolInput: null, toolResult: null, stateAfter: state, failure,
+        };
+        // Record the failure before prompting so cancellation or EOF cannot
+        // erase the rejected evaluation. A continuation is a separate record.
+        phase = 'trace';
+        await appendOrchestrationTrace(trace, { ...failurePayload, recovery: { available } });
+        phase = 'recovery';
+        const recovery = available && recoverEvaluation
+          ? await interruptible(() => recoverEvaluation({
+            state: structuredClone(state), failure: { ...failure }, remainingIterations: maxIterations - iteration, tracePath: trace.path,
+          }), options.signal)
+          : 'stop';
+        throwIfInterrupted(options.signal);
+        const decision = recovery === 'continue' ? 'continue' : 'stop';
+        if (decision === 'continue') state = {
+          ...state,
+          currentGoal: 'Reassess preserved task evidence after explicit evaluation recovery.',
+          observations: [...state.observations, 'User explicitly continued after evaluation failure; existing budgets and evidence are retained.'],
+        };
+        phase = 'trace';
+        await appendOrchestrationTrace(trace, { ...failurePayload, stateAfter: state, recovery: { available, decision } });
+        throwIfInterrupted(options.signal);
+        if (decision === 'stop') return {
+          status: 'evaluation_failed', state, tracePath: trace.path, iterations: iteration, exitCode: 1, failure,
+        };
+        // This failed evaluation consumes an iteration. No candidate from it
+        // exists, and call counts, generations, and failure history stay intact.
+        continue;
+      }
       throwIfInterrupted(options.signal);
       const evaluatedPolicy = applyPolicy(state, evaluation.assessment);
       policy = evaluatedPolicy;
@@ -649,13 +709,20 @@ export async function runOrchestration(
         const blockedRepeat = state.failedApproaches.includes(proposalSignature(proposal, state));
         const exhaustedCodex = proposal.action === 'CALL_CODEX' && state.codexCalls >= MAX_CODEX_CALLS;
         const exhaustedClaude = proposal.action === 'CALL_CLAUDE' && state.claudeCalls >= MAX_CLAUDE_CALLS;
-        if (blockedRepeat || exhaustedCodex || exhaustedClaude ||
+        const completionAllowed = policy.selected === 'FINISH' ||
+          (policy.selected === 'ASK_USER' && policy.completionReview !== undefined);
+        const blockedCompletion = proposal.action === 'FINISH' &&
+          (!hasPassedValidation(state) || !completionAllowed);
+        const blockedValidation = proposal.action === 'RUN_TESTS' && selectPendingValidation(state) === undefined;
+        if (blockedRepeat || exhaustedCodex || exhaustedClaude || blockedCompletion || blockedValidation ||
           (state.evidence?.repoRefreshRequired && proposal.action !== 'ASK_USER')) {
           decision = {
             kind: 'reject',
             reason: blockedRepeat
               ? 'The resolved candidate already failed with the same relevant evidence.'
-              : 'Repository inspection or a worker call limit prevents execution.',
+              : blockedCompletion || blockedValidation
+                ? 'Current validation or completion policy prevents execution.'
+                : 'Repository inspection or a worker call limit prevents execution.',
           };
           approval.decisions.push(decision);
         }
@@ -722,7 +789,9 @@ export async function runOrchestration(
         terminalStatus = 'finished';
         const completionObservation = policy.selected === 'FINISH'
           ? 'User approved completion.'
-          : 'User explicitly overrode completion confidence after passing validation.';
+          : policy.completionReview === 'validation_complete'
+            ? 'User explicitly confirmed task acceptance after all required independent validation passed.'
+            : 'User explicitly overrode completion confidence after passing validation.';
         nextState = {
           ...state,
           observations: [...state.observations, completionObservation],
@@ -803,6 +872,7 @@ export async function runOrchestration(
       state,
       tracePath: trace.path,
       iterations: maxIterations,
+      exitCode: 1,
     };
   } catch (error) {
     if (error instanceof RunInterruptedError || options.signal?.aborted) return await stop();

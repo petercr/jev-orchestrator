@@ -16,11 +16,42 @@ export type JevEvaluationErrorCode =
   | 'service_unavailable'
   | 'request_failed';
 
+export type EvaluationDiagnostic = {
+  stage: 'transport' | 'json' | 'answers' | 'next_action' | 'distribution' | 'confidence' | 'metadata' | 'model';
+  category: 'request' | 'shape' | 'value' | 'sum' | 'choice' | 'missing_action' | 'unknown_action' | 'size';
+  field?: 'taskComplete' | 'needsMoreInformation' | 'needsTesting' | 'stuck';
+};
+
+export type EvaluationFailure = EvaluationDiagnostic & { code: JevEvaluationErrorCode };
+
 export class JevEvaluationError extends Error {
-  constructor(readonly code: JevEvaluationErrorCode, message: string) {
+  constructor(
+    readonly code: JevEvaluationErrorCode,
+    message: string,
+    readonly diagnostic: EvaluationDiagnostic = { stage: 'transport', category: 'request' },
+  ) {
     super(message);
     this.name = 'JevEvaluationError';
   }
+}
+
+/** Never forward exception messages, causes, response bodies, or headers. */
+export function evaluationFailure(error: unknown): EvaluationFailure {
+  if (error instanceof JevEvaluationError) {
+    // Select fields explicitly; even a malformed injected exception cannot
+    // introduce provider-controlled strings into failure diagnostics.
+    const codes: JevEvaluationErrorCode[] = ['timeout', 'authentication', 'authorization', 'billing', 'rate_limit', 'model_unavailable', 'invalid_response', 'service_unavailable', 'request_failed'];
+    const stages: EvaluationDiagnostic['stage'][] = ['transport', 'json', 'answers', 'next_action', 'distribution', 'confidence', 'metadata', 'model'];
+    const categories: EvaluationDiagnostic['category'][] = ['request', 'shape', 'value', 'sum', 'choice', 'missing_action', 'unknown_action', 'size'];
+    const fields: NonNullable<EvaluationDiagnostic['field']>[] = ['taskComplete', 'needsMoreInformation', 'needsTesting', 'stuck'];
+    return {
+      code: codes.includes(error.code) ? error.code : 'request_failed',
+      stage: stages.includes(error.diagnostic?.stage) ? error.diagnostic.stage : 'transport',
+      category: categories.includes(error.diagnostic?.category) ? error.diagnostic.category : 'request',
+      ...(error.diagnostic?.field && fields.includes(error.diagnostic.field) ? { field: error.diagnostic.field } : {}),
+    };
+  }
+  return { code: 'request_failed', stage: 'transport', category: 'request' };
 }
 
 /** Only status and allowlisted classifications survive the transport boundary. */
@@ -79,7 +110,9 @@ export function normalizeJevEvaluationError(error: unknown, provider: JevProvide
     return new JevEvaluationError('timeout', `Jev evaluation timed out after ${JEV_EVALUATION_TIMEOUT_MS / 1000} seconds.`);
   }
   if (InvalidResponseDataError.isInstance(failure) || JSONParseError.isInstance(failure) || TypeValidationError.isInstance(failure)) {
-    return new JevEvaluationError('invalid_response', 'Jev returned invalid evaluation data.');
+    return new JevEvaluationError('invalid_response', 'Jev returned invalid evaluation data.', {
+      stage: JSONParseError.isInstance(failure) ? 'json' : 'answers', category: 'shape',
+    });
   }
   const status = statusCode(failure);
   if (NoSuchModelError.isInstance(failure) || status === 404) {
