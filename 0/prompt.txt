@@ -1,9 +1,1 @@
-pr 26 merged lets keep working on cli
-
----
-
-did we do a live run thru of the cli vs codex in the test repo
-
----
-
-ok run codex too
+ok lets push and pr
