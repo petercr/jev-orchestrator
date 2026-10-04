@@ -21,6 +21,16 @@ function evaluation(choice: Action): EvaluationResult {
   };
 }
 
+function preparedState(repo: Awaited<ReturnType<typeof repository>>) {
+  const initial = createInitialState(repo, issueUrl);
+  initial.filesRead = ['CONTRIBUTING.md', 'CLAUDE.md'];
+  initial.evidence!.issue = {
+    url: issueUrl, title: 'Rename config', body: 'Rename config and update references.',
+    requestedValidationScripts: ['test', 'typecheck', 'verify'], truncated: false,
+  };
+  return initial;
+}
+
 async function repository() {
   const root = await mkdtemp(path.join(os.tmpdir(), 'jev-completion-'));
   roots.push(root);
@@ -58,7 +68,11 @@ describe('completion after independent validation', () => {
     const approvalHistory: Array<{ iteration: number; action: string }> = [];
     const askForInformation = vi.fn();
     const result = await runOrchestration(createInitialState(repo, issueUrl), {
-      evaluate: async (state) => evaluation((['READ_ISSUE', 'READ_FILE', 'READ_FILE', 'CALL_CODEX'] as const)[state.iteration - 1] ?? 'RUN_TESTS'),
+      evaluate: async (state) => {
+        const request = evaluation(state.iteration <= 4 ? 'CALL_CODEX' : 'RUN_TESTS');
+        request.assessment.needsTesting.probability = 0.95;
+        return request;
+      },
       approve: async ({ state, proposal, policy, allowedAlternatives }) => {
         approvalHistory.push({ iteration: state.iteration, action: proposal.action });
         if (state.iteration === 7 && proposal.action === 'ASK_USER') {
@@ -75,6 +89,9 @@ describe('completion after independent validation', () => {
     expect(result).toMatchObject({ status: 'finished', iterations: 7, state: { codexCalls: 1, claudeCalls: 0, tests: { ran: true, passed: true }, evidence: { validationGeneration: 1 } } });
     expect(runner.mock.calls.map(([command]) => command.args)).toEqual([['run', 'verify'], ['run', 'build']]);
     expect(askForInformation).not.toHaveBeenCalled();
+    expect(approvalHistory.slice(0, 6).map((entry) => entry.action)).toEqual([
+      'READ_ISSUE', 'READ_FILE', 'READ_FILE', 'CALL_CODEX', 'RUN_TESTS', 'RUN_TESTS',
+    ]);
     expect(approvalHistory.slice(-2)).toEqual([{ iteration: 7, action: 'ASK_USER' }, { iteration: 7, action: 'FINISH' }]);
     expect(await readFile(path.join(repo.root, 'vitest.config.mts'), 'utf8')).toBe('export default {};\n');
     const records = (await readFile(result.tracePath, 'utf8')).trim().split('\n').map((line) => JSON.parse(line));
@@ -90,7 +107,7 @@ describe('completion after independent validation', () => {
 
   it.each(['reject', 'stop'] as const)('does not complete a validation review on %s', async (kind) => {
     const repo = await repository();
-    const initial = createInitialState(repo, issueUrl);
+    const initial = preparedState(repo);
     initial.tests = { ran: true, passed: true };
     initial.evidence!.validations = ['verify', 'build'].map((script) => ({ iteration: 0, generation: 0, script, exitCode: 0, timedOut: false, passed: true, summary: '' }));
     const execute = vi.fn();
@@ -111,7 +128,7 @@ describe('completion after independent validation', () => {
 
   it('does not fabricate completion approval when the resolved review is interrupted', async () => {
     const repo = await repository();
-    const initial = createInitialState(repo, issueUrl);
+    const initial = preparedState(repo);
     initial.tests = { ran: true, passed: true };
     initial.evidence!.validations = ['verify', 'build'].map((script) => ({ iteration: 0, generation: 0, script, exitCode: 0, timedOut: false, passed: true, summary: '' }));
     const controller = new AbortController();
@@ -138,7 +155,7 @@ describe('completion after independent validation', () => {
 
   it.each(['pending', 'failed', 'new_generation', 'refresh', 'omitted_requirements', 'missing_information', 'stuck', 'ambiguous'] as const)('withholds completion on %s evidence', async (condition) => {
     const repo = await repository();
-    const initial = createInitialState(repo, issueUrl);
+    const initial = preparedState(repo);
     initial.tests = { ran: true, passed: true };
     initial.evidence!.validations = ['verify', 'build'].map((script) => ({ iteration: 0, generation: 0, script, exitCode: 0, timedOut: false, passed: true, summary: '' }));
     if (condition === 'pending') initial.evidence!.validations.pop();

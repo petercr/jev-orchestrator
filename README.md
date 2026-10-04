@@ -145,9 +145,22 @@ alternative) presents a read of that exact issue for approval. It uses only
 the fixed public GitHub API, without credentials or redirects, with a
 10-second deadline and 64 KiB response limit. Title/body context is bounded
 and redacted; issue text remains untrusted. Private or unavailable issues need
-context through `ASK_USER`. Repository reads prefer `AGENTS.md`,
-`CONTRIBUTING.md`, and `CLAUDE.md` before other candidates. No issue fetch occurs in
-decision-only mode, or before approving `READ_ISSUE`.
+context through `ASK_USER`. For a confident route, policy first proposes
+`READ_ISSUE`, then reads each known root `AGENTS.md`, `CONTRIBUTING.md`, and
+`CLAUDE.md` before testing, delegation, or completion. Each read still needs
+approval; early test, worker, and completion alternatives remain unavailable
+until preparation is complete. An unsafe required instruction file asks for
+user intervention. No issue fetch occurs in decision-only mode, or before
+approving `READ_ISSUE`.
+
+After an issue read fails, policy proposes `ASK_USER` instead of repeating the
+fetch. An approved, nonempty user reply supplies fallback task context and
+reaches the worker as a clarification, with no fabricated fetched issue.
+Known repository instructions must still be read. Once preparation is complete,
+a clear first worker recommendation can proceed without a testing score forcing
+baseline validation first. Every worker attempt still invalidates prior checks
+and requires independent validation before completion. Ambiguity,
+missing-information, stuck, and unresolved-inspection guards remain in force.
 
 If evaluation fails, the loop records its safe code, validation stage, and
 category before asking for recovery. Enter `continue` to reevaluate the
@@ -192,9 +205,9 @@ Completion requires all relevant independent checks since the latest worker
 attempt. Inspection recognizes `verify` alongside `test`, `check`, `typecheck`,
 `lint`, and `build`, including namespaced variants. Exact base names form the
 default required workflow when present; otherwise detected variants are
-required. Recognized validation commands named in the issue add required
+required. Recognized validation commands named in the issue or user clarifications add required
 checks, including unavailable checks that need user intervention. The issue
-read retains at most eight script references; omitted requirements block
+read and clarification requirements each retain at most eight script references; omitted requirements block
 completion and require more context instead of silently counting as satisfied.
 Each approved `RUN_TESTS` selects a script covering pending checks. A comprehensive script
 counts toward other checks only when its declared command is a conjunction of

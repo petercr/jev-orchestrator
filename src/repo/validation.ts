@@ -7,6 +7,23 @@ export function isValidationScript(script: string): boolean {
     VALIDATION_NAMES.some((name) => script === name || script.startsWith(`${name}:`));
 }
 
+export function validationRequirementsFromText(text: string): { scripts: string[]; truncated: boolean } {
+  const scripts: string[] = [];
+  for (const match of text.matchAll(/\b(?:npm|pnpm|yarn|bun)\s+(?:run\s+)?([a-zA-Z0-9][a-zA-Z0-9:_-]{0,199})\b/gu)) {
+    if (match[1] && isValidationScript(match[1]) && !scripts.includes(match[1])) scripts.push(match[1]);
+    if (scripts.length > 8) return { scripts: scripts.slice(0, 8), truncated: true };
+  }
+  return { scripts, truncated: false };
+}
+
+function clarificationValidation(state: AgentState): { scripts: string[]; truncated: boolean } {
+  return validationRequirementsFromText((state.evidence?.clarifications ?? []).map((item) => item.text).join('\n'));
+}
+
+export function hasOmittedValidationRequirements(state: AgentState): boolean {
+  return state.evidence?.issue?.validationRequirementsTruncated === true || clarificationValidation(state).truncated;
+}
+
 // Only a conjunction of plain package-script calls proves coverage. Flags,
 // shell substitutions, ORs, and opaque tool commands prove nothing further.
 function scriptDependencies(command: string, manager: RepoSnapshot['packageManager']): string[] {
@@ -49,6 +66,7 @@ export function requiredValidationScripts(state: AgentState): string[] {
   return [...new Set([
     ...(state.repo.requiredValidationScripts ?? state.repo.validationScripts),
     ...(state.evidence?.issue?.requestedValidationScripts ?? []),
+    ...clarificationValidation(state).scripts,
   ])];
 }
 
@@ -83,7 +101,7 @@ export function hasFailedValidation(state: AgentState): boolean {
 }
 
 export function hasPassedValidation(state: AgentState): boolean {
-  return !state.evidence?.repoRefreshRequired && !state.evidence?.issue?.validationRequirementsTruncated &&
+  return !state.evidence?.repoRefreshRequired && !hasOmittedValidationRequirements(state) &&
     state.tests.ran && state.tests.passed === true &&
     requiredValidationScripts(state).length > 0 && pendingValidationScripts(state).length === 0;
 }

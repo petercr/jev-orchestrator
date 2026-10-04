@@ -2,7 +2,7 @@ import { interruptible, throwIfInterrupted, type ExecutionOptions } from '../can
 import { redactSensitiveText } from '../logging/trace.js';
 import { truncateText } from '../limits.js';
 import type { IssueContext } from '../types.js';
-import { isValidationScript } from './validation.js';
+import { isValidationScript, validationRequirementsFromText } from './validation.js';
 
 export const ISSUE_TIMEOUT_MS = 10_000;
 export const MAX_ISSUE_RESPONSE_BYTES = 64 * 1024;
@@ -21,15 +21,6 @@ export function parseGitHubIssue(task: string): GitHubIssue | undefined {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === 'object' && !Array.isArray(value);
-}
-
-function requestedIssueValidation(text: string): { scripts: string[]; truncated: boolean } {
-  const scripts: string[] = [];
-  for (const match of text.matchAll(/\b(?:npm|pnpm|yarn|bun)\s+(?:run\s+)?([a-zA-Z0-9][a-zA-Z0-9:_-]{0,199})\b/gu)) {
-    if (match[1] && isValidationScript(match[1]) && !scripts.includes(match[1])) scripts.push(match[1]);
-    if (scripts.length > 8) return { scripts: scripts.slice(0, 8), truncated: true };
-  }
-  return { scripts, truncated: false };
 }
 
 export function isIssueContext(value: unknown): value is IssueContext {
@@ -105,7 +96,7 @@ export async function readGitHubIssue(url: string, options: ExecutionOptions = {
     }
     const title = redactSensitiveText(data.title);
     const body = redactSensitiveText(data.body ?? '');
-    const requestedValidation = requestedIssueValidation(`${title}\n${body}`);
+    const requestedValidation = validationRequirementsFromText(`${title}\n${body}`);
     return {
       url,
       title: truncateText(title, 300),
