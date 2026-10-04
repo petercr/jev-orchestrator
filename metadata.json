@@ -1,0 +1,43 @@
+{
+  "cli_version": "0.10.7-nightly.202609190623.ae303f31d",
+  "checkpoint_id": "01M43YF393N1NJ5RW0Z72YHTR5",
+  "strategy": "manual-commit",
+  "branch": "feat/issue-task-routing",
+  "checkpoints_count": 3,
+  "files_touched": [
+    "AGENTS.md",
+    "PLAN.md",
+    "README.md",
+    "src/ai/contract.test.ts",
+    "src/ai/contract.ts",
+    "src/orchestration/candidate.test.ts",
+    "src/orchestration/candidate.ts",
+    "src/orchestration/completion.test.ts",
+    "src/orchestration/execute.ts",
+    "src/orchestration/loop.ts",
+    "src/orchestration/preparation.test.ts",
+    "src/policy.test.ts",
+    "src/policy.ts",
+    "src/repo/issue.ts",
+    "src/repo/preparation.ts",
+    "src/repo/validation.test.ts",
+    "src/repo/validation.ts"
+  ],
+  "sessions": [
+    {
+      "metadata": "/0/metadata.json",
+      "transcript": "/0/full.jsonl",
+      "compact_transcript": "/0/transcript.jsonl",
+      "content_hash": "/0/content_hash.txt",
+      "prompt": "/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 462964,
+    "cache_creation_tokens": 0,
+    "cache_read_tokens": 5796608,
+    "output_tokens": 85137,
+    "api_call_count": 80,
+    "subagent_tokens_complete": true
+  }
+}
