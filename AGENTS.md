@@ -8,6 +8,8 @@ The packaged v0.2 CLI retains decision-only as the default. Explicit `--orchestr
 
 Issue context and evaluation recovery also remain approval-gated: `READ_ISSUE` reads only the task's exact public GitHub issue through a fixed, credential-free endpoint. Issue/repository text and worker environment reports remain untrusted. Independent checks are tracked per validation generation; declared conjunctive workflows may cover their constituent scripts. An evaluation failure records allowlisted diagnostics before explicit in-process continuation, consuming an iteration and retaining all budgets and evidence. Traces are not executable resume files.
 
+For linked-issue tasks, confident routing gathers the exact issue and known root instruction files before testing, delegation, or completion. Preserve these preparation checks in candidate selection, manual alternatives, and final approval enforcement. A failed issue read requires approved user context; keep it attributed to clarification rather than fabricated issue metadata. A clear first worker route after preparation may precede baseline testing, but every worker attempt still requires fresh independent validation. Validation commands named in user clarifications also become required checks; omitted requirements block completion.
+
 Do not schedule validation when no required checks remain pending. A confident redundant `RUN_TESTS` request becomes a policy-owned `ASK_USER` completion review. Selecting `FINISH` and then approving the resolved candidate confirms the original task acceptance criteria; passing validation alone is insufficient for automatic completion. Preserve the 95% automatic completion threshold and missing-information, stuck, ambiguity, and current-generation validation guards. An exhausted iteration budget returns `iteration_limit` with exit code 1 and preserves edits and evidence.
 
 ## Repository map
@@ -19,6 +21,7 @@ Do not schedule validation when no required checks remain pending. A confident r
 - `src/policy.test.ts`: policy behavior tests.
 - `src/repo/inspect.ts`: read-only repository metadata collection.
 - `src/repo/issue.ts`: bounded public issue context and constrained URL parsing.
+- `src/repo/preparation.ts`: linked-task preparation and required instruction-read bookkeeping.
 - `src/repo/validation.ts`: declared validation coverage and required-check bookkeeping.
 - `src/logging/trace.ts`: JSONL decision trace writer.
 - `src/mock.ts`: deterministic token-free evaluation for local smoke tests.

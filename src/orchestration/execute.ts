@@ -153,7 +153,7 @@ async function executeRead(proposal: Extract<CandidateProposal, { action: 'READ_
       durationMs: Math.round(performance.now() - startedAt),
       timedOut: false,
       output: contents.subarray(0, bytesRead).toString('utf8'),
-      files: [safeRelativePath],
+      files: [...new Set([proposal.input.path, safeRelativePath])],
     };
   } finally {
     await file.close();

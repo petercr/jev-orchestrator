@@ -1,5 +1,6 @@
 import type { AgentAssessment, AgentState, PolicyDecision } from './types.js';
-import { hasFailedValidation, hasPassedValidation, pendingValidationScripts } from './repo/validation.js';
+import { hasFailedValidation, hasOmittedValidationRequirements, hasPassedValidation, pendingValidationScripts } from './repo/validation.js';
+import { taskPreparation } from './repo/preparation.js';
 
 export type PolicyThresholds = {
   finish: number;
@@ -21,10 +22,10 @@ function requireValidation(
   state: AgentState,
   requested: PolicyDecision['requested'],
 ): PolicyDecision {
-  if (state.evidence?.issue?.validationRequirementsTruncated) {
+  if (hasOmittedValidationRequirements(state)) {
     return {
       requested, selected: 'ASK_USER', override: requested !== 'ASK_USER',
-      reason: 'The bounded issue context omitted validation requirements; more context is needed before completion.',
+      reason: 'The bounded task context omitted validation requirements; more context is needed before completion.',
     };
   }
   if (state.repo.validationScripts.length === 0) {
@@ -91,6 +92,26 @@ export function applyPolicy(
     };
   }
 
+  const preparation = taskPreparation(state);
+  if (preparation.nextAction !== null) {
+    if (!clearRouting || requested === 'ASK_USER') {
+      return {
+        requested, selected: 'ASK_USER', override: requested !== 'ASK_USER',
+        reason: 'Linked-task context is still pending, but routing requires clarification before a preparatory read.',
+      };
+    }
+    return {
+      requested,
+      selected: preparation.nextAction,
+      override: requested !== preparation.nextAction,
+      reason: preparation.nextAction === 'READ_ISSUE'
+        ? 'Read the linked issue acceptance criteria before testing or delegation.'
+        : preparation.nextAction === 'READ_FILE'
+          ? `Read the remaining repository instructions before testing or delegation: ${preparation.unreadInstructions.join(', ')}.`
+          : 'The linked issue read failed; ask the user for task context before testing or delegation.',
+    };
+  }
+
   if (
     assessment.taskComplete.probability >= thresholds.finish &&
     hasPassedValidation(state)
@@ -103,9 +124,13 @@ export function applyPolicy(
     };
   }
 
+  const firstIssueWorker = preparation.issue !== 'not_linked' && clearRouting && !state.tests.ran &&
+    state.codexCalls === 0 && state.claudeCalls === 0 && !hasFailedValidation(state) &&
+    (requested === 'CALL_CODEX' || requested === 'CALL_CLAUDE');
   if (
     assessment.needsTesting.probability >= thresholds.test &&
-    !hasPassedValidation(state)
+    !hasPassedValidation(state) &&
+    !firstIssueWorker
   ) {
     return requireValidation(state, requested);
   }

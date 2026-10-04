@@ -100,6 +100,44 @@ describe('candidate selection', () => {
     await expect(selectCandidate('READ_FILE', initial, ['source.ts'])).resolves.toMatchObject({ input: { path: 'source.ts' } });
   });
 
+  it.each(['RUN_TESTS', 'CALL_CODEX', 'CALL_CLAUDE', 'FINISH'] as const)(
+    'does not resolve %s before linked-task preparation', async (action) => {
+      const initial = state(await temporaryRoot(), { task: 'https://github.com/owner/repo/issues/80' });
+      await expect(selectCandidate(action, initial)).resolves.toMatchObject({ action: 'ASK_USER', tool: null, input: null });
+      initial.evidence = {
+        revision: 0, validationGeneration: 0, clarifications: [], findings: [], failures: [],
+        issue: { url: initial.task, title: 'Task', body: '', requestedValidationScripts: [], truncated: false },
+      };
+      initial.repo.topLevelFiles = ['AGENTS.md'];
+      await expect(selectCandidate(action, initial)).resolves.toMatchObject({ action: 'ASK_USER' });
+      initial.filesRead = ['AGENTS.md'];
+      await expect(selectCandidate(action, initial)).resolves.toMatchObject({ action });
+    },
+  );
+
+  it('cannot skip an unsafe required instruction file for an unrelated safe read', async () => {
+    const root = await temporaryRoot();
+    const outside = await temporaryRoot();
+    await writeFile(path.join(outside, 'instructions.md'), 'Outside instructions.');
+    await symlink(path.join(outside, 'instructions.md'), path.join(root, 'AGENTS.md'));
+    await writeFile(path.join(root, 'README.md'), 'Safe unrelated read.');
+    const initial = state(root, { task: 'https://github.com/owner/repo/issues/80' });
+    initial.repo.topLevelFiles = ['AGENTS.md', 'README.md'];
+    await expect(selectCandidate('READ_FILE', initial, ['README.md'])).resolves.toMatchObject({
+      action: 'ASK_USER', reason: expect.stringContaining('AGENTS.md cannot be read safely'),
+    });
+  });
+
+  it('reads the task issue when earlier evidence is for another issue', async () => {
+    const initial = state(await temporaryRoot(), { task: 'https://github.com/owner/repo/issues/80?tracking=ignored' });
+    initial.evidence = {
+      revision: 0, validationGeneration: 0, clarifications: [], findings: [], failures: [],
+      issue: { url: 'https://github.com/owner/repo/issues/81', title: 'Other task', body: '', requestedValidationScripts: [], truncated: false },
+    };
+    await expect(selectCandidate('CALL_CODEX', initial)).resolves.toMatchObject({ action: 'ASK_USER' });
+    await expect(selectCandidate('READ_ISSUE', initial)).resolves.toMatchObject({ action: 'READ_ISSUE', input: { url: 'https://github.com/owner/repo/issues/80' } });
+  });
+
   it('builds validation commands only from detected scripts and lockfiles', async () => {
     const root = await temporaryRoot();
     await expect(selectCandidate('RUN_TESTS', state(root))).resolves.toMatchObject({

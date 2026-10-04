@@ -8,6 +8,7 @@ import type { Action, AgentState } from '../types.js';
 import { selectDiagnosticCommand, type DiagnosticCommandId } from './diagnostics.js';
 import { parseGitHubIssue } from '../repo/issue.js';
 import { hasPassedValidation, selectPendingValidation } from '../repo/validation.js';
+import { REPOSITORY_INSTRUCTION_FILES, requiresTaskPreparation, taskPreparation } from '../repo/preparation.js';
 
 export const EXECUTABLE_ACTIONS = [
   'SEARCH_REPO',
@@ -220,7 +221,7 @@ function preferredReadCandidates(state: AgentState, searchResults: string[]): st
     .filter((entry) => !entry.endsWith('/'))
     .filter((candidate) => !searchedSet.has(candidate))
     .filter((candidate) => !state.filesRead.includes(candidate));
-  const preferences = ['AGENTS.md', 'CONTRIBUTING.md', 'CLAUDE.md', 'README.md', 'package.json', 'PLAN.md'];
+  const preferences = [...REPOSITORY_INSTRUCTION_FILES, 'README.md', 'package.json', 'PLAN.md'];
 
   const sortedKnownPaths = knownPaths.sort((left, right) => {
     const leftIndex = preferences.indexOf(left);
@@ -229,7 +230,7 @@ function preferredReadCandidates(state: AgentState, searchResults: string[]): st
     const rightRank = rightIndex === -1 ? preferences.length : rightIndex;
     return leftRank - rightRank || left.localeCompare(right);
   });
-  const instructions = ['AGENTS.md', 'CONTRIBUTING.md', 'CLAUDE.md']
+  const instructions: string[] = REPOSITORY_INSTRUCTION_FILES
     .filter((file) => state.repo.topLevelFiles.includes(file) && !state.filesRead.includes(file));
   return [...instructions, ...searched.filter((file) => !instructions.includes(file)),
     ...sortedKnownPaths.filter((file) => !instructions.includes(file))];
@@ -256,6 +257,13 @@ export async function selectCandidate(
   state: AgentState,
   searchResults: string[] = [],
 ): Promise<CandidateProposal> {
+  const preparation = taskPreparation(state);
+  if (preparation.nextAction !== null && requiresTaskPreparation(action)) {
+    return {
+      action: 'ASK_USER', tool: null, input: null,
+      reason: 'The linked issue and known repository instructions must be read before testing, delegation, or completion.',
+    };
+  }
   switch (action) {
     case 'SEARCH_REPO':
       return {
@@ -265,7 +273,7 @@ export async function selectCandidate(
       };
     case 'READ_ISSUE': {
       const issue = parseGitHubIssue(state.task);
-      return issue && !state.evidence?.issue ? {
+      return issue && state.evidence?.issue?.url !== issue.url ? {
         action,
         tool: 'github_issue',
         input: { url: issue.url },
@@ -277,6 +285,19 @@ export async function selectCandidate(
       };
     }
     case 'READ_FILE': {
+      const requiredInstruction = preparation.unreadInstructions[0];
+      if (requiredInstruction) {
+        try {
+          await resolveSafeRepoFile(state.repo.root, requiredInstruction);
+          return { action, tool: 'read_file', input: { root: state.repo.root, path: requiredInstruction } };
+        } catch (error) {
+          if (!(error instanceof CandidateSelectionError)) throw error;
+          return {
+            action: 'ASK_USER', tool: null, input: null,
+            reason: `The required repository instruction file ${requiredInstruction} cannot be read safely.`,
+          };
+        }
+      }
       for (const candidate of preferredReadCandidates(state, searchResults)) {
         try {
           const safePath = await resolveSafeRepoFile(state.repo.root, candidate);

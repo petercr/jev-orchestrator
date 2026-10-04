@@ -873,6 +873,77 @@ approval. The original checkout was preserved. All 24 receipt checks passed;
 artifacts are under `/tmp/jev-issue80-completion-72kig8hb`. Early routing still
 needed manual choices; this result does not establish an autonomous pilot.
 
+## Linked-issue task preparation
+
+Implementation (2026-10-04): address the early manual rerouting observed in the
+issue #80 pilot. For a confident linked-issue route, deterministic policy first
+proposes the exact public issue read, then each known root instruction file
+(`AGENTS.md`, `CONTRIBUTING.md`, `CLAUDE.md`) before testing or delegation.
+Preparation is enforced in candidate selection, manual alternatives, and the
+final approval check, including before completion. Jev receives explicit
+bounded preparation progress, and its criteria distinguish missing external
+information from context available through supported reads.
+
+A failed issue read proposes `ASK_USER`. Approved supplied context remains a
+clarification in worker evidence, never a fabricated fetched issue, and does
+not bypass repository instructions. Safe internal instruction symlinks retain
+both the approved name and resolved path as read evidence; escaping or secret
+targets stay blocked. Recognized validation references from user clarification
+share the issue reader's bounded extraction and independent required-check
+rules; missing or omitted requirements cannot establish completion.
+
+After preparation, a clear first coding-worker request can proceed without a
+high testing score forcing baseline tests. The exception applies before any
+worker attempt or validation run and never suppresses a failed check. Every
+worker attempt still requires fresh independent validation. Preparation routing
+applies to linked-issue tasks. Confidence thresholds, manual approvals, eight
+iterations, two calls per worker adapter, recovery, and cancellation boundaries
+remain unchanged.
+
+Offline regressions exercise the pilot workflow while Jev recommends a worker
+with a high testing score on all four preparatory/implementation turns. The
+loop reads the issue and both contributor files, uses one approved worker,
+records independently scheduled `verify`/`build` checks, then resolves explicit
+completion review without early manual alternatives. Additional cases cover unavailable issues,
+supplied-context attribution, named checks, instruction aliases and escape,
+premature manual alternatives, stale approval, stop, and interruption. Worker,
+evaluation, and validation process boundaries are mocked in those regressions;
+repository reads and fixture edits are real.
+
+Verification passed `pnpm check`, all 390 tests across 25 files,
+`pnpm build`, and `git diff --check`. The packed `0.2.0` archive includes the
+new preparation module and excludes tests, traces, credentials, and dependencies.
+It was installed offline into a fresh consumer. From a separate fixture
+directory, the installed binary reported `0.2.0` and returned a keyless mock
+decision with `status: "unexecuted"`, overriding `SEARCH_REPO` to `READ_ISSUE`
+for an issue-URL task. The fixture remained unchanged and no trace was written.
+
+A fresh installed-package live issue #80 pilot (2026-10-04) completed from an
+external clone at the same `5a910ba` baseline, using direct TypeSafe
+`jev-latest` (served as `jev-1.13.0`) and Codex CLI 0.160.0. The only supplied
+task was the issue URL. The first three approved proposals read the issue,
+`CONTRIBUTING.md`, and `CLAUDE.md` without manual routing. Iteration 4's worker
+distribution was ambiguous (Codex 27%), so policy required a reviewed manual
+`CALL_CODEX` selection. One worker call took 136.0 s and made only the config
+rename and TypeScript filename-reference change. Its sandbox-reported test
+limitations remained unverified; independent `verify` and `build` passed.
+
+A `distribution/sum` rejection at iteration 6 required explicit in-process
+continuation, preserving edits, generation-1 validation, worker counts, and
+the two remaining iterations. After build, the iteration-8 `FINISH` request
+had 73% confidence and required a reviewed manual finish selection and approval.
+The full independent test log showed all 296 tests passing and no original Vite
+warning before completion approval. The run finished with exit 0, without
+restart or budget reset. Early manual routing fell from four choices to one;
+completion review and one evaluation recovery were still required. The run
+used all eight iterations and does not establish autonomous completion.
+
+All 25 pilot receipt checks passed, including a complete reverse-checked patch,
+unchanged lockfile, byte-identical renamed config, and preservation of the
+original checkout's HEAD, status, diff, and 184 file hashes. Trace, terminal log,
+full test log, patch, fingerprints, and receipt are under
+`/tmp/jev-issue80-routing-KupNZ9`.
+
 ## Reference, not a template
 
 [`gargpratyush/jev-router`](https://github.com/gargpratyush/jev-router) is a

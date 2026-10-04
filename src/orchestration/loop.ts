@@ -5,6 +5,7 @@ import {
   type InterruptionPhase,
 } from '../logging/trace.js';
 import { applyPolicy } from '../policy.js';
+import { requiresTaskPreparation, taskPreparation } from '../repo/preparation.js';
 import { truncateText } from '../limits.js';
 import { inspectRepo } from '../repo/inspect.js';
 import { isIssueContext, parseGitHubIssue } from '../repo/issue.js';
@@ -235,13 +236,18 @@ function allowedAlternatives(
   policy: PolicyDecision,
 ): ExecutableAction[] {
   if (state.evidence?.repoRefreshRequired) return ['ASK_USER'];
+  const preparation = taskPreparation(state);
   return EXECUTABLE_ACTIONS.filter((action) => {
+    if (preparation.nextAction !== null && requiresTaskPreparation(action)) return false;
     if (action === 'FINISH') {
       return hasPassedValidation(state) && (policy.selected === 'FINISH' ||
         (policy.selected === 'ASK_USER' && policy.completionReview !== undefined));
     }
     if (action === 'RUN_TESTS') return selectPendingValidation(state) !== undefined;
-    if (action === 'READ_ISSUE') return Boolean(parseGitHubIssue(state.task)) && !state.evidence?.issue;
+    if (action === 'READ_ISSUE') {
+      const issue = parseGitHubIssue(state.task);
+      return Boolean(issue && state.evidence?.issue?.url !== issue.url);
+    }
     if (action === 'CALL_CODEX') return state.codexCalls < MAX_CODEX_CALLS;
     if (action === 'CALL_CLAUDE') return state.claudeCalls < MAX_CLAUDE_CALLS;
     return true;
@@ -714,15 +720,18 @@ export async function runOrchestration(
         const blockedCompletion = proposal.action === 'FINISH' &&
           (!hasPassedValidation(state) || !completionAllowed);
         const blockedValidation = proposal.action === 'RUN_TESTS' && selectPendingValidation(state) === undefined;
-        if (blockedRepeat || exhaustedCodex || exhaustedClaude || blockedCompletion || blockedValidation ||
+        const blockedPreparation = requiresTaskPreparation(proposal.action) && taskPreparation(state).nextAction !== null;
+        if (blockedRepeat || exhaustedCodex || exhaustedClaude || blockedCompletion || blockedValidation || blockedPreparation ||
           (state.evidence?.repoRefreshRequired && proposal.action !== 'ASK_USER')) {
           decision = {
             kind: 'reject',
             reason: blockedRepeat
               ? 'The resolved candidate already failed with the same relevant evidence.'
-              : blockedCompletion || blockedValidation
-                ? 'Current validation or completion policy prevents execution.'
-                : 'Repository inspection or a worker call limit prevents execution.',
+              : blockedPreparation
+                ? 'Linked-task preparation must complete before execution.'
+                : blockedCompletion || blockedValidation
+                  ? 'Current validation or completion policy prevents execution.'
+                  : 'Repository inspection or a worker call limit prevents execution.',
           };
           approval.decisions.push(decision);
         }
