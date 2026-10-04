@@ -53,6 +53,7 @@ The current action vocabulary is:
 type Action =
   | 'SEARCH_REPO'
   | 'READ_FILE'
+  | 'READ_ISSUE'
   | 'RUN_COMMAND'
   | 'RUN_TESTS'
   | 'CALL_CODEX'
@@ -771,6 +772,106 @@ Focused tests, `pnpm check`, all 274 tests, `pnpm build`, and
 `git diff --check` passed. Loading the local `.env` with the built configuration
 resolved to `typesafe` / `jev-latest` with a configured selected credential;
 this verification made no additional live request.
+
+## Orchestration recovery, issue context, and validation — issue #24
+
+Implementation and offline verification status (2026-10-03): complete.
+
+- [x] Allowlisted evaluation failure codes, stages, categories, and optional
+  answer fields; no exception messages, response bodies, headers, or causes in
+  failure evidence. Rejected distributions and confidence remain invalid.
+- [x] Failure trace before recovery input, explicit in-process continuation,
+  preserved edits/evidence/history/call budgets, and failed evaluations counted
+  toward the same eight-iteration ceiling. Cancellation fences continuation
+  prompts, late responses, and recovery trace writes.
+- [x] Approved `READ_ISSUE` for the task's exact public GitHub issue, a fixed
+  credential-free endpoint, no redirects, bounded responses/context, safe
+  errors, and cancellation. Repository instructions precede other read
+  candidates; issue data and worker claims remain untrusted.
+- [x] Bounded prior evidence and independent validation progress reach Jev.
+  Completion requires all current-generation checks, including issue-named
+  scripts. Missing or omitted requirements cannot silently permit completion.
+- [x] Detected `verify` scripts and conservative declared conjunction coverage;
+  each resolved script remains typed and manually approved. Bare package
+  manager builtins, flags, ORs, and pipelines prove no extra coverage.
+- [x] Worker-reported loopback binding restrictions have explicit attribution
+  and never pass validation or broaden worker permissions. Every worker
+  attempt still requires fresh independent checks before completion.
+- [x] Offline regressions for post-edit evaluation rejection, explicit recovery
+  budgets/history, ambiguous routing, multi-check completion, malformed issue
+  metadata, request bounds, credential redaction, sandbox reports, and signal
+  cleanup. Existing policy thresholds and worker capabilities remain intact.
+
+`pnpm check`, all 335 tests across 23 files, `pnpm build`, and
+`git diff --check` passed. An existing process cleanup assertion encountered
+a kernel timing race in one full-suite run; its focused rerun and the final
+full suite passed without changes to process execution or that test.
+
+Packed `0.2.0` and installed it offline into a disposable consumer. From a
+separate fixture directory, the installed binary produced a keyless mock
+decision and completed `SEARCH_REPO → READ_FILE → RUN_TESTS → FINISH` after
+four explicit approvals. It read `CONTRIBUTING.md`, independently ran
+`npm run verify` (four passing tests plus a syntax check), and credited the
+declared `verify`, `test`, and `typecheck` workflow before completion. No live
+Jev evaluation or coding worker ran in that mock verification. Recovery/issue
+transport regressions use mocked provider, process, and HTTP boundaries.
+Recovery is in-process, not persisted execution from a trace.
+
+Live issue #80 rerun (2026-10-03 local time): used the installed package from
+a fresh `jspdf-md-renderer` checkout at the earlier baseline commit, with only
+the issue URL as the task. TypeSafe served `jev-1.13.0` for all eight valid
+evaluations. It selected `READ_ISSUE` first and read `CONTRIBUTING.md`; manual
+action selection then read `CLAUDE.md` and approved one Codex call (113.7 s).
+The worker made only the identical-content config rename and TypeScript
+include update, reporting sandbox listener restrictions as unverified claims.
+Independent loop validation ran `verify` and `build`, passing lint,
+typechecking, all 296 tests, and the build. A full standalone `npm test` log
+confirmed the original warning is gone. The original checkout was preserved.
+
+The live pilot remains incomplete as an orchestration workflow: after every
+required current-generation check passed, Jev proposed duplicate `verify`
+runs on iterations 7 and 8. Both were rejected; the same run ended at
+`iteration_limit` without `FINISH` or a restart. CLI exit code was 0 despite
+that incomplete status. This identified completion routing and duplicate
+validation handling as follow-up work. No live evaluation failure
+occurred, so recovery remains verified by offline regressions. Twenty receipt
+checks passed; evidence is saved under `/tmp/jev-issue80-rerun-p5yoj2p2`.
+
+Completion follow-up (2026-10-03 local time): required validation selection
+now returns no candidate when nothing is pending, including manual
+`RUN_TESTS` alternatives. A confident redundant validation request becomes
+a policy-owned `ASK_USER` completion review with a typed `completionReview`
+reason. Selecting `FINISH` and approving its resolved candidate confirms
+original task acceptance; automatic completion still requires 95% confidence,
+and current-generation validation, ambiguity, missing-information, stuck,
+inspection and omitted-requirement guards remain intact. Jev receives a
+derived `allRequiredPassed` flag and explicit criteria distinguishing
+validation coverage from task outcome evidence. `iteration_limit` returns
+exit 1 and explains that completion was not approved.
+
+Focused regressions reproduced the original duplicate-validation and exit
+failures, then passed with the fixes. The pilot-derived regression completes
+in seven iterations after a redundant test request, with one worker and only
+`verify`/`build` validation; rejection, stop, interruption during the resolved
+completion prompt, and invalid/stale/incomplete evidence cannot fabricate
+completion. `pnpm check`, all 356 tests across 24 files, `pnpm build` and
+`git diff --check` passed. The installed CLI separately returned exit 1 after
+eight rejected mock proposals. An installed-package evaluation fixture ran
+one real Node test and completed the new redundant-validation review path
+after selecting `FINISH` and approving it, with no live model or worker.
+
+A fresh live issue #80 pilot then finished in the same eight-iteration run.
+It used four initial manual routing choices, one approved Codex call (134.5 s),
+independent passing `verify`/`build`, and a reviewed manual `FINISH` on the last
+iteration. A `distribution/sum` rejection on iteration 7 exercised real
+in-process recovery: explicit continuation retained edits, passing generation-1
+checks, one used worker call, the same trace, and the one remaining iteration.
+The live model requested `FINISH`; the new redundant-test fallback is verified
+by the offline regressions and installed fixture. All 296 tests passed and a
+full independent test log confirmed the warning was gone before completion
+approval. The original checkout was preserved. All 24 receipt checks passed;
+artifacts are under `/tmp/jev-issue80-completion-72kig8hb`. Early routing still
+needed manual choices; this result does not establish an autonomous pilot.
 
 ## Reference, not a template
 

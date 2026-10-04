@@ -66,23 +66,21 @@ describe('process cancellation', () => {
     try {
       controller.abort();
       expect(await running).toMatchObject({ cancelled: true, timedOut: false });
+      // SIGKILL delivery is asynchronous even after the parent has closed.
       // An orphan zombie can await host reaping, but must no longer execute.
-      if (process.platform === 'linux' && alive(pid)) {
+      await expect.poll(async () => {
+        if (!alive(pid)) return true;
+        if (process.platform !== 'linux') return false;
         try {
           const status = await readFile(`/proc/${pid}/status`, 'utf8');
-          expect(status).toMatch(/State:\s+Z/u);
+          return /State:\s+Z/u.test(status);
         } catch (error) {
           // The host can reap the zombie between kill-zero and the proc read.
           const code = (error as NodeJS.ErrnoException).code;
           if (code !== 'ENOENT' && code !== 'ESRCH') throw error;
-          expect(alive(pid)).toBe(false);
+          return !alive(pid);
         }
-      } else {
-        for (let attempt = 0; attempt < 200 && alive(pid); attempt += 1) {
-          await new Promise((resolve) => setTimeout(resolve, 10));
-        }
-        expect(alive(pid)).toBe(false);
-      }
+      }, { interval: 10, timeout: 2_000 }).toBe(true);
     } finally {
       try { process.kill(pid, 'SIGKILL'); } catch { /* Already gone. */ }
     }

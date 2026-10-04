@@ -52,14 +52,14 @@ export async function evaluateNative(
     body = await response.json();
   } catch {
     if (!response.ok) throw new JevHttpError(response.status, retryAfterMs(response.headers.get('retry-after')));
-    throw new JevEvaluationError('invalid_response', 'Jev returned invalid JSON evaluation data.');
+    throw new JevEvaluationError('invalid_response', 'Jev returned invalid JSON evaluation data.', { stage: 'json', category: 'shape' });
   }
   const status = errorStatus(body);
   if (!response.ok || (isRecord(body) && body.error !== undefined)) {
     throw new JevHttpError(status ?? (response.ok ? 400 : response.status), retryAfterMs(response.headers.get('retry-after')));
   }
   if (!isRecord(body) || !isRecord(body.answers)) {
-    throw new JevEvaluationError('invalid_response', 'Jev returned invalid evaluation data.');
+    throw new JevEvaluationError('invalid_response', 'Jev returned invalid evaluation data.', { stage: 'answers', category: 'shape' });
   }
   const nextAction = body.answers.nextAction;
   return {

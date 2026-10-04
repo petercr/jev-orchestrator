@@ -27,6 +27,14 @@ afterEach(async () => {
 });
 
 describe('constrained execution', () => {
+  it.each(['deploy', 'publish', '--help', 'test; echo bad'])('rejects a non-validation script %s without running a process', async (script) => {
+    const runner = vi.fn<ProcessRunner>();
+    await expect(executeCandidate({
+      action: 'RUN_TESTS', tool: 'package_script',
+      input: { root: '/repo', packageManager: 'npm', script, command: 'npm', args: ['run', script] },
+    }, runner)).rejects.toThrow('does not match');
+    expect(runner).not.toHaveBeenCalled();
+  });
   it('uses direct rg arguments and normalizes bounded search results', async () => {
     const root = await temporaryRoot();
     const runner = vi.fn<ProcessRunner>().mockResolvedValue({

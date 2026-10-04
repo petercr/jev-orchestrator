@@ -1,9 +1,12 @@
 import type { Action, AgentState, EvaluationResult } from './types.js';
+import { hasPassedValidation } from './repo/validation.js';
+import { parseGitHubIssue } from './repo/issue.js';
 
 function probabilitiesFor(choice: Action): Partial<Record<Action, number>> {
   return {
     SEARCH_REPO: choice === 'SEARCH_REPO' ? 0.68 : 0.04,
     READ_FILE: choice === 'READ_FILE' ? 0.68 : 0.04,
+    READ_ISSUE: choice === 'READ_ISSUE' ? 0.68 : 0.02,
     RUN_COMMAND: 0.02,
     RUN_TESTS: choice === 'RUN_TESTS' ? 0.68 : 0.04,
     CALL_CODEX: 0.02,
@@ -19,7 +22,7 @@ export function mockEvaluation(state?: AgentState): EvaluationResult {
   let needsMoreInformation = 0.08;
   let needsTesting = 0.09;
 
-  if (state?.tests.passed === true) {
+  if (state && hasPassedValidation(state)) {
     choice = 'FINISH';
     taskComplete = 0.98;
     needsTesting = 0.02;
@@ -27,6 +30,8 @@ export function mockEvaluation(state?: AgentState): EvaluationResult {
     choice = 'ASK_USER';
     needsMoreInformation = 0.95;
     needsTesting = 0.9;
+  } else if (state && parseGitHubIssue(state.task) && !state.evidence?.issue) {
+    choice = 'READ_ISSUE';
   } else if ((state?.filesRead.length ?? 0) > 0) {
     choice = 'RUN_TESTS';
     needsTesting = 0.9;

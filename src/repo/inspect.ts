@@ -3,6 +3,7 @@ import path from 'node:path';
 import { spawn } from 'node:child_process';
 import type { RepoSnapshot } from '../types.js';
 import { truncateText } from '../limits.js';
+import { isValidationScript, validationWorkflow } from './validation.js';
 
 export const MAX_PACKAGE_JSON_BYTES = 64 * 1024;
 export const MAX_TOP_LEVEL_FILES = 80;
@@ -19,6 +20,7 @@ const MAX_GIT_LINE_LENGTH = 500;
 type PackageMetadata = {
   packageName?: string;
   scripts: string[];
+  validationCommands?: Record<string, string>;
 };
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -120,7 +122,12 @@ async function readPackageMetadata(packageJsonPath: string): Promise<PackageMeta
           .slice(0, MAX_SCRIPTS)
         : [];
 
-      return { ...(packageName ? { packageName } : {}), scripts };
+      const validationCommands: Record<string, string> = {};
+      for (const name of scripts.filter(isValidationScript)) {
+        const command = isRecord(parsed.scripts) ? parsed.scripts[name] : undefined;
+        if (typeof command === 'string') validationCommands[name] = command;
+      }
+      return { ...(packageName ? { packageName } : {}), scripts, validationCommands };
     } finally {
       await packageJson.close();
     }
@@ -180,10 +187,7 @@ export async function inspectRepo(inputPath: string): Promise<RepoSnapshot> {
     inspectGit(root),
   ]);
 
-  const validationNames = new Set(['test', 'check', 'typecheck', 'lint', 'build']);
-  const validationScripts = packageMetadata.scripts.filter((script) =>
-    [...validationNames].some((name) => script === name || script.startsWith(`${name}:`)),
-  );
+  const validationScripts = packageMetadata.scripts.filter(isValidationScript);
 
   return {
     root,
@@ -191,6 +195,7 @@ export async function inspectRepo(inputPath: string): Promise<RepoSnapshot> {
     ...(packageMetadata.packageName ? { packageName: packageMetadata.packageName } : {}),
     scripts: packageMetadata.scripts,
     validationScripts,
+    ...validationWorkflow(validationScripts, packageMetadata.validationCommands ?? {}, packageManager),
     ...gitMetadata,
     topLevelFiles,
   };

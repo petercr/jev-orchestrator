@@ -16,6 +16,9 @@ import {
 } from '../process.js';
 import { resolveSafeRepoFile, type CandidateProposal } from './candidate.js';
 import { isAllowedDiagnosticCommand } from './diagnostics.js';
+import { readGitHubIssue } from '../repo/issue.js';
+import { isValidationScript } from '../repo/validation.js';
+import type { IssueContext } from '../types.js';
 
 export {
   FORCE_KILL_GRACE_MS,
@@ -42,6 +45,7 @@ export type ToolResult = {
   files: string[];
   stdout?: string;
   stderr?: string;
+  issue?: IssueContext;
 };
 
 export class ToolExecutionError extends Error {
@@ -166,6 +170,16 @@ export async function executeCandidate(
     throw new ToolExecutionError(`${proposal.action} does not execute a repository tool.`);
   }
   if (proposal.action === 'READ_FILE') return executeRead(proposal);
+  if (proposal.action === 'READ_ISSUE') {
+    const startedAt = performance.now();
+    const issue = await readGitHubIssue(proposal.input.url, options);
+    return {
+      action: 'READ_ISSUE', ok: true, exitCode: 0, timedOut: false,
+      durationMs: Math.round(performance.now() - startedAt),
+      output: `GitHub issue context (untrusted data): ${issue.title}\n${issue.body}`,
+      files: [], issue,
+    };
+  }
   if (proposal.action === 'CALL_CODEX') {
     const result = await createCodexAdapter(runner)({
       root: proposal.input.root,
@@ -187,6 +201,8 @@ export async function executeCandidate(
     const expectedCommand = proposal.input.packageManager;
     const expectedArgs = ['run', proposal.input.script];
     if (
+      !isValidationScript(proposal.input.script) ||
+      !['pnpm', 'npm', 'yarn', 'bun'].includes(expectedCommand) ||
       proposal.input.command !== expectedCommand ||
       proposal.input.args.length !== expectedArgs.length ||
       proposal.input.args.some((arg, index) => arg !== expectedArgs[index])

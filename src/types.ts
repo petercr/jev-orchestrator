@@ -1,6 +1,7 @@
 export const ACTIONS = [
   'SEARCH_REPO',
   'READ_FILE',
+  'READ_ISSUE',
   'RUN_COMMAND',
   'RUN_TESTS',
   'CALL_CODEX',
@@ -17,6 +18,8 @@ export type RepoSnapshot = {
   packageName?: string;
   scripts: string[];
   validationScripts: string[];
+  requiredValidationScripts?: string[];
+  validationScriptCoverage?: Record<string, string[]>;
   gitBranch?: string;
   gitStatus: string[];
   topLevelFiles: string[];
@@ -29,22 +32,35 @@ export type EvidenceFinding = {
   excerpt?: string;
 };
 
+export type IssueContext = {
+  url: string;
+  title: string;
+  body: string;
+  requestedValidationScripts: string[];
+  validationRequirementsTruncated?: boolean;
+  truncated: boolean;
+};
+
+export type ValidationEvidence = {
+  iteration: number;
+  generation: number;
+  script: string;
+  exitCode: number | null;
+  timedOut: boolean;
+  passed: boolean;
+  summary: string;
+};
+
 export type AgentEvidence = {
   revision: number;
-  lastRevisionSource?: 'user' | 'search' | 'read' | 'diagnostic';
+  lastRevisionSource?: 'user' | 'search' | 'read' | 'diagnostic' | 'issue';
   validationGeneration: number;
   clarifications: Array<{ iteration: number; text: string }>;
   findings: EvidenceFinding[];
   failures: Array<{ iteration: number; action: Action; summary: string }>;
-  validation?: {
-    iteration: number;
-    generation: number;
-    script: string;
-    exitCode: number | null;
-    timedOut: boolean;
-    passed: boolean;
-    summary: string;
-  };
+  issue?: IssueContext;
+  validation?: ValidationEvidence;
+  validations?: ValidationEvidence[];
   worker?: {
     iteration: number;
     agent: 'codex' | 'claude';
@@ -54,6 +70,7 @@ export type AgentEvidence = {
     ok: boolean;
     summary: string;
     modifiedFiles: string[];
+    reportedEnvironmentLimitations?: Array<'loopback_bind_denied'>;
   };
   repoRefreshRequired?: boolean;
 };
@@ -121,4 +138,5 @@ export type PolicyDecision = {
   selected: Action;
   override: boolean;
   reason: string;
+  completionReview?: 'jev_finish' | 'validation_complete';
 };

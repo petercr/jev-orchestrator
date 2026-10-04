@@ -5,6 +5,9 @@ import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createInterface } from 'node:readline/promises';
 import * as inspection from './repo/inspect.js';
+import * as evaluation from './ai/evaluate.js';
+import { JevEvaluationError } from './ai/errors.js';
+import { mockEvaluation } from './mock.js';
 import { main, runCliOrchestration, type CliOptions } from './cli.js';
 
 vi.mock('node:readline/promises', () => ({ createInterface: vi.fn() }));
@@ -31,6 +34,7 @@ beforeEach(() => {
 afterEach(async () => {
   process.exitCode = originalExitCode;
   vi.restoreAllMocks();
+  vi.unstubAllEnvs();
   await Promise.all(roots.splice(0).map((root) => rm(root, { recursive: true, force: true })));
 });
 
@@ -81,6 +85,29 @@ describe('CLI interruption lifecycle', () => {
     expect(entry).not.toHaveProperty('interruption');
   });
 
+  it('returns exit 1 for exhausted iterations and restores signal listeners', async () => {
+    const opts = await options();
+    terminal.question.mockResolvedValue('reject');
+    const listeners = process.listenerCount('SIGTERM');
+    const outcome = await runCliOrchestration(opts);
+    expect(outcome).toMatchObject({ status: 'iteration_limit', iterations: 8, exitCode: 1 });
+    expect(terminal.question).toHaveBeenCalledTimes(8);
+    expect(terminal.close).toHaveBeenCalledOnce();
+    expect(process.listenerCount('SIGTERM')).toBe(listeners);
+    const entries = (await readFile(outcome.tracePath, 'utf8')).trim().split('\n').map((line) => JSON.parse(line));
+    expect(entries).toHaveLength(8);
+    expect(entries.every((entry) => entry.toolResult === null)).toBe(true);
+    expect(entries[7].stateAfter.currentGoal).not.toBe('Task complete.');
+  });
+
+  it('sets the incomplete-run exit code from main and explains the outcome', async () => {
+    const opts = await options();
+    terminal.question.mockResolvedValue('reject');
+    await main([opts.repoPath, opts.task, '--mock', '--orchestrate']);
+    expect(process.exitCode).toBe(1);
+    expect(vi.mocked(console.log).mock.calls.flat().join('\n')).toContain('Task completion was not approved before the iteration limit');
+  });
+
   it('drains initial read-only inspection and records interruption without entering evaluation', async () => {
     const opts = await options();
     const inspect = inspection.inspectRepo;
@@ -103,5 +130,58 @@ describe('CLI interruption lifecycle', () => {
     await expect(runCliOrchestration(opts)).rejects.toThrow('inspection failed');
     expect(process.listenerCount('SIGINT')).toBe(intCount);
     expect(process.listenerCount('SIGTERM')).toBe(termCount);
+  });
+
+  it('requires explicit continuation and reviews a new proposal after evaluation rejection', async () => {
+    const opts = await options();
+    opts.mock = false;
+    vi.stubEnv('TYPESAFE_API_KEY', 'test-key');
+    vi.stubEnv('JEV_PROVIDER', 'typesafe');
+    const evaluate = vi.spyOn(evaluation, 'evaluateAgentState')
+      .mockRejectedValueOnce(new JevEvaluationError('invalid_response', 'raw upstream body', { stage: 'distribution', category: 'sum' }))
+      .mockResolvedValueOnce(mockEvaluation());
+    terminal.question.mockResolvedValueOnce('approve').mockResolvedValueOnce('continue').mockResolvedValueOnce('stop');
+    const outcome = await runCliOrchestration(opts);
+    expect(outcome).toMatchObject({ status: 'stopped', iterations: 2 });
+    expect(evaluate).toHaveBeenCalledTimes(2);
+    expect(terminal.question).toHaveBeenCalledTimes(3);
+    expect(terminal.question.mock.calls[0]?.[0]).toContain('continue');
+    expect(terminal.question.mock.calls[2]?.[0]).toContain('approve, reject, stop');
+    expect(vi.mocked(console.log).mock.calls.flat().join('\n')).not.toContain('raw upstream');
+    const entries = (await readFile(outcome.tracePath, 'utf8')).trim().split('\n').map((line) => JSON.parse(line));
+    expect(entries[0]).toMatchObject({ failure: { code: 'invalid_response', stage: 'distribution', category: 'sum' }, approval: null });
+    expect(entries[1]).toMatchObject({ recovery: { decision: 'continue' } });
+    expect(entries[2]).toMatchObject({ approval: { kind: 'stop' }, toolResult: null });
+  });
+
+  it('returns exit 1 and restores listeners when evaluation recovery is stopped', async () => {
+    const opts = await options();
+    opts.mock = false;
+    vi.stubEnv('TYPESAFE_API_KEY', 'test-key');
+    vi.stubEnv('JEV_PROVIDER', 'typesafe');
+    vi.spyOn(evaluation, 'evaluateAgentState').mockRejectedValueOnce(new JevEvaluationError('invalid_response', 'invalid'));
+    terminal.question.mockResolvedValueOnce('stop');
+    const listeners = process.listenerCount('SIGINT');
+    const outcome = await runCliOrchestration(opts);
+    expect(outcome).toMatchObject({ status: 'evaluation_failed', iterations: 1, exitCode: 1 });
+    expect(terminal.close).toHaveBeenCalledOnce();
+    expect(process.listenerCount('SIGINT')).toBe(listeners);
+  });
+
+  it('cleans up CLI signal listeners after interruption during recovery', async () => {
+    const opts = await options();
+    opts.mock = false;
+    vi.stubEnv('TYPESAFE_API_KEY', 'test-key');
+    vi.stubEnv('JEV_PROVIDER', 'typesafe');
+    const evaluate = vi.spyOn(evaluation, 'evaluateAgentState').mockRejectedValue(new JevEvaluationError('invalid_response', 'invalid'));
+    const listeners = process.listenerCount('SIGTERM');
+    terminal.onQuestion = () => { process.emit('SIGTERM'); };
+    const outcome = await runCliOrchestration(opts);
+    expect(outcome).toMatchObject({ status: 'stopped', exitCode: 143 });
+    expect(evaluate).toHaveBeenCalledOnce();
+    expect(process.listenerCount('SIGTERM')).toBe(listeners);
+    expect(terminal.listenerCount('SIGINT')).toBe(0);
+    const entries = (await readFile(outcome.tracePath, 'utf8')).trim().split('\n').map((line) => JSON.parse(line));
+    expect(entries.at(-1)).toMatchObject({ interruption: { phase: 'recovery' } });
   });
 });

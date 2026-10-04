@@ -139,7 +139,10 @@ describe.each(providers)('%s evaluation transport', (provider) => {
     respond(provider, 'FINISH');
     const result = await evaluateAgentState(state());
     expect(applyPolicy(state(), result.assessment).selected).toBe('RUN_TESTS');
-    expect(applyPolicy({ ...state(), tests: { ran: true, passed: true } }, result.assessment).selected).toBe('FINISH');
+    const validated = state();
+    validated.tests = { ran: true, passed: true };
+    validated.evidence!.validations = [{ iteration: 0, generation: 0, script: 'test', exitCode: 0, timedOut: false, passed: true, summary: 'passed' }];
+    expect(applyPolicy(validated, result.assessment).selected).toBe('FINISH');
   });
 
   it.each([

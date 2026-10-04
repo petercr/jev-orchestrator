@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { appendFile, mkdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import type { AgentState, EvaluationAttribution, EvaluationResult, PolicyDecision } from '../types.js';
+import type { EvaluationFailure } from '../ai/errors.js';
 
 export const TRACE_SCHEMA_VERSION = 1;
 export const ORCHESTRATION_TRACE_SCHEMA_VERSION = 2;
@@ -41,7 +42,7 @@ export type TraceRecord = {
   policy: TraceValue;
 };
 
-export type InterruptionPhase = 'inspection' | 'evaluation' | 'candidate' | 'approval' | 'information' | 'execution' | 'refresh' | 'trace';
+export type InterruptionPhase = 'inspection' | 'evaluation' | 'recovery' | 'candidate' | 'approval' | 'information' | 'execution' | 'refresh' | 'trace';
 
 export type OrchestrationTracePayload = {
   iteration: number;
@@ -55,6 +56,8 @@ export type OrchestrationTracePayload = {
   toolResult: unknown;
   stateAfter: AgentState;
   workerRequest?: unknown;
+  failure?: EvaluationFailure;
+  recovery?: { available: boolean; decision?: 'continue' | 'stop' };
 };
 
 export class TraceWriteError extends Error {
@@ -272,6 +275,8 @@ export async function appendOrchestrationTrace(
       : { workerRequest: sanitizeTraceValue(payload.workerRequest, secretValues) }),
     stateAfter: sanitizeTraceValue(payload.stateAfter, secretValues),
     ...(payload.interruption ? { interruption: payload.interruption } : {}),
+    ...(payload.failure ? { failure: sanitizeTraceValue(payload.failure, secretValues) } : {}),
+    ...(payload.recovery ? { recovery: payload.recovery } : {}),
   };
 
   try {

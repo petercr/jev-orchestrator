@@ -23,7 +23,7 @@ export async function boundedResponse(response: Response, signal: AbortSignal): 
       size += value.byteLength;
       if (size > MAX_JEV_RESPONSE_BYTES) {
         void reader.cancel().catch(() => undefined);
-        throw new JevEvaluationError('invalid_response', 'Jev response exceeded the bounded output limit.');
+        throw new JevEvaluationError('invalid_response', 'Jev response exceeded the bounded output limit.', { stage: 'transport', category: 'size' });
       }
       chunks.push(value);
     }
