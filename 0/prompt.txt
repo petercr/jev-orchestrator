@@ -1,0 +1,130 @@
+ok commit pusj and pr
+
+---
+
+PR is merged
+
+---
+
+ok keep going with the live test in the test repo
+
+---
+
+approve
+
+---
+
+did you try running the issue fro mthe test repo outside of this dir, the 1 from earlier in our convo with the test issue 80
+
+---
+
+from eailwer in this transcript
+
+---
+
+test repo instructions: Yep — I found a **really clean first target** for the JEV orchestrator.
+
+### Best first real-world test: `jspdf-md-renderer` #80
+
+[Issue #80 — Rename vitest.config.ts to vitest.config.mts](https://github.com/JeelGajera/jspdf-md-renderer/issues/80?utm_source=chatgpt.com)  
+[Repository — JeelGajera/jspdf-md-renderer](https://github.com/JeelGajera/jspdf-md-renderer?utm_source=chatgpt.com)
+
+This one is almost ideal for what we want:
+
+- Small repo — roughly **761 KB**
+- TypeScript + Vitest
+- Issue is **open, unassigned, and has zero comments**
+- No matching open PR right now
+- Labeled **`good first issue`**
+- Created **today, October 3, 2026**, by the repo owner
+- Very explicit acceptance criteria, but the agent still has to inspect the repo rather than blindly edit one line
+- Has a real verification pipeline
+
+The actual task is to fix this Vite/Vitest warning by changing:
+
+```text
+vitest.config.ts
+        ↓
+vitest.config.mts
+```
+
+Then the agent needs to discover that `tsconfig.test.json` explicitly references the old filename:
+
+```json
+"include": ["src", "test", "vitest.config.ts"]
+```
+
+and update any other references it discovers.
+
+Success requires:
+
+```bash
+npm test
+npm run typecheck
+npm run verify
+```
+
+The project's contributor instructions specifically say to use:
+
+```bash
+npm ci
+npm run verify
+```
+
+That makes this much better than some fake toy issue because we can see whether **JEV actually follows repository instructions, searches references, makes the minimum patch, and validates its work**.
+
+### I’d use this as JEV test #1
+
+Give JEV essentially just:
+
+```text
+https://github.com/JeelGajera/jspdf-md-renderer/issues/80
+```
+
+and see whether it can independently perform the full loop:
+
+**issue → inspect repo → understand constraints → plan → modify → test → self-review → produce final summary/diff**
+
+Don't tell it which files to modify beyond what's in the issue. That's exactly the behavior we're trying to evaluate.
+
+There are two other good levels after that:
+
+| Test | Issue | What it tests |
+|---|---|---|
+| **Smoke test** | [fork-commit-merge #8201](https://github.com/fork-commit-merge/fork-commit-merge/issues/8201?utm_source=chatgpt.com) | Extremely easy TypeScript/Vitest task; tests basic end-to-end orchestration |
+| **Best first test** | **jspdf-md-renderer #80** | Repo inspection, search, filesystem change, verification |
+| **Next level** | [TrusTrove #949](https://github.com/TrusTrove/TrusTrove-app/issues/949?utm_source=chatgpt.com) | Actual bug fix + new tests + boundary-case reasoning |
+
+The **TrusTrove #949** issue is especially good for run #2: `truncateAddress()` mishandles strings ≤10 characters, and JEV has to change production TypeScript **and write Vitest tests for lengths 1, 10, 11, empty input, and a normal 56-character Stellar address**. It's still labeled `good first issue` / `complexity:low`, but it's a more legitimate coding task.
+
+**I'd start with `jspdf-md-renderer #80`.** It's simple enough that when something goes wrong we'll know it was the orchestrator rather than the issue being complicated.
+
+If you want, next we can **fork that repo into your GitHub account and use it as the first live JEV run.**
+
+---
+
+its at ~./jspdf-md-renderer
+
+---
+
+approve
+
+---
+
+so how do the 2 different runs compare show me a nice table
+
+---
+
+ok open issue to deal with orchestration limits
+
+---
+
+issue 24
+
+---
+
+rerun the piolet
+
+---
+
+work on remaining issues

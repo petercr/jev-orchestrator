@@ -1,0 +1,100 @@
+{
+  "cli_version": "0.10.7-nightly.202609190623.ae303f31d",
+  "checkpoint_id": "01M43QX8J05SMVWRYWV59WA0BY",
+  "session_id": "01a102d4-3858-7fd0-bf6d-4d70ac86367a",
+  "strategy": "manual-commit",
+  "created_at": "2026-10-04T15:18:26.566744943Z",
+  "branch": "fix/orchestration-limits",
+  "checkpoints_count": 3,
+  "save_step_count": 3,
+  "files_touched": [
+    "AGENTS.md",
+    "PLAN.md",
+    "README.md",
+    "src/agents/context.ts",
+    "src/ai/contract.test.ts",
+    "src/ai/contract.ts",
+    "src/ai/errors.ts",
+    "src/ai/native.ts",
+    "src/ai/providers.test.ts",
+    "src/ai/transport.ts",
+    "src/cli.cancellation.test.ts",
+    "src/cli.ts",
+    "src/logging/trace.ts",
+    "src/mock.ts",
+    "src/orchestration/cancellation.test.ts",
+    "src/orchestration/candidate.test.ts",
+    "src/orchestration/candidate.ts",
+    "src/orchestration/completion.test.ts",
+    "src/orchestration/execute.test.ts",
+    "src/orchestration/execute.ts",
+    "src/orchestration/loop.test.ts",
+    "src/orchestration/loop.ts",
+    "src/orchestration/recovery.test.ts",
+    "src/policy.test.ts",
+    "src/policy.ts",
+    "src/repo/inspect.ts",
+    "src/repo/issue.test.ts",
+    "src/repo/issue.ts",
+    "src/repo/validation.test.ts",
+    "src/repo/validation.ts",
+    "src/types.ts"
+  ],
+  "agent": "Codex",
+  "model": "gpt-6.1-sol",
+  "turn_id": "f98a15f73b73",
+  "compact_transcript_start": 0,
+  "token_usage": {
+    "input_tokens": 1757073,
+    "cache_creation_tokens": 0,
+    "cache_read_tokens": 30082688,
+    "output_tokens": 239017,
+    "api_call_count": 287,
+    "subagent_tokens_complete": true
+  },
+  "session_metrics": {
+    "turn_count": 3
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-10-04T15:18:26.238977785Z",
+    "agent_lines": 1690,
+    "agent_removed": 137,
+    "human_added": 0,
+    "human_modified": 0,
+    "human_removed": 0,
+    "total_committed": 1690,
+    "total_lines_changed": 1827,
+    "agent_percentage": 100,
+    "metric_version": 2
+  },
+  "prompt_attributions": [
+    {
+      "checkpoint_number": 1,
+      "user_lines_added": 0,
+      "user_lines_removed": 0,
+      "agent_lines_added": 0,
+      "agent_lines_removed": 0
+    },
+    {
+      "checkpoint_number": 2,
+      "user_lines_added": 0,
+      "user_lines_removed": 0,
+      "agent_lines_added": 1309,
+      "agent_lines_removed": 95
+    },
+    {
+      "checkpoint_number": 3,
+      "user_lines_added": 0,
+      "user_lines_removed": 0,
+      "agent_lines_added": 1329,
+      "agent_lines_removed": 95
+    },
+    {
+      "checkpoint_number": 4,
+      "user_lines_added": 0,
+      "user_lines_removed": 0,
+      "agent_lines_added": 1690,
+      "agent_lines_removed": 137
+    }
+  ]
+}
