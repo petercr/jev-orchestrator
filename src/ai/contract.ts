@@ -26,6 +26,8 @@ const ACTION_CRITERIA = {
   FINISH: 'The requested task is complete and adequately validated.',
 } as const;
 
+export const PROBABILITY_SUM_TOLERANCE = 0.001;
+
 export type ProviderEvaluation = {
   assessment: AgentAssessment;
   rawAnswers: unknown;
@@ -76,7 +78,9 @@ export function normalizeAssessment(answers: unknown, confidence: unknown, nativ
   if ((native && ACTIONS.some((action) => probabilities[action] === undefined)) || probabilities[choice] === undefined) {
     invalidAnswer({ stage: 'distribution', category: 'missing_action' });
   }
-  if (Math.abs(total - 1) > 0.001) invalidAnswer({ stage: 'distribution', category: 'sum' });
+  if (Math.abs(total - 1) > PROBABILITY_SUM_TOLERANCE) {
+    invalidAnswer({ stage: 'distribution', category: 'sum', probabilitySum: total });
+  }
   if (Object.values(probabilities).some((probability) => probability > (probabilities[choice] ?? 0))) {
     invalidAnswer({ stage: 'distribution', category: 'choice' });
   }

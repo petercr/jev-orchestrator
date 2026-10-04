@@ -2,13 +2,16 @@ import { describe, expect, it, vi } from 'vitest';
 import {
   CliUsageError,
   createDecisionOutput,
+  createErrorOutput,
   EXIT_CODES,
   exitCodeFor,
+  formatEvaluationFailure,
   parseArgs,
   parseApprovalChoice,
   printApprovalProposal,
 } from './cli.js';
 import { buildWorkerContext } from './agents/context.js';
+import { evaluationFailure, JevEvaluationError } from './ai/errors.js';
 import { mockEvaluation } from './mock.js';
 import type { AgentState, PolicyDecision } from './types.js';
 
@@ -40,6 +43,35 @@ const policy: PolicyDecision = {
   override: false,
   reason: 'Clear recommendation.',
 };
+
+describe('evaluation error reporting', () => {
+  it('exposes allowlisted evaluation diagnostics in the JSON error contract', () => {
+    const error = new JevEvaluationError('invalid_response', 'Jev returned invalid evaluation data.', {
+      stage: 'distribution', category: 'sum', probabilitySum: 0.99,
+    });
+    Object.assign(error.diagnostic, { rawBody: 'untrusted upstream body' });
+    const output = JSON.parse(JSON.stringify(createErrorOutput(error)));
+    expect(output).toMatchObject({
+      schemaVersion: 1, status: 'error', exitCode: 1,
+      error: { kind: 'operational', failure: { code: 'invalid_response', stage: 'distribution', category: 'sum', probabilitySum: 0.99 } },
+    });
+    expect(JSON.stringify(output)).not.toContain('untrusted upstream body');
+  });
+
+  it('omits unavailable numeric evidence and preserves the usage-error contract', () => {
+    const error = new JevEvaluationError('invalid_response', 'Invalid.', { stage: 'answers', category: 'shape' });
+    expect(createErrorOutput(error).error.failure).not.toHaveProperty('probabilitySum');
+    expect(formatEvaluationFailure(evaluationFailure(error))).toBe('invalid_response at answers/shape');
+    expect(createErrorOutput(new CliUsageError('Invalid flags.'))).toEqual({
+      schemaVersion: 1, status: 'error', error: { kind: 'usage', message: 'Invalid flags.' }, exitCode: 2,
+    });
+  });
+
+  it('shows a rejected zero total without hiding or rounding the evidence', () => {
+    const error = new JevEvaluationError('invalid_response', 'Invalid.', { stage: 'distribution', category: 'sum', probabilitySum: 0 });
+    expect(formatEvaluationFailure(evaluationFailure(error))).toBe('invalid_response at distribution/sum; probability sum 0, expected 1 (tolerance 0.001)');
+  });
+});
 
 describe('parseArgs', () => {
   it('parses known flags independently of positional argument order', () => {

@@ -170,6 +170,19 @@ describe.each(providers)('%s evaluation transport', (provider) => {
     await expect(evaluateAgentState(state())).rejects.toMatchObject({ code: 'invalid_response' });
   });
 
+  it.each([0.99, 1.01])('rejects probability sum %s with available diagnostics and no automatic retry', async (total) => {
+    const payload = body(provider);
+    const probabilities = Object.fromEntries(ACTIONS.map((action) => [action, action === 'SEARCH_REPO' ? 0.9 : action === 'READ_FILE' ? total - 0.9 : 0]));
+    (payload.answers as Record<string, Record<string, unknown>>).nextAction!.probabilities = probabilities;
+    fetchMock.mockImplementation(async () => Response.json(payload));
+    await expect(evaluateAgentState(state())).rejects.toMatchObject({
+      code: 'invalid_response', diagnostic: provider === 'vercel'
+        ? { stage: 'answers', category: 'shape' }
+        : { stage: 'distribution', category: 'sum', probabilitySum: total },
+    });
+    expect(fetchMock).toHaveBeenCalledOnce();
+  });
+
   it.each([[401, 'authentication'], [403, 'authorization'], [402, 'billing'], [404, 'model_unavailable'], [429, 'rate_limit'], [503, 'service_unavailable'], [529, 'service_unavailable']] as const)
     ('classifies HTTP %i safely with at most one transient retry', async (status, code) => {
       fetchMock.mockImplementation(async () => Response.json({ error: { code: status, message: `Free tier users do not have access to this model. ${keys.join(' ')}` } }, { status }));

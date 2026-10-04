@@ -6,6 +6,8 @@ import path from 'node:path';
 import { createInterface, type Interface } from 'node:readline/promises';
 import { pathToFileURL } from 'node:url';
 import { evaluateAgentState } from './ai/evaluate.js';
+import { PROBABILITY_SUM_TOLERANCE } from './ai/contract.js';
+import { evaluationFailure, JevEvaluationError, type EvaluationFailure } from './ai/errors.js';
 import { resolveJevConfiguration } from './config.js';
 import { requireBoundedTask } from './limits.js';
 import { writeTrace } from './logging/trace.js';
@@ -70,6 +72,7 @@ type ErrorOutput = {
   error: {
     kind: 'usage' | 'operational';
     message: string;
+    failure?: EvaluationFailure;
   };
   exitCode: number;
 };
@@ -363,7 +366,10 @@ async function promptForEvaluationRecovery(
   context: EvaluationRecoveryContext,
   options: ExecutionOptions,
 ): Promise<'continue' | 'stop'> {
-  console.log(`\nEvaluation failed: ${context.failure.code} at ${context.failure.stage}/${context.failure.category}${context.failure.field ? ` (${context.failure.field})` : ''}.`);
+  console.log(`\nEvaluation failed: ${formatEvaluationFailure(context.failure)}.`);
+  if (context.failure.code === 'invalid_response') {
+    console.log('Continue requests a fresh evaluation within the remaining budget. It does not approve a repository action.');
+  }
   console.log(`Edits and evidence are preserved. ${context.remainingIterations} iterations remain; worker calls used: Codex ${context.state.codexCalls}/2, Claude ${context.state.claudeCalls}/2.`);
   console.log(`Trace: ${redactSensitiveText(context.tracePath)}`);
   while (true) {
@@ -472,14 +478,22 @@ export function exitCodeFor(error: unknown): number {
     : EXIT_CODES.operationalError;
 }
 
-function errorOutput(error: unknown): ErrorOutput {
+export function formatEvaluationFailure(failure: EvaluationFailure): string {
+  const sum = failure.probabilitySum === undefined ? ''
+    : `; probability sum ${failure.probabilitySum}, expected 1 (tolerance ${PROBABILITY_SUM_TOLERANCE})`;
+  return `${failure.code} at ${failure.stage}/${failure.category}${failure.field ? ` (${failure.field})` : ''}${sum}`;
+}
+
+export function createErrorOutput(error: unknown): ErrorOutput {
   const usage = error instanceof CliUsageError;
+  const failure = error instanceof JevEvaluationError ? evaluationFailure(error) : undefined;
   return {
     schemaVersion: 1,
     status: 'error',
     error: {
       kind: usage ? 'usage' : 'operational',
       message: redactSensitiveText(error instanceof Error ? error.message : String(error)),
+      ...(failure === undefined ? {} : { failure }),
     },
     exitCode: exitCodeFor(error),
   };
@@ -515,7 +529,7 @@ export async function main(argv: string[] = process.argv.slice(2)): Promise<void
     console.log(`\nLoop status: ${result.status}`);
     console.log(`Iterations: ${result.iterations}`);
     console.log(`Trace: ${redactSensitiveText(path.relative(process.cwd(), result.tracePath))}`);
-    if (result.failure) console.log(`Failure: ${result.failure.code} at ${result.failure.stage}/${result.failure.category}${result.failure.field ? ` (${result.failure.field})` : ''}.`);
+    if (result.failure) console.log(`Failure: ${formatEvaluationFailure(result.failure)}.`);
     if (result.status === 'iteration_limit') {
       console.log('Task completion was not approved before the iteration limit; edits and evidence are preserved. Exit code: 1.');
     }
@@ -537,11 +551,13 @@ function isDirectInvocation(): boolean {
 
 if (isDirectInvocation()) {
   void main().catch((error: unknown) => {
+    const output = createErrorOutput(error);
     if (wantsJsonError(process.argv.slice(2))) {
-      console.error(JSON.stringify(errorOutput(error)));
+      console.error(JSON.stringify(output));
     } else {
-      console.error(`\nError: ${redactSensitiveText(error instanceof Error ? error.message : String(error))}`);
+      console.error(`\nError: ${output.error.message}`);
+      if (output.error.failure) console.error(`Failure: ${formatEvaluationFailure(output.error.failure)}.`);
     }
-    process.exitCode = exitCodeFor(error);
+    process.exitCode = output.exitCode;
   });
 }
