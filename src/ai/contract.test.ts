@@ -40,6 +40,45 @@ describe('evaluation contract diagnostics and progress', () => {
     expect(evaluationFailure(error)).toEqual({ code: 'request_failed', stage: 'transport', category: 'request' });
   });
 
+  it.each([false, true])('retains the computed sum when rejecting a distribution (native: %s)', (native) => {
+    const data = answers();
+    data.nextAction!.probabilities = Object.fromEntries(ACTIONS.map((action) => [action, action === 'READ_ISSUE' ? 0.99 : 0]));
+    let rejected: unknown;
+    try { normalizeAssessment(data, 0.99, native); } catch (error) { rejected = error; }
+    expect(evaluationFailure(rejected)).toEqual({
+      code: 'invalid_response', stage: 'distribution', category: 'sum', probabilitySum: 0.99,
+    });
+  });
+
+  it.each(['raw upstream secret', -1, ACTIONS.length + 0.01, NaN, Infinity, null, {}])(
+    'does not retain an unsafe sum diagnostic: %s', (probabilitySum) => {
+      const error = new JevEvaluationError('invalid_response', 'raw upstream body', { stage: 'distribution', category: 'sum' });
+      Object.assign(error.diagnostic, { probabilitySum, rawBody: 'raw upstream body' });
+      expect(evaluationFailure(error)).toEqual({ code: 'invalid_response', stage: 'distribution', category: 'sum' });
+    },
+  );
+
+  it('does not attach probability totals to other failure categories', () => {
+    const error = new JevEvaluationError('invalid_response', 'invalid', { stage: 'answers', category: 'value', field: 'stuck' });
+    Object.assign(error.diagnostic, { probabilitySum: 0.99 });
+    expect(evaluationFailure(error)).toEqual({ code: 'invalid_response', stage: 'answers', category: 'value', field: 'stuck' });
+  });
+
+  it.each([0, ACTIONS.length])('retains a computed total at the safe diagnostic bound %s', (total) => {
+    const data = answers();
+    data.nextAction!.probabilities = Object.fromEntries(ACTIONS.map((action) => [action, total === 0 ? 0 : 1]));
+    let rejected: unknown;
+    try { normalizeAssessment(data, 0.99, true); } catch (error) { rejected = error; }
+    expect(evaluationFailure(rejected)).toMatchObject({ probabilitySum: total });
+  });
+
+  it('preserves acceptable probabilities and confidence without renormalizing them', () => {
+    const data = answers();
+    const probabilities = Object.fromEntries(ACTIONS.map((action) => [action, action === 'READ_ISSUE' ? 0.9005 : action === 'ASK_USER' ? 0.1 : 0]));
+    data.nextAction!.probabilities = probabilities;
+    expect(normalizeAssessment(data, 0.8, true).nextAction).toEqual({ choice: 'READ_ISSUE', probabilities, confidence: 0.8 });
+  });
+
   it('bounds escaped progress and preserves the unverified-worker and independent-check distinction', () => {
     vi.stubEnv('TYPESAFE_AI_API_KEY', 'credential-value');
     const initial = createInitialState({ root: '/repo', packageManager: 'npm', scripts: ['test'], validationScripts: ['test'], gitStatus: [], topLevelFiles: [] }, 'Task');

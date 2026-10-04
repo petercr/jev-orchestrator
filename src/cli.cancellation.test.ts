@@ -138,7 +138,7 @@ describe('CLI interruption lifecycle', () => {
     vi.stubEnv('TYPESAFE_API_KEY', 'test-key');
     vi.stubEnv('JEV_PROVIDER', 'typesafe');
     const evaluate = vi.spyOn(evaluation, 'evaluateAgentState')
-      .mockRejectedValueOnce(new JevEvaluationError('invalid_response', 'raw upstream body', { stage: 'distribution', category: 'sum' }))
+      .mockRejectedValueOnce(new JevEvaluationError('invalid_response', 'raw upstream body', { stage: 'distribution', category: 'sum', probabilitySum: 0.99 }))
       .mockResolvedValueOnce(mockEvaluation());
     terminal.question.mockResolvedValueOnce('approve').mockResolvedValueOnce('continue').mockResolvedValueOnce('stop');
     const outcome = await runCliOrchestration(opts);
@@ -147,9 +147,12 @@ describe('CLI interruption lifecycle', () => {
     expect(terminal.question).toHaveBeenCalledTimes(3);
     expect(terminal.question.mock.calls[0]?.[0]).toContain('continue');
     expect(terminal.question.mock.calls[2]?.[0]).toContain('approve, reject, stop');
-    expect(vi.mocked(console.log).mock.calls.flat().join('\n')).not.toContain('raw upstream');
+    const output = vi.mocked(console.log).mock.calls.flat().join('\n');
+    expect(output).not.toContain('raw upstream');
+    expect(output).toContain('probability sum 0.99, expected 1 (tolerance 0.001)');
+    expect(output).toContain('Continue requests a fresh evaluation within the remaining budget');
     const entries = (await readFile(outcome.tracePath, 'utf8')).trim().split('\n').map((line) => JSON.parse(line));
-    expect(entries[0]).toMatchObject({ failure: { code: 'invalid_response', stage: 'distribution', category: 'sum' }, approval: null });
+    expect(entries[0]).toMatchObject({ failure: { code: 'invalid_response', stage: 'distribution', category: 'sum', probabilitySum: 0.99 }, approval: null });
     expect(entries[1]).toMatchObject({ recovery: { decision: 'continue' } });
     expect(entries[2]).toMatchObject({ approval: { kind: 'stop' }, toolResult: null });
   });

@@ -120,12 +120,12 @@ describe('orchestration recovery and issue progress', () => {
     expect(runner).toHaveBeenCalledOnce();
     expect(runner.mock.calls[0]?.[0]).toMatchObject({ command: 'npm', args: ['run', 'verify'], cwd: repo.root });
     expect(recoverEvaluation).toHaveBeenCalledWith(expect.objectContaining({
-      failure: { code: 'invalid_response', stage: 'distribution', category: 'sum' }, remainingIterations: 4,
+      failure: { code: 'invalid_response', stage: 'distribution', category: 'sum', probabilitySum: 0.4 }, remainingIterations: 4,
       state: expect.objectContaining({ codexCalls: 1, tests: { ran: false } }),
     }));
     expect(approve).toHaveBeenCalledTimes(5);
     const trace = await records(outcome.tracePath);
-    expect(trace[3]).toMatchObject({ iteration: 4, evaluation: null, policy: null, approval: null, toolInput: null, toolResult: null, failure: { stage: 'distribution', category: 'sum' } });
+    expect(trace[3]).toMatchObject({ iteration: 4, evaluation: null, policy: null, approval: null, toolInput: null, toolResult: null, failure: { stage: 'distribution', category: 'sum', probabilitySum: 0.4 } });
     expect(trace[4]).toMatchObject({ recovery: { available: true, decision: 'continue' } });
     expect(JSON.stringify(trace)).not.toContain('credential-not-for-traces');
   });

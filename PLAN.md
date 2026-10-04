@@ -944,6 +944,85 @@ original checkout's HEAD, status, diff, and 184 file hashes. Trace, terminal log
 full test log, patch, fingerprints, and receipt are under
 `/tmp/jev-issue80-routing-KupNZ9`.
 
+## Actionable evaluation-failure diagnostics
+
+Implementation (2026-10-04): make the recurring live-pilot
+`distribution/sum` rejection diagnosable without changing acceptance rules.
+The [TypeSafe API schema](https://api.typesafe.ai/openapi.json) describes
+approximate probability sums without specifying a tolerance; prior failure
+traces retained only the classification, not the observed total. Local response
+validation now retains its computed `probabilitySum`. The failure boundary
+accepts it only for `invalid_response` at `distribution/sum`, as a finite
+number between zero and the known action count. Arbitrary text, extra fields,
+nonfinite numbers, out-of-range totals, and unrelated classifications cannot
+introduce numeric evidence.
+
+The CLI shows the observed sum, expected total, and existing `0.001` tolerance
+in recovery prompts and terminal errors. Decision-only JSON evaluation errors
+include allowlisted diagnostics under `error.failure`. Gateway SDK failures
+that precede local normalization keep their existing classification without
+fabricated totals. Recovery explains that explicit continuation requests a new
+evaluation within the remaining budget and does not approve an action. Invalid
+answers remain rejected without automatic retries or probability rescaling;
+confidence rules, completion guards, cancellation, and budgets are unchanged.
+
+Focused regressions passed 162 tests across five files. `pnpm check`, all 412
+tests across 25 files, and `pnpm build` passed. Tests cover missing/unsafe numeric
+diagnostics, unchanged accepted probabilities and confidence, native and SDK
+rejections, JSON compatibility, and retention of the computed sum through
+failure tracing and explicit recovery after edits.
+
+An offline installed-package check used a fresh consumer and fixture outside
+this repository. An intercepted provider response with total `0.99` produced
+exit 1 in both human and JSON decision-only modes. The interactive CLI rejected
+`approve` at the recovery prompt without another request, reevaluated only after
+`continue`, then required separate review of the new candidate. Stopping there
+returned exit 0 with two iterations, no worker calls, no tool execution, and
+unchanged fixture files. All 13 receipt checks passed. Transport calls were
+intercepted; no live Jev request, coding worker, or new issue #80 pilot ran.
+Artifacts are under `/tmp/jev-evaluation-diagnostics-51I2Ii`.
+
+## Standalone Codex comparison
+
+Live benchmark (2026-10-04): ran standalone Codex against issue #80 in a
+fresh external clone at the same `5a910ba` baseline as the PR #26 JEV pilot.
+It used Codex CLI 0.160.0, `gpt-5.6-terra`, high reasoning, the same
+`workspace-write` sandbox and noninteractive approval settings, and a
+15-minute limit. The task contained only the issue URL plus general execution
+boundaries; no issue body, file hints, or prepared worker evidence was supplied.
+Live public web search was enabled so Codex could retrieve the issue itself.
+
+| Observation | Recorded PR #26 JEV pilot | Standalone Codex |
+| --- | --- | --- |
+| Codex processes | 1 | 1 |
+| Codex elapsed time | 136.0 s | 132.7 s |
+| Root instructions | Read both contributor files before delegation | No recorded reads of `CONTRIBUTING.md` or `CLAUDE.md` |
+| Interactive decisions | Seven candidate approvals, including manual worker/completion choices; one explicit evaluation recovery | None during the Codex run |
+| Worker validation | Reported sandbox listener restrictions | Two `verify` attempts failed with `listen EPERM` |
+| Independent validation | 296 tests, verify, and build passed | 296 tests, verify, and build passed |
+| Patch | Config rename and filename reference update | Identical contents to the JEV patch |
+
+Standalone Codex exited 0 and accurately disclosed its blocked test verification.
+Independent `npm run verify` then passed lint, typechecking, and all 296 tests
+across 28 files, with the original warning absent; `npm run build` also passed.
+The config remained byte-identical, the lockfile was unchanged, and no other
+tracked files changed. A complete unstaged patch passed reverse application
+checking. All 21 acceptance/evidence checks passed. The original test checkout's
+184 files and the orchestrator's existing source changes were preserved during
+the benchmark; this section is the subsequent documentation update.
+
+Codex reported 226,409 input tokens, including 198,912 cached input tokens,
+and 2,591 output tokens. Comparable JEV token totals were not recorded.
+These timings cover different context preparation: JEV supplied approved
+evidence, while standalone Codex fetched the issue itself. JEV's approximate
+293-second recorded overall window also includes operator approvals and
+independent checks. This single small issue does not establish general speed,
+cost, or autonomous completion performance. The JEV column uses the existing
+live pilot; this benchmark made no new JEV evaluation request.
+
+Events, invocation, final message, full independent logs, patch, fingerprints,
+and receipt are under `/tmp/jev-issue80-codex-am91kovj`.
+
 ## Reference, not a template
 
 [`gargpratyush/jev-router`](https://github.com/gargpratyush/jev-router) is a

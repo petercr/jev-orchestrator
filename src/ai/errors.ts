@@ -1,6 +1,6 @@
 import { APICallError, InvalidResponseDataError, JSONParseError, NoSuchModelError, RetryError, TypeValidationError } from 'ai';
 import { JEV_PROVIDERS } from '../config.js';
-import type { JevProvider } from '../types.js';
+import { ACTIONS, type JevProvider } from '../types.js';
 
 export const JEV_EVALUATION_TIMEOUT_MS = 10_000;
 export const JEV_EVALUATION_MAX_RETRIES = 1;
@@ -20,6 +20,7 @@ export type EvaluationDiagnostic = {
   stage: 'transport' | 'json' | 'answers' | 'next_action' | 'distribution' | 'confidence' | 'metadata' | 'model';
   category: 'request' | 'shape' | 'value' | 'sum' | 'choice' | 'missing_action' | 'unknown_action' | 'size';
   field?: 'taskComplete' | 'needsMoreInformation' | 'needsTesting' | 'stuck';
+  probabilitySum?: number;
 };
 
 export type EvaluationFailure = EvaluationDiagnostic & { code: JevEvaluationErrorCode };
@@ -44,11 +45,16 @@ export function evaluationFailure(error: unknown): EvaluationFailure {
     const stages: EvaluationDiagnostic['stage'][] = ['transport', 'json', 'answers', 'next_action', 'distribution', 'confidence', 'metadata', 'model'];
     const categories: EvaluationDiagnostic['category'][] = ['request', 'shape', 'value', 'sum', 'choice', 'missing_action', 'unknown_action', 'size'];
     const fields: NonNullable<EvaluationDiagnostic['field']>[] = ['taskComplete', 'needsMoreInformation', 'needsTesting', 'stuck'];
+    const probabilitySum = error.diagnostic?.probabilitySum;
     return {
       code: codes.includes(error.code) ? error.code : 'request_failed',
       stage: stages.includes(error.diagnostic?.stage) ? error.diagnostic.stage : 'transport',
       category: categories.includes(error.diagnostic?.category) ? error.diagnostic.category : 'request',
       ...(error.diagnostic?.field && fields.includes(error.diagnostic.field) ? { field: error.diagnostic.field } : {}),
+      ...(error.code === 'invalid_response' && error.diagnostic?.stage === 'distribution' &&
+        error.diagnostic.category === 'sum' && typeof probabilitySum === 'number' &&
+        Number.isFinite(probabilitySum) && probabilitySum >= 0 && probabilitySum <= ACTIONS.length
+        ? { probabilitySum } : {}),
     };
   }
   return { code: 'request_failed', stage: 'transport', category: 'request' };

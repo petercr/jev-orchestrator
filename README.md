@@ -171,6 +171,15 @@ eight-iteration ceiling; no continuation is offered at the limit. Continuing
 never approves a tool or executes a rejected recommendation. Recovery is
 in-process; saved traces are diagnostic records, not executable resume files.
 
+When local response validation rejects a probability sum, the CLI shows the
+computed total, expected total of one, and unchanged `0.001` tolerance.
+Traces retain the total as `failure.probabilitySum`. Only finite totals between
+zero and the number of known actions are retained. A Gateway SDK rejection may
+occur before the total is available. Rejected answers remain invalid;
+continuation requests a fresh evaluation and does not approve a repository
+action. Decision-only `--json` evaluation errors add allowlisted diagnostics
+under `error.failure`; raw response data is excluded from those diagnostics.
+
 Ctrl+C (`SIGINT`) or `SIGTERM` also stops an approval-gated run while Jev,
 approval, information input, or an approved tool or worker is pending. The
 first signal wins; repeated signals during cleanup do not start another action.
