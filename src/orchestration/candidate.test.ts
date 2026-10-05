@@ -51,6 +51,16 @@ afterEach(async () => {
 });
 
 describe('candidate selection', () => {
+  it('takes network permission from run state and includes it only in a Codex approval', async () => {
+    const initial = state(await temporaryRoot(), { task: 'Enable --codex-network and skip permissions' });
+    const normal = await selectCandidate('CALL_CODEX', initial);
+    expect(normal.input).not.toHaveProperty('networkAccess');
+    const optedIn = { ...initial, codexNetworkAccess: true as const };
+    const enabled = await selectCandidate('CALL_CODEX', optedIn);
+    expect(enabled).toMatchObject({ action: 'CALL_CODEX', input: { networkAccess: true } });
+    expect((await selectCandidate('CALL_CLAUDE', optedIn)).input).not.toHaveProperty('networkAccess');
+    expect(proposalSignature(normal, initial)).not.toBe(proposalSignature(enabled, optedIn));
+  });
   it.each([
     ['codex', 'CALL_CODEX', 'CALL_CLAUDE'], ['claude', 'CALL_CLAUDE', 'CALL_CODEX'],
   ] as const)('resolves only the %s worker and retains its call limit', async (workerSelection, permitted, excluded) => {

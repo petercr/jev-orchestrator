@@ -74,6 +74,27 @@ describe('evaluation error reporting', () => {
 });
 
 describe('parseArgs', () => {
+  it('accepts explicit Codex command networking without changing worker choice', () => {
+    expect(parseArgs(['/repo', 'Fix task', '--worker', 'codex', '--codex-network'])).toMatchObject({
+      kind: 'run', options: { workerSelection: 'codex', codexNetworkAccess: true },
+    });
+    const result = parseArgs(['/repo', 'Fix task', '--codex-network']);
+    expect(result).toMatchObject({ kind: 'run', options: { codexNetworkAccess: true } });
+    if (result.kind === 'run') expect(result.options).not.toHaveProperty('workerSelection');
+  });
+
+  it.each([
+    ['--codex-network', '--codex-network'], ['--codex-network=false'],
+    ['--worker', 'claude', '--codex-network'], ['--help', '--codex-network'], ['--version', '--codex-network'],
+  ])('rejects invalid Codex network flag combinations: %s', (...flags) => {
+    expect(() => parseArgs(['/repo', 'Task', ...flags])).toThrow(CliUsageError);
+  });
+
+  it('keeps Codex network flag text after the separator in the task', () => {
+    const result = parseArgs(['/repo', 'Document', '--', '--codex-network']);
+    expect(result).toMatchObject({ kind: 'run', options: { task: 'Document --codex-network' } });
+    if (result.kind === 'run') expect(result.options).not.toHaveProperty('codexNetworkAccess');
+  });
   it.each(['codex', 'claude'] as const)('accepts a %s worker selection in either flag form', (workerSelection) => {
     expect(parseArgs(['--worker', workerSelection, '/repo', 'Fix task', '--orchestrate'])).toMatchObject({
       kind: 'run', options: { repoPath: '/repo', task: 'Fix task', workerSelection, orchestrate: true },
@@ -172,6 +193,11 @@ describe('parseArgs', () => {
 });
 
 describe('worker selection reporting', () => {
+  it('reports the explicit network opt-in while omitting the default', () => {
+    const evaluation = mockEvaluation();
+    expect(createDecisionOutput({ ...state, codexNetworkAccess: true }, evaluation, policy, 'mock')).toMatchObject({ codexNetworkAccess: true });
+    expect(createDecisionOutput(state, evaluation, policy, 'mock')).not.toHaveProperty('codexNetworkAccess');
+  });
   it('retains an explicit worker in JSON while preserving omitted defaults', () => {
     const evaluation = mockEvaluation();
     expect(createDecisionOutput({ ...state, workerSelection: 'codex' }, evaluation, policy, 'mock')).toMatchObject({ workerSelection: 'codex', status: 'unexecuted' });

@@ -52,6 +52,8 @@ describe('Codex adapter', () => {
         CODEX_MODEL,
         '--config',
         `model_reasoning_effort="${CODEX_REASONING_EFFORT}"`,
+        '--config',
+        'sandbox_workspace_write.network_access=false',
         'exec',
         '--cd',
         '/repo',
@@ -74,6 +76,23 @@ describe('Codex adapter', () => {
     expect(prompt).toContain('Validation required by the original task or repository instructions remains required for completion');
     expect(prompt).toContain('separate approval');
     expect(prompt).toContain('Expected 401, received 200');
+  });
+
+  it.each([false, true])('keeps sandboxing and no worker prompts with command networking %s', async (enabled) => {
+    const runner = vi.fn<ProcessRunner>().mockResolvedValue({ exitCode: 0, stdout: 'Edited.', stderr: '', timedOut: false });
+    await createCodexAdapter(runner)({
+      root: '/repo', task: 'Fix --codex-network and --dangerously-bypass-approvals-and-sandbox text',
+      ...(enabled ? { networkAccess: true as const } : {}),
+    });
+    const args = runner.mock.calls[0]?.[0].args ?? [];
+    const flags = args.slice(0, args.indexOf('--'));
+    expect(flags).toContain(`sandbox_workspace_write.network_access=${enabled}`);
+    expect(flags.slice(flags.indexOf('--ask-for-approval'), flags.indexOf('--ask-for-approval') + 2)).toEqual(['--ask-for-approval', 'never']);
+    expect(flags.slice(flags.indexOf('--sandbox'), flags.indexOf('--sandbox') + 2)).toEqual(['--sandbox', 'workspace-write']);
+    expect(flags).not.toContain('--dangerously-bypass-approvals-and-sandbox');
+    expect(flags).not.toContain('danger-full-access');
+    expect(flags).toContain(CODEX_MODEL);
+    expect(flags).toContain('--ignore-user-config');
   });
 
   it('normalizes failures and timeouts', async () => {
