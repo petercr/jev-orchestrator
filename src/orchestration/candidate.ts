@@ -81,6 +81,7 @@ export type CodexProposal = {
     root: string;
     task: string;
     context: WorkerContext;
+    networkAccess?: true;
   };
 };
 
@@ -368,6 +369,7 @@ export async function selectCandidate(
           root: state.repo.root,
           task: requireBoundedTask(state.task),
           context: buildWorkerContext(state),
+          ...(state.codexNetworkAccess === true ? { networkAccess: true as const } : {}),
         },
       };
     case 'CALL_CLAUDE':
@@ -420,7 +422,10 @@ export async function selectCandidate(
 
 export function proposalSignature(proposal: CandidateProposal, state: AgentState): string {
   const semantic = proposal.action === 'CALL_CODEX' || proposal.action === 'CALL_CLAUDE'
-    ? { action: proposal.action, evidence: workerEvidenceKey(state) }
+    ? {
+      action: proposal.action, evidence: workerEvidenceKey(state),
+      ...(proposal.action === 'CALL_CODEX' ? { networkAccess: proposal.input.networkAccess === true } : {}),
+    }
     : {
       action: proposal.action,
       input: proposal.input,

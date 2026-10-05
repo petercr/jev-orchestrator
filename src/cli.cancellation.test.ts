@@ -46,6 +46,16 @@ async function options(): Promise<CliOptions> {
 }
 
 describe('CLI interruption lifecycle', () => {
+  it('retains and reports the network opt-in through both CLI modes', async () => {
+    const opts = { ...await options(), workerSelection: 'codex' as const, codexNetworkAccess: true as const };
+    expect(await runDecision({ ...opts, noTrace: true })).toMatchObject({ codexNetworkAccess: true });
+    terminal.question.mockResolvedValueOnce('stop');
+    const result = await runCliOrchestration(opts);
+    expect(result.state).toMatchObject({ codexNetworkAccess: true, codexCalls: 0 });
+    const record = JSON.parse((await readFile(result.tracePath, 'utf8')).trim());
+    expect(record).toMatchObject({ stateBefore: { codexNetworkAccess: true }, stateAfter: { codexNetworkAccess: true }, toolResult: null });
+    expect(vi.mocked(console.log).mock.calls.flat().join('\n')).toContain('Codex command network: enabled');
+  });
   it.each(['codex', 'claude'] as const)('wires the %s selection into both CLI modes and rejects the other alias', async (workerSelection) => {
     const opts = { ...await options(), workerSelection };
     const decision = await runDecision({ ...opts, noTrace: true });

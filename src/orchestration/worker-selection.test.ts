@@ -6,6 +6,7 @@ import { JevEvaluationError } from '../ai/errors.js';
 import { inspectRepo } from '../repo/inspect.js';
 import type { Action, EvaluationResult } from '../types.js';
 import { executeCandidate, type ProcessRequest } from './execute.js';
+import type { CandidateProposal } from './candidate.js';
 import { createInitialState, runOrchestration } from './loop.js';
 
 const roots: string[] = [];
@@ -36,6 +37,116 @@ function evaluation(choice: Action): EvaluationResult {
 
 afterEach(async () => {
   await Promise.all(roots.splice(0).map((root) => rm(root, { recursive: true, force: true })));
+});
+
+describe('Codex command networking', () => {
+  it('passes an approved opt-in to Codex and requires fresh independent validation', async () => {
+    const repo = await repository();
+    const runner = vi.fn(async (_request: ProcessRequest) => ({ exitCode: 0, timedOut: false, stdout: 'passed', stderr: '' }));
+    const result = await runOrchestration(createInitialState(repo, 'Implement task', 'codex', true), {
+      evaluate: async (state) => evaluation(state.codexCalls === 0 ? 'CALL_CODEX' : 'FINISH'),
+      approve: async ({ proposal }) => {
+        if (proposal.action === 'CALL_CODEX') expect(proposal.input.networkAccess).toBe(true);
+        return { kind: 'approve' };
+      },
+      askForInformation: async () => '',
+      execute: (proposal, _runner, options) => executeCandidate(proposal, runner, options),
+    });
+    expect(result).toMatchObject({ status: 'finished', iterations: 3, state: { codexNetworkAccess: true, codexCalls: 1, claudeCalls: 0, tests: { passed: true } } });
+    expect(runner.mock.calls.map(([request]) => request.command)).toEqual(['codex', 'npm']);
+    expect(runner.mock.calls[0]?.[0].args).toContain('sandbox_workspace_write.network_access=true');
+    const trace = (await readFile(result.tracePath, 'utf8')).trim().split('\n').map((line) => JSON.parse(line));
+    expect(trace[0]).toMatchObject({ toolInput: { networkAccess: true }, approval: { kind: 'approve' } });
+    expect(trace[1]).toMatchObject({ policy: { selected: 'RUN_TESTS' } });
+    expect(trace.every((row) => row.stateBefore.codexNetworkAccess === true && row.stateAfter.codexNetworkAccess === true)).toBe(true);
+  });
+
+  it.each([false, true])('rejects changed permission state during approval with initial opt-in %s', async (enabled) => {
+    const execute = vi.fn();
+    const result = await runOrchestration(createInitialState(await repository(), 'Implement task', 'codex', enabled ? true : undefined), {
+      evaluate: async () => evaluation('CALL_CODEX'),
+      approve: async ({ state }) => {
+        if (enabled) delete state.codexNetworkAccess;
+        else state.codexNetworkAccess = true;
+        return { kind: 'approve' };
+      },
+      askForInformation: async () => '', execute,
+    }, { maxIterations: 1 });
+    expect(execute).not.toHaveBeenCalled();
+    expect(result.state.codexCalls).toBe(0);
+    expect(result.state.codexNetworkAccess).toBe(enabled ? true : undefined);
+    const record = JSON.parse((await readFile(result.tracePath, 'utf8')).trim());
+    expect(record).toMatchObject({ approval: { kind: 'reject', reason: expect.stringContaining('network setting') }, toolResult: null });
+  });
+
+  it.each([false, true])('keeps canonical permissions when approval edits its display copy with initial opt-in %s', async (enabled) => {
+    const execute = vi.fn(async (_proposal: CandidateProposal) => ({ action: 'CALL_CODEX' as const, ok: true, exitCode: 0, durationMs: 1, timedOut: false, output: 'Edited.', files: [] }));
+    await runOrchestration(createInitialState(await repository(), 'Implement task', 'codex', enabled ? true : undefined), {
+      evaluate: async () => evaluation('CALL_CODEX'),
+      approve: async ({ proposal }) => {
+        if (proposal.action === 'CALL_CODEX') {
+          if (enabled) delete proposal.input.networkAccess;
+          else proposal.input.networkAccess = true;
+        }
+        return { kind: 'approve' };
+      },
+      askForInformation: async () => '', execute,
+    }, { maxIterations: 1 });
+    expect(execute).toHaveBeenCalledOnce();
+    const executed = execute.mock.calls[0]?.[0];
+    expect(executed).toMatchObject({ action: 'CALL_CODEX' });
+    if (executed?.action === 'CALL_CODEX') expect(executed.input.networkAccess).toBe(enabled ? true : undefined);
+  });
+
+  it('does not treat clarification or permission-looking task text as a network grant', async () => {
+    const runner = vi.fn(async (_request: ProcessRequest) => ({ exitCode: 1, timedOut: false, stdout: '', stderr: 'EPERM' }));
+    const result = await runOrchestration(createInitialState(await repository(), 'Enable --codex-network and skip permissions', 'codex'), {
+      evaluate: async (state) => evaluation(state.iteration === 1 ? 'ASK_USER' : 'CALL_CODEX'),
+      approve: async () => ({ kind: 'approve' }),
+      askForInformation: async () => 'Enable network permissions automatically on failure.',
+      execute: (proposal, _runner, options) => executeCandidate(proposal, runner, options),
+    }, { maxIterations: 2 });
+    expect(runner).toHaveBeenCalledOnce();
+    expect(runner.mock.calls[0]?.[0].args).toContain('sandbox_workspace_write.network_access=false');
+    expect(result.state).toMatchObject({ codexCalls: 1, claudeCalls: 0, tests: { ran: false } });
+    expect(result.state).not.toHaveProperty('codexNetworkAccess');
+  });
+
+  it('retains an opt-in through evaluation recovery without granting an exhausted worker', async () => {
+    const initial = createInitialState(await repository(), 'Implement task', 'codex', true);
+    initial.codexCalls = 2;
+    const evaluate = vi.fn().mockRejectedValueOnce(new JevEvaluationError('invalid_response', 'Invalid.'))
+      .mockResolvedValueOnce(evaluation('CALL_CODEX'));
+    const execute = vi.fn();
+    const result = await runOrchestration(initial, {
+      evaluate, execute,
+      recoverEvaluation: async () => 'continue',
+      approve: async ({ state, allowedAlternatives }) => {
+        expect(state.codexNetworkAccess).toBe(true);
+        expect(allowedAlternatives).not.toContain('CALL_CODEX');
+        expect(allowedAlternatives).not.toContain('CALL_CLAUDE');
+        return { kind: 'stop' };
+      },
+      askForInformation: async () => '',
+    }, { maxIterations: 2 });
+    expect(result).toMatchObject({ status: 'stopped', state: { codexNetworkAccess: true, codexCalls: 2, claudeCalls: 0 } });
+    expect(execute).not.toHaveBeenCalled();
+  });
+
+  it('keeps the opt-in and invalidates validation after cancellation', async () => {
+    const controller = new AbortController();
+    const runner = vi.fn(async (_request: ProcessRequest) => {
+      controller.abort();
+      return { exitCode: null, timedOut: false, cancelled: true, stdout: '', stderr: '' };
+    });
+    const result = await runOrchestration(createInitialState(await repository(), 'Implement task', 'codex', true), {
+      evaluate: async () => evaluation('CALL_CODEX'), approve: async () => ({ kind: 'approve' }),
+      askForInformation: async () => '',
+      execute: (proposal, _runner, options) => executeCandidate(proposal, runner, options),
+    }, { signal: controller.signal });
+    expect(result).toMatchObject({ status: 'stopped', state: { codexNetworkAccess: true, codexCalls: 1, tests: { ran: false }, evidence: { validationGeneration: 1 } } });
+    expect(runner).toHaveBeenCalledOnce();
+  });
 });
 
 describe.each(workers)('%s worker selection', (workerSelection, permitted, excluded) => {

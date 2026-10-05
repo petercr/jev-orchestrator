@@ -29,7 +29,7 @@ ${redactSensitiveText(task)}${renderWorkerEvidence(context)}`;
 export function createCodexAdapter(
   runner: ProcessRunner = runProcess,
 ): CodingAgentAdapter {
-  return async ({ root, task, context }, options = {}) => {
+  return async ({ root, task, context, networkAccess }, options = {}) => {
     throwIfInterrupted(options.signal);
     const boundedTask = requireBoundedTask(task.trim());
     if (!boundedTask) throw new Error('Codex requires a non-empty repository task.');
@@ -45,6 +45,8 @@ export function createCodexAdapter(
         CODEX_MODEL,
         '--config',
         `model_reasoning_effort="${CODEX_REASONING_EFFORT}"`,
+        '--config',
+        `sandbox_workspace_write.network_access=${networkAccess === true}`,
         'exec',
         '--cd',
         root,

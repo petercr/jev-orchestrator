@@ -83,10 +83,11 @@ export type OrchestrationOptions = {
   initialPhase?: 'inspection';
 };
 
-export function createInitialState(repo: RepoSnapshot, task: string, workerSelection?: WorkerSelection): AgentState {
+export function createInitialState(repo: RepoSnapshot, task: string, workerSelection?: WorkerSelection, codexNetworkAccess?: true): AgentState {
   return {
     task,
     ...(workerSelection === undefined ? {} : { workerSelection }),
+    ...(codexNetworkAccess === undefined ? {} : { codexNetworkAccess }),
     iteration: 1,
     currentGoal: 'Choose the safest useful first action.',
     repo,
@@ -583,6 +584,7 @@ export async function runOrchestration(
   options: OrchestrationOptions = {},
 ): Promise<OrchestrationResult> {
   const workerSelection = initialState.workerSelection;
+  const codexNetworkAccess = initialState.codexNetworkAccess;
   const maxIterations = options.maxIterations ?? MAX_ORCHESTRATION_ITERATIONS;
   if (!Number.isInteger(maxIterations) || maxIterations < 1 || maxIterations > MAX_ORCHESTRATION_ITERATIONS) {
     throw new Error(`Iteration limit must be between 1 and ${MAX_ORCHESTRATION_ITERATIONS}.`);
@@ -635,6 +637,8 @@ export async function runOrchestration(
       state = { ...state, iteration };
       if (workerSelection === undefined) delete state.workerSelection;
       else state.workerSelection = workerSelection;
+      if (codexNetworkAccess === undefined) delete state.codexNetworkAccess;
+      else state.codexNetworkAccess = codexNetworkAccess;
       interruptedIteration = iteration;
       stateBefore = state;
       evaluation = null;
@@ -730,24 +734,30 @@ export async function runOrchestration(
         const blockedPreparation = requiresTaskPreparation(proposal.action) && taskPreparation(state).nextAction !== null;
         const blockedWorker = !isWorkerActionAllowed(proposal.action, workerSelection) ||
           (isCodingAgentProposal(proposal) && state.workerSelection !== workerSelection);
-        if (blockedRepeat || exhaustedCodex || exhaustedClaude || blockedCompletion || blockedValidation || blockedPreparation || blockedWorker ||
+        const blockedCodexNetwork = proposal.action === 'CALL_CODEX' &&
+          (state.codexNetworkAccess !== codexNetworkAccess || proposal.input.networkAccess !== codexNetworkAccess);
+        if (blockedRepeat || exhaustedCodex || exhaustedClaude || blockedCompletion || blockedValidation || blockedPreparation || blockedWorker || blockedCodexNetwork ||
           (state.evidence?.repoRefreshRequired && proposal.action !== 'ASK_USER')) {
           decision = {
             kind: 'reject',
             reason: blockedRepeat
               ? 'The resolved candidate already failed with the same relevant evidence.'
-              : blockedWorker
-                ? 'The worker selection for this run prevents execution.'
-                : blockedPreparation
-                  ? 'Linked-task preparation must complete before execution.'
-                  : blockedCompletion || blockedValidation
-                    ? 'Current validation or completion policy prevents execution.'
-                    : 'Repository inspection or a worker call limit prevents execution.',
+              : blockedCodexNetwork
+                ? 'The Codex network setting for this run prevents execution.'
+                : blockedWorker
+                  ? 'The worker selection for this run prevents execution.'
+                  : blockedPreparation
+                    ? 'Linked-task preparation must complete before execution.'
+                    : blockedCompletion || blockedValidation
+                      ? 'Current validation or completion policy prevents execution.'
+                      : 'Repository inspection or a worker call limit prevents execution.',
           };
           approval.decisions.push(decision);
         }
       }
       let toolResult: ToolResult | null = null;
+      if (codexNetworkAccess === undefined) delete state.codexNetworkAccess;
+      else state.codexNetworkAccess = codexNetworkAccess;
       let nextState = state;
       let terminalStatus: Extract<OrchestrationStatus, 'finished' | 'stopped'> | undefined;
 

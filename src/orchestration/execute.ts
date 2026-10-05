@@ -185,6 +185,7 @@ export async function executeCandidate(
       root: proposal.input.root,
       task: proposal.input.task,
       context: proposal.input.context,
+      ...(proposal.input.networkAccess === true ? { networkAccess: true as const } : {}),
     }, options);
     return codingAgentToolResult(proposal.action, result);
   }

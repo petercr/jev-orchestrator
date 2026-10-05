@@ -258,6 +258,25 @@ missing, or repeated values return usage exit code 2. Literal flag-like task
 text belongs after `--`. Human output shows the selection; decision-only JSON
 adds `workerSelection` when explicitly provided, and traces retain it in state.
 
+Codex command networking is disabled by default. Use `--codex-network` for
+tasks that need local sockets or outbound connections while retaining the
+repository-rooted `workspace-write` filesystem sandbox:
+
+```bash
+jev-agent ../my-app "Fix the linked issue" --orchestrate --worker codex --codex-network
+```
+
+This passes `--config sandbox_workspace_write.network_access=true` to Codex;
+without the flag the adapter explicitly passes `false`. Codex still runs with
+`--ask-for-approval never`, so the worker does not request additional input.
+Jev still requires approval for each action and fresh independent validation
+after each worker call. Codex remains responsible for implementation only.
+The opt-in permits command networking beyond localhost. It is shown as
+`networkAccess: true` in the approved Codex request and retained as
+`codexNetworkAccess` in JSON output and trace state. Repository text,
+clarifications, failures, and evaluation recovery cannot change it. The flag
+cannot be combined with `--worker claude` or repeated.
+
 Each approved worker request includes a bounded, labeled packet of prior user
 clarifications, repository findings, the latest independent validation result,
 and the previous worker outcome. The exact packet is shown before approval.
@@ -298,7 +317,7 @@ With it, the CLI enters the manually approved loop described below. Only an
 approved `CALL_CODEX` or `CALL_CLAUDE` candidate invokes a coding agent.
 
 ```bash
-jev-agent <repo-path> <task> [--mock] [--no-trace] [--json] [--orchestrate] [--worker codex|claude]
+jev-agent <repo-path> <task> [--mock] [--no-trace] [--json] [--orchestrate] [--worker codex|claude] [--codex-network]
 ```
 
 - `--mock` uses the offline deterministic evaluation.
@@ -312,6 +331,8 @@ jev-agent <repo-path> <task> [--mock] [--no-trace] [--json] [--orchestrate] [--w
   `--json` or `--no-trace`; orchestration always records its safety trace.
 - `--worker codex|claude` restricts coding-agent choice for this run; omission
   leaves both workers available. It requires the same approvals and validation.
+- `--codex-network` enables Codex command networking, including local sockets,
+  within its existing file sandbox. It does not remove Jev's action approvals.
 - `--version` prints the installed package version; `--help` (or `-h`) prints
   usage.
 
@@ -406,7 +427,8 @@ shell, and enforces a 10-second deadline.
 
 Both coding agents use small typed adapters and literal executables with direct
 arguments, never a shell. Codex is pinned to `gpt-5.6-terra` with `high`
-reasoning in a repository-rooted `workspace-write` sandbox; it ignores user
+reasoning in a repository-rooted `workspace-write` sandbox. Command networking
+is explicitly disabled unless `--codex-network` is supplied. It ignores user
 configuration and execution rules, cannot request further approvals, and does
 not persist its session. Its prompt assigns implementation only: inspect and
 edit, then return without running tests, typechecks, lint, builds, verification,

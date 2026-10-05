@@ -1268,6 +1268,54 @@ events, full verification logs, patches, fingerprints, per-case receipts, and
 the aggregate receipt are under
 `/home/peterc/.cache/jev-pilots/issue80-codex-implementation-20261005-g1ugj82n`.
 
+## Explicit Codex command networking
+
+Implementation and live verification (2026-10-05): add `--codex-network` to
+enable networking for Codex commands, including local listeners. The adapter
+always passes an explicit `sandbox_workspace_write.network_access` boolean;
+omission keeps it false. `workspace-write`, `--ask-for-approval never`,
+Terra/high, implementation-only prompting, worker selection, and all approval,
+validation, iteration, and call limits remain in force. This enables outbound
+networking as well as localhost; it does not bypass the filesystem sandbox.
+
+The opt-in appears in approved Codex parameters, decision-only JSON, and trace
+state. The loop retains its original setting through clarification, recovery,
+and cancellation, and rejects approval after a changed permission setting.
+Approval display copies cannot change the canonical request. Task/repository
+text cannot grant networking, and execution failures do not enable a fallback
+to full-access mode. Repeated flags and a Claude-only selection with the flag
+return usage exit code 2.
+
+Focused checks passed 98 tests, followed by a 26-test orchestration regression
+after a test typing correction. `pnpm check`, all 511 tests across 28 files,
+and `pnpm build` passed. A fresh package was installed offline into an external
+consumer; all nine installed-package checks passed, covering help, default and
+opt-in JSON, invalid flag combinations, literal adapter settings, retained
+sandbox/no-prompt arguments, and exclusion of local files.
+
+Native Codex sandbox probes reproduced a localhost `EPERM` with networking off
+and successfully listened with it on. A fresh issue #80 clone at `5a910ba`
+used `npm ci` and the previously verified minimal rename patch applied by the
+harness. Running the same verifier in Codex's sandbox with networking off
+failed with `listen EPERM`; networking on passed lint, typecheck, all 296 tests
+across 28 files, and build. The original config warning was absent. This was a
+permissions comparison on a known patch, not a new delegated issue repair.
+
+A separate live Codex CLI 0.160.0 diagnostic used the compiled adapter's
+arguments with a diagnostic prompt and JSON output. With stdin closed and
+Terra/high unchanged, it completed one requested command in 10.5 s. The probe
+opened a localhost socket, wrote inside its selected workspace, and received
+`EROFS` when attempting a disposable write outside it. No worker approval or
+full-sandbox bypass flag was used. This tiny diagnostic is not a worker-speed
+comparison with the issue #80 pilots.
+
+All 18 acceptance/evidence checks passed, including preservation of the
+original test checkout, target HEAD/index/lockfile, and only the required
+config/reference changes in the cloned target. Probe invocations, native
+verification logs, actual Codex events, installed package, clone, fingerprints,
+and receipts are under
+`/home/peterc/.cache/jev-pilots/codex-permissions-20261005-5my184mp`.
+
 ## Reference, not a template
 
 [`gargpratyush/jev-router`](https://github.com/gargpratyush/jev-router) is a

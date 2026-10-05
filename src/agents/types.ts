@@ -8,6 +8,7 @@ export type CodingAgentRequest = {
   root: string;
   task: string;
   context?: WorkerContext;
+  networkAccess?: true;
 };
 
 export type CodingAgentResult = {

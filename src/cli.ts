@@ -48,6 +48,7 @@ export type CliOptions = {
   json: boolean;
   orchestrate: boolean;
   workerSelection?: WorkerSelection;
+  codexNetworkAccess?: true;
 };
 
 export type CliCommand =
@@ -62,6 +63,7 @@ export type DecisionOutput = EvaluationAttribution & {
   repo: RepoSnapshot;
   task: string;
   workerSelection?: WorkerSelection;
+  codexNetworkAccess?: true;
   assessment: AgentAssessment;
   policy: PolicyDecision;
   model: string;
@@ -88,7 +90,7 @@ export class CliUsageError extends Error {
 }
 
 export function usage(): string {
-  return `jev-agent <repo-path> <task> [--mock] [--no-trace] [--json] [--orchestrate] [--worker codex|claude]
+  return `jev-agent <repo-path> <task> [--mock] [--no-trace] [--json] [--orchestrate] [--worker codex|claude] [--codex-network]
 
 Options:
   --mock       Use the offline deterministic evaluation.
@@ -96,6 +98,7 @@ Options:
   --json       Write one machine-readable decision to stdout.
   --orchestrate  Enter the bounded, manually approved execution loop.
   --worker     Restrict coding work to codex or claude; otherwise Jev may choose either.
+  --codex-network  Allow Codex command networking, including local sockets; keep its file sandbox.
   --version    Print the installed package version.
   --help, -h   Print this help text.
 
@@ -144,6 +147,7 @@ export function parseArgs(argv: string[]): CliCommand {
   let json = false;
   let orchestrate = false;
   let workerSelection: WorkerSelection | undefined;
+  let codexNetworkAccess: true | undefined;
   let showHelp = false;
   let showVersion = false;
   let parseFlags = true;
@@ -184,6 +188,10 @@ export function parseArgs(argv: string[]): CliCommand {
       case '--worker':
         selectWorker(args[++index]);
         break;
+      case '--codex-network':
+        if (codexNetworkAccess) throw usageError('--codex-network can only be specified once.');
+        codexNetworkAccess = true;
+        break;
       case '--help':
       case '-h':
         showHelp = true;
@@ -207,7 +215,7 @@ export function parseArgs(argv: string[]): CliCommand {
     if (showHelp && showVersion) {
       throw usageError('Use either --help or --version, not both.');
     }
-    if (mock || noTrace || json || orchestrate || workerSelection !== undefined || positional.length > 0) {
+    if (mock || noTrace || json || orchestrate || workerSelection !== undefined || codexNetworkAccess !== undefined || positional.length > 0) {
       throw usageError('--help and --version cannot be combined with a decision request.');
     }
     return showHelp ? { kind: 'help' } : { kind: 'version' };
@@ -225,9 +233,16 @@ export function parseArgs(argv: string[]): CliCommand {
   if (orchestrate && noTrace) {
     throw usageError('--orchestrate requires its per-iteration safety trace.');
   }
+  if (codexNetworkAccess && workerSelection === 'claude') {
+    throw usageError('--codex-network cannot be combined with --worker claude.');
+  }
   return {
     kind: 'run',
-    options: { repoPath, task, mock, noTrace, json, orchestrate, ...(workerSelection === undefined ? {} : { workerSelection }) },
+    options: {
+      repoPath, task, mock, noTrace, json, orchestrate,
+      ...(workerSelection === undefined ? {} : { workerSelection }),
+      ...(codexNetworkAccess === undefined ? {} : { codexNetworkAccess }),
+    },
   };
 }
 
@@ -272,6 +287,7 @@ export function createDecisionOutput(
     },
     task: redactSensitiveText(state.task),
     ...(state.workerSelection === undefined ? {} : { workerSelection: state.workerSelection }),
+    ...(state.codexNetworkAccess === undefined ? {} : { codexNetworkAccess: state.codexNetworkAccess }),
     assessment: evaluation.assessment,
     policy: { ...policy, reason: redactSensitiveText(policy.reason) },
     model: redactSensitiveText(evaluation.model),
@@ -282,11 +298,11 @@ export function createDecisionOutput(
 }
 
 export async function runDecision(
-  options: Pick<CliOptions, 'repoPath' | 'task' | 'mock' | 'noTrace' | 'workerSelection'>,
+  options: Pick<CliOptions, 'repoPath' | 'task' | 'mock' | 'noTrace' | 'workerSelection' | 'codexNetworkAccess'>,
   cwd: string = process.cwd(),
 ): Promise<DecisionOutput> {
   const repo = await inspectRepo(options.repoPath);
-  const state = createInitialState(repo, options.task, options.workerSelection);
+  const state = createInitialState(repo, options.task, options.workerSelection, options.codexNetworkAccess);
   const mode: DecisionOutput['mode'] = options.mock ? 'mock' : 'live';
 
   if (!options.mock) resolveJevConfiguration();
@@ -420,7 +436,7 @@ export async function runCliOrchestration(options: CliOptions): Promise<Orchestr
     // Inspection is read-only and already bounded. Drain it before returning;
     // an initial interruption never enters evaluation or approval.
     const repo = await inspectRepo(options.repoPath);
-    const state = createInitialState(repo, options.task, options.workerSelection);
+    const state = createInitialState(repo, options.task, options.workerSelection, options.codexNetworkAccess);
     if (!options.mock && !controller.signal.aborted) resolveJevConfiguration();
     terminal = createInterface({ input: process.stdin, output: process.stdout });
     terminal.on('SIGINT', sigint);
@@ -431,6 +447,7 @@ export async function runCliOrchestration(options: CliOptions): Promise<Orchestr
     console.log(`Task: ${redactSensitiveText(options.task)}`);
     console.log(`Mode: ${options.mock ? 'mock' : 'live Jev'}`);
     console.log(`Worker selection: ${options.workerSelection ?? 'Codex or Claude'}`);
+    if (options.codexNetworkAccess) console.log('Codex command network: enabled; workspace file sandbox retained.');
     console.log('No repository action runs without approval.');
 
     const result = await runOrchestration(state, {
@@ -460,6 +477,7 @@ function printHumanDecision(decision: DecisionOutput): void {
   console.log(`Repo: ${decision.repo.root}`);
   console.log(`Task: ${decision.task}`);
   if (decision.workerSelection) console.log(`Worker selection: ${decision.workerSelection}`);
+  if (decision.codexNetworkAccess) console.log('Codex command network: enabled; workspace file sandbox retained.');
   console.log(`Mode: ${decision.mode === 'mock' ? 'mock' : 'live Jev'}\n`);
   console.log(`Task complete       ${percent(assessment.taskComplete.probability)}`);
   console.log(`Needs information  ${percent(assessment.needsMoreInformation.probability)}`);

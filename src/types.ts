@@ -80,6 +80,7 @@ export type AgentEvidence = {
 export type AgentState = {
   task: string;
   workerSelection?: WorkerSelection;
+  codexNetworkAccess?: true;
   iteration: number;
   currentGoal: string;
   repo: RepoSnapshot;
