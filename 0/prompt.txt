@@ -1,0 +1,13 @@
+ok lets commit push and pr now
+
+---
+
+ok commit and pr
+
+---
+
+it merged
+
+---
+
+ok merged lets try to fix that codex issue now, maybe if we pass a skil permissions flag in then we can get it to work without additional input
