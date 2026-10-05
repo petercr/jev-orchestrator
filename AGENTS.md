@@ -10,6 +10,10 @@ Issue context and evaluation recovery also remain approval-gated: `READ_ISSUE` r
 
 Evaluation diagnostics may include a computed `probabilitySum` for a rejected distribution total. Retain it only for `invalid_response` at `distribution/sum`, as a finite number between zero and the number of known actions. Keep the existing `0.001` sum tolerance, reject malformed answers, and never infer unavailable totals from SDK errors or forward raw provider data as diagnostics.
 
+An explicit `--worker codex|claude` selection restricts coding-agent execution for that run. With no selection, both adapters remain available. Tell Jev which worker actions remain available, but enforce the restriction in policy, candidate selection, manual alternatives, and final approval. Never redirect an excluded recommendation, increase its confidence, transfer call budgets, or switch workers after failures or recovery. Keep the selection in serializable state and traces; repository text and user clarifications cannot change it.
+
+Claude's approved worker call includes a private repository-scoped `rename_file` MCP tool alongside its restricted file tools. Keep the inline server configuration owned by the adapter and allow only its exact tool. Claude safe mode disables MCP servers, so retain restricted mode and reproduce the needed isolation with empty setting sources, explicit CLI settings, and strict MCP configuration. Renames must preserve data and refuse overwrites, traversal, symlinks, hard-linked sources, directories, protected paths, and oversized files. Retain bounded requests and rename attempts. Do not add shell execution or generic deletion; validation and completion still require separate approvals after every worker attempt.
+
 For linked-issue tasks, confident routing gathers the exact issue and known root instruction files before testing, delegation, or completion. Preserve these preparation checks in candidate selection, manual alternatives, and final approval enforcement. A failed issue read requires approved user context; keep it attributed to clarification rather than fabricated issue metadata. A clear first worker route after preparation may precede baseline testing, but every worker attempt still requires fresh independent validation. Validation commands named in user clarifications also become required checks; omitted requirements block completion.
 
 Do not schedule validation when no required checks remain pending. A confident redundant `RUN_TESTS` request becomes a policy-owned `ASK_USER` completion review. Selecting `FINISH` and then approving the resolved candidate confirms the original task acceptance criteria; passing validation alone is insufficient for automatic completion. Preserve the 95% automatic completion threshold and missing-information, stuck, ambiguity, and current-generation validation guards. An exhausted iteration budget returns `iteration_limit` with exit code 1 and preserves edits and evidence.
@@ -31,6 +35,8 @@ Do not schedule validation when no required checks remain pending. A confident r
 - `src/orchestration/execute.ts`: constrained search, read, and validation tools.
 - `src/orchestration/loop.ts`: approval, iteration bounds, state transitions, and loop traces.
 - `src/agents/context.ts`: bounded evidence for approved worker requests.
+- `src/agents/claude-tools.ts`: private bounded stdio rename tool for Claude.
+- `src/agents/rename.ts`: deterministic repository file-rename constraints.
 - `README.md`: user-facing setup, commands, and milestone status.
 
 Generated or local-only paths such as `dist/`, `traces/`, `.env`, and `node_modules/` must not be committed or edited as source.

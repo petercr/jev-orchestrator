@@ -31,6 +31,7 @@ import type {
   EvaluationAttribution,
   PolicyDecision,
   RepoSnapshot,
+  WorkerSelection,
 } from './types.js';
 
 export const EXIT_CODES = {
@@ -46,6 +47,7 @@ export type CliOptions = {
   noTrace: boolean;
   json: boolean;
   orchestrate: boolean;
+  workerSelection?: WorkerSelection;
 };
 
 export type CliCommand =
@@ -59,6 +61,7 @@ export type DecisionOutput = EvaluationAttribution & {
   mode: 'mock' | 'live';
   repo: RepoSnapshot;
   task: string;
+  workerSelection?: WorkerSelection;
   assessment: AgentAssessment;
   policy: PolicyDecision;
   model: string;
@@ -85,13 +88,14 @@ export class CliUsageError extends Error {
 }
 
 export function usage(): string {
-  return `jev-agent <repo-path> <task> [--mock] [--no-trace] [--json] [--orchestrate]
+  return `jev-agent <repo-path> <task> [--mock] [--no-trace] [--json] [--orchestrate] [--worker codex|claude]
 
 Options:
   --mock       Use the offline deterministic evaluation.
   --no-trace   Do not write a JSONL trace.
   --json       Write one machine-readable decision to stdout.
   --orchestrate  Enter the bounded, manually approved execution loop.
+  --worker     Restrict coding work to codex or claude; otherwise Jev may choose either.
   --version    Print the installed package version.
   --help, -h   Print this help text.
 
@@ -139,12 +143,21 @@ export function parseArgs(argv: string[]): CliCommand {
   let noTrace = false;
   let json = false;
   let orchestrate = false;
+  let workerSelection: WorkerSelection | undefined;
   let showHelp = false;
   let showVersion = false;
   let parseFlags = true;
   const positional: string[] = [];
 
-  for (const arg of withoutNodeArgumentSeparator(argv)) {
+  const args = withoutNodeArgumentSeparator(argv);
+  const selectWorker = (value: string | undefined): void => {
+    if (workerSelection !== undefined) throw usageError('--worker can only be specified once.');
+    if (value !== 'codex' && value !== 'claude') throw usageError('--worker requires codex or claude.');
+    workerSelection = value;
+  };
+  for (let index = 0; index < args.length; index += 1) {
+    const arg = args[index];
+    if (arg === undefined) continue;
     if (!parseFlags) {
       positional.push(arg);
       continue;
@@ -168,6 +181,9 @@ export function parseArgs(argv: string[]): CliCommand {
       case '--orchestrate':
         orchestrate = true;
         break;
+      case '--worker':
+        selectWorker(args[++index]);
+        break;
       case '--help':
       case '-h':
         showHelp = true;
@@ -176,6 +192,10 @@ export function parseArgs(argv: string[]): CliCommand {
         showVersion = true;
         break;
       default:
+        if (arg.startsWith('--worker=')) {
+          selectWorker(arg.slice('--worker='.length));
+          break;
+        }
         if (arg.startsWith('-')) {
           throw usageError(`Unknown option: ${arg}`);
         }
@@ -187,7 +207,7 @@ export function parseArgs(argv: string[]): CliCommand {
     if (showHelp && showVersion) {
       throw usageError('Use either --help or --version, not both.');
     }
-    if (mock || noTrace || json || orchestrate || positional.length > 0) {
+    if (mock || noTrace || json || orchestrate || workerSelection !== undefined || positional.length > 0) {
       throw usageError('--help and --version cannot be combined with a decision request.');
     }
     return showHelp ? { kind: 'help' } : { kind: 'version' };
@@ -207,7 +227,7 @@ export function parseArgs(argv: string[]): CliCommand {
   }
   return {
     kind: 'run',
-    options: { repoPath, task, mock, noTrace, json, orchestrate },
+    options: { repoPath, task, mock, noTrace, json, orchestrate, ...(workerSelection === undefined ? {} : { workerSelection }) },
   };
 }
 
@@ -251,6 +271,7 @@ export function createDecisionOutput(
       topLevelFiles: state.repo.topLevelFiles.map((value) => redactSensitiveText(value)),
     },
     task: redactSensitiveText(state.task),
+    ...(state.workerSelection === undefined ? {} : { workerSelection: state.workerSelection }),
     assessment: evaluation.assessment,
     policy: { ...policy, reason: redactSensitiveText(policy.reason) },
     model: redactSensitiveText(evaluation.model),
@@ -261,11 +282,11 @@ export function createDecisionOutput(
 }
 
 export async function runDecision(
-  options: Pick<CliOptions, 'repoPath' | 'task' | 'mock' | 'noTrace'>,
+  options: Pick<CliOptions, 'repoPath' | 'task' | 'mock' | 'noTrace' | 'workerSelection'>,
   cwd: string = process.cwd(),
 ): Promise<DecisionOutput> {
   const repo = await inspectRepo(options.repoPath);
-  const state = createInitialState(repo, options.task);
+  const state = createInitialState(repo, options.task, options.workerSelection);
   const mode: DecisionOutput['mode'] = options.mock ? 'mock' : 'live';
 
   if (!options.mock) resolveJevConfiguration();
@@ -399,7 +420,7 @@ export async function runCliOrchestration(options: CliOptions): Promise<Orchestr
     // Inspection is read-only and already bounded. Drain it before returning;
     // an initial interruption never enters evaluation or approval.
     const repo = await inspectRepo(options.repoPath);
-    const state = createInitialState(repo, options.task);
+    const state = createInitialState(repo, options.task, options.workerSelection);
     if (!options.mock && !controller.signal.aborted) resolveJevConfiguration();
     terminal = createInterface({ input: process.stdin, output: process.stdout });
     terminal.on('SIGINT', sigint);
@@ -409,6 +430,7 @@ export async function runCliOrchestration(options: CliOptions): Promise<Orchestr
     console.log(`Repo: ${redactSensitiveText(repo.root)}`);
     console.log(`Task: ${redactSensitiveText(options.task)}`);
     console.log(`Mode: ${options.mock ? 'mock' : 'live Jev'}`);
+    console.log(`Worker selection: ${options.workerSelection ?? 'Codex or Claude'}`);
     console.log('No repository action runs without approval.');
 
     const result = await runOrchestration(state, {
@@ -437,6 +459,7 @@ function printHumanDecision(decision: DecisionOutput): void {
   console.log('Status: unexecuted decision (no tools or coding agents ran)\n');
   console.log(`Repo: ${decision.repo.root}`);
   console.log(`Task: ${decision.task}`);
+  if (decision.workerSelection) console.log(`Worker selection: ${decision.workerSelection}`);
   console.log(`Mode: ${decision.mode === 'mock' ? 'mock' : 'live Jev'}\n`);
   console.log(`Task complete       ${percent(assessment.taskComplete.probability)}`);
   console.log(`Needs information  ${percent(assessment.needsMoreInformation.probability)}`);

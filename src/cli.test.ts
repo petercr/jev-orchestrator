@@ -74,6 +74,33 @@ describe('evaluation error reporting', () => {
 });
 
 describe('parseArgs', () => {
+  it.each(['codex', 'claude'] as const)('accepts a %s worker selection in either flag form', (workerSelection) => {
+    expect(parseArgs(['--worker', workerSelection, '/repo', 'Fix task', '--orchestrate'])).toMatchObject({
+      kind: 'run', options: { repoPath: '/repo', task: 'Fix task', workerSelection, orchestrate: true },
+    });
+    expect(parseArgs(['/repo', 'Inspect', `--worker=${workerSelection}`, '--mock', '--json'])).toMatchObject({
+      kind: 'run', options: { workerSelection, json: true },
+    });
+  });
+
+  it.each([
+    ['--worker'], ['--worker', 'auto'], ['--worker', '--mock'], ['--worker='],
+    ['--worker=unknown'], ['--worker', 'codex', '--worker=claude'], ['--worker=codex', '--worker', 'codex'],
+  ])('rejects invalid or repeated worker flags: %s', (...flags) => {
+    expect(() => parseArgs(['/repo', 'Inspect', ...flags])).toThrow(CliUsageError);
+  });
+
+  it('keeps worker-like text after the argument separator in the task', () => {
+    const result = parseArgs(['/repo', 'Document', '--', '--worker', 'claude']);
+    expect(result).toMatchObject({ kind: 'run', options: { task: 'Document --worker claude' } });
+    if (result.kind === 'run') expect(result.options).not.toHaveProperty('workerSelection');
+  });
+
+  it('does not combine worker selection with informational flags', () => {
+    expect(() => parseArgs(['--help', '--worker', 'codex'])).toThrow(CliUsageError);
+    expect(() => parseArgs(['--version', '--worker=claude'])).toThrow(CliUsageError);
+  });
+
   it('parses known flags independently of positional argument order', () => {
     expect(parseArgs(['--mock', '/repo', '--json', 'Inspect', 'this', '--no-trace'])).toEqual({
       kind: 'run',
@@ -141,6 +168,14 @@ describe('parseArgs', () => {
         orchestrate: true,
       },
     });
+  });
+});
+
+describe('worker selection reporting', () => {
+  it('retains an explicit worker in JSON while preserving omitted defaults', () => {
+    const evaluation = mockEvaluation();
+    expect(createDecisionOutput({ ...state, workerSelection: 'codex' }, evaluation, policy, 'mock')).toMatchObject({ workerSelection: 'codex', status: 'unexecuted' });
+    expect(createDecisionOutput(state, evaluation, policy, 'mock')).not.toHaveProperty('workerSelection');
   });
 });
 

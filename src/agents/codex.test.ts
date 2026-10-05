@@ -11,7 +11,7 @@ import {
 } from './codex.js';
 
 describe('Codex adapter', () => {
-  it('uses Terra with high reasoning, fixed non-interactive arguments, and no shell', async () => {
+  it('delegates implementation with Terra/high, fixed arguments, and preserved validation evidence', async () => {
     const runner = vi.fn<ProcessRunner>().mockResolvedValue({
       exitCode: 0,
       stdout: 'Implemented the fix.',
@@ -68,7 +68,12 @@ describe('Codex adapter', () => {
       cwd: '/repo',
       timeoutMs: CODEX_TIMEOUT_MS,
     });
-    expect(buildCodexPrompt('Fix the bug', context)).toContain('Expected 401, received 200');
+    const prompt = runner.mock.calls[0]?.[0].args.at(-1);
+    expect(prompt).toContain('implementation only');
+    expect(prompt).toContain('Do not run tests, typechecks, lint, builds, verification scripts, dependency installation');
+    expect(prompt).toContain('Validation required by the original task or repository instructions remains required for completion');
+    expect(prompt).toContain('separate approval');
+    expect(prompt).toContain('Expected 401, received 200');
   });
 
   it('normalizes failures and timeouts', async () => {

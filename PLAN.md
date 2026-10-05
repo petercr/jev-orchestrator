@@ -1023,6 +1023,251 @@ live pilot; this benchmark made no new JEV evaluation request.
 Events, invocation, final message, full independent logs, patch, fingerprints,
 and receipt are under `/tmp/jev-issue80-codex-am91kovj`.
 
+## Explicit per-run worker selection
+
+Implementation (2026-10-04): add `--worker codex|claude` to both CLI modes,
+including `--worker=value` syntax. Omission retains both adapters. Missing,
+unsupported, or repeated values produce usage exit 2; flag-like task text
+after `--` remains literal. An explicit selection appears in human output,
+decision-only JSON, and serializable orchestration state and traces.
+
+Jev receives the operator selection and worker actions allowed by the selection
+and remaining per-adapter budgets. Deterministic policy, candidate selection,
+manual alternatives, and final approval independently enforce the restriction.
+Excluded recommendations become `ASK_USER`, without redirection or probability
+changes. The run retains its original selection across state updates and
+recovery; stale worker approval after a changed selection is rejected. Worker
+failures, clarifications, and an exhausted selected budget cannot enable the
+other adapter. Linked-task preparation, independent current-generation
+validation, completion thresholds, eight iterations, and two calls per adapter
+remain in force. Provider and worker-model configuration is separate.
+
+Focused regressions passed 164 tests across seven files, with a further
+18-test worker regression run after correcting fixture signal forwarding.
+`pnpm check`, all 452 tests across 26 files, and `pnpm build` passed. Coverage
+includes both workers, ambiguous routing, excluded and stale manual approvals,
+linked-task preparation, fresh validation before completion, failures,
+timeouts, malformed results, cancellation and partial edits, recovery, and
+exhausted budgets without switching workers.
+
+The packed CLI was installed offline into an external consumer. Decision-only
+checks verified explicit/omitted JSON selection, help, and usage errors. Two
+interactive mock-evaluation runs rejected the opposite worker alias, resolved
+the chosen worker for a separate approval, executed only that worker's fixture
+shim, and passed a real independent Node test before finishing in five
+iterations. All 20 installed-package receipt checks passed, including selection
+retention in every trace and package exclusions. No live evaluator or coding
+worker was called. Invocation logs, transcripts, fixtures, traces, archive, and
+receipt are under `/tmp/jev-worker-selection-fv5hw1cn`.
+
+Live Claude issue #80 verification (2026-10-04) used the installed package with
+`--worker claude`, direct TypeSafe `jev-latest` (served as `jev-1.13.0`), and
+Claude Code 2.1.289 configured for Sonnet / medium. A fresh external clone used
+the same `5a910ba` baseline as the Codex pilot; the only task input was the
+issue URL. The first three approved actions read the issue, `CONTRIBUTING.md`,
+and `CLAUDE.md`. Ambiguous iteration-4 routing required a manual `CALL_CLAUDE`
+selection and separate approval.
+
+The single live Claude call exited 0 after 10,496 ms, copied the config to
+`vitest.config.mts`, and updated `tsconfig.test.json`. It explicitly disclosed
+that `vitest.config.ts` remained: its file-only tools and no-delete prompt
+cannot complete this rename. Independently approved `verify` passed all 296
+tests across 28 files, and `build` passed. A full stdout/stderr verification log
+confirmed the original Vite warning still appeared. Passing checks did not
+satisfy the task; the run was stopped at iteration 7 without completion approval.
+
+The run retained the Claude selection in every trace, used one Claude call and
+zero Codex calls, and recorded six approved actions, two manual alternatives,
+and no evaluation recovery. All 25 evidence checks passed, including unchanged
+original and orchestrator checkouts before this documentation update, protected
+file hashes, an unchanged lockfile, a byte-identical config copy, and a complete
+reverse-checked partial patch. The rename and warning acceptance criteria
+failed. Logs, trace, patch, fingerprints, and receipt are under
+`/tmp/jev-issue80-claude-ze1kk2iq`. A bounded rename capability is needed before
+this Claude adapter can complete the issue.
+
+## Bounded Claude file renames
+
+Implementation (2026-10-05): add a private stdio MCP server exposing only
+`rename_file` within an approved Claude worker call. The adapter owns its inline
+configuration and permits only `mcp__jev_files__rename_file` alongside the
+existing restricted file tools. The server accepts bounded JSON-RPC requests
+and permits eight rename attempts per worker call, including rejected attempts.
+It exposes no shell or generic deletion capability.
+
+Renames require two repository-relative paths and existing parent directories.
+They preserve content and permissions, refuse overwrite, and reject traversal,
+symlinks, hard-linked sources, directories, protected paths, and files over
+1 MiB. An exclusive destination link precedes source removal, preserving data
+if the operation is interrupted. Development and installed builds both launch
+the private server with direct Node arguments from the selected repository.
+
+The first live attempt with the new tool still could not rename: Claude's
+`--safe-mode` disabled the inline MCP server. The adapter now uses restricted
+mode, empty setting sources, explicit isolation settings, and strict MCP
+configuration. Manual approval, independent validation, process cancellation,
+worker selection, and iteration/call budgets remain in force.
+
+Focused rename/server coverage adds 39 deterministic tests. `pnpm check`, all
+491 tests across 28 files, and `pnpm build` passed. A freshly packed CLI was
+installed offline into an external consumer; nine package and stdio checks
+passed, including the compiled server, exact tool advertisement, protected-path
+refusal, content-preserving rename, clean EOF, and package exclusions.
+
+The corrected live issue #80 pilot used only the issue URL, the installed CLI
+with `--worker claude`, direct TypeSafe `jev-latest` served as `jev-1.13.0`, and
+Claude Code 2.1.289 configured for Sonnet / medium. A fresh external clone used
+baseline `5a910ba`. The first three approvals read the exact issue,
+`CONTRIBUTING.md`, and `CLAUDE.md`. One rejected Jev distribution at iteration 4
+required explicit evaluation recovery. Ambiguous iteration-5 routing required
+selecting `CALL_CLAUDE` and separately approving the resolved worker candidate.
+
+The single Claude call exited 0 after 9,125 ms. It removed `vitest.config.ts`,
+created the byte-identical `vitest.config.mts`, and updated the TypeScript
+include reference. Independently approved `verify` and `build` passed. A
+separate full stdout/stderr `npm run verify` log confirmed lint, typecheck,
+all 296 tests across 28 files, and absence of the original Vite config warning.
+Completion confidence remained below 95%, so iteration 8 required selecting
+`FINISH`, reviewing its resolved candidate, and separately approving acceptance
+of the original task criteria. The loop finished with exit 0, seven approved
+actions including completion, two manual alternatives, one evaluation recovery,
+one Claude call, and zero Codex calls.
+
+All 25 evidence and acceptance checks passed. The original test checkout and
+orchestrator checkout were unchanged before this documentation update; the
+target lockfile, unrelated files, HEAD, and index were preserved. The complete
+patch passed a reverse-apply check. Package, clone, logs, trace, patch,
+fingerprints, and receipt are under
+`/home/peterc/.cache/jev-pilots/issue80-claude-rename-20261005-r4ci7ggs`.
+
+## Standalone Claude comparison
+
+Live benchmark (2026-10-05): ran standalone Claude Code 2.1.289 against issue
+#80 in a fresh external clone at the same `5a910ba` baseline. The harness
+prepared dependencies with `npm ci`. Claude received only the issue URL and
+general execution boundaries, with no prepared worker evidence, Jev evaluation,
+or private rename tool. Sonnet and medium effort matched the configured JEV
+worker selection; the standalone CLI reported `claude-sonnet-5-5`. The earlier
+JEV Claude run did not record its resolved model version.
+
+Built-in file, shell, and web tools were available, with empty settings sources,
+hooks and automatic memory disabled, no MCP servers, no session persistence,
+a 12-turn cap, and a 15-minute deadline. Project CLAUDE discovery remained
+enabled. The run used `acceptEdits`, preapproved built-in tools, and no
+interactive permission prompts; it did not bypass all permissions.
+
+Claude exited 0 after 24,907 ms, using four turns and three Bash calls. It
+retrieved the exact issue through `gh issue view`, searched filename references,
+then used `mv` and `sed` to make the same minimal patch. No explicit read of
+`CONTRIBUTING.md` was observed. Its final command ran typecheck, test, and verify
+through `tail`/`grep` pipelines without preserving each command's exit status.
+It disclosed that it saw only the final eight lines of verify output. It did
+not run build. The worker's completion was therefore independently checked.
+
+Full `npm run verify` and `npm run build` passed afterward. Verification showed
+lint, typecheck, all 296 tests across 28 files, and no original Vite config
+warning. The patch was byte-identical to the successful JEV Claude patch and
+passed reverse-apply checking. All 21 acceptance/evidence checks passed,
+including unchanged original and orchestrator checkouts before this
+documentation update, unchanged target HEAD/index/lockfile, and no unrelated
+source changes.
+
+| Run | Worker process time | Independent acceptance | Interactive run decisions |
+| --- | --- | --- | --- |
+| JEV + Claude, Sonnet / medium | 9.1 s | 296 tests, verify, build; warning gone | Seven approvals, one Jev recovery |
+| Standalone Claude, Sonnet / medium | 24.9 s | Same checks and identical patch | None during worker execution |
+| JEV + Codex, Terra / high | 136.0 s | Same checks passed | Seven approvals, one Jev recovery |
+| Standalone Codex, Terra / high | 132.7 s | Same checks passed afterward | None during worker execution |
+
+These are worker process times, not comparable total workflow times. JEV
+supplied approved issue/instruction evidence and ran validation afterward;
+standalone Claude retrieved the issue and ran its own checks within its timer.
+Models, tool access, and sandbox behavior also differ between Claude and Codex.
+JEV's confirmed distinction here is enforced preparation, approvals, independent
+exit-status validation, and completion review; this one small issue does not
+establish a general speed or quality advantage over a standalone worker.
+
+Claude reported 33,628 input tokens including cache creation/read tokens, 604
+output tokens, and `total_cost_usd` of 0.0259736. The cost field is the CLI's
+reported estimate, not a billing receipt; matching JEV usage totals were not
+recorded. Invocation, events, final message, full independent logs, patch,
+fingerprints, and receipt are under
+`/home/peterc/.cache/jev-pilots/issue80-standalone-claude-20261005-gxsg628k`.
+
+## Codex implementation-only handoff
+
+Implementation and live comparison (2026-10-05): the Codex prompt now assigns
+inspection and editing to the worker and asks it to return with validation
+pending. It explicitly leaves tests, typecheck, lint, build, verification, and
+dependency installation to the separate orchestration phase. Original task
+and repository validation requirements remain required, and failed validation
+evidence remains in the worker context. This is a prompt instruction; Codex's
+shell capabilities are unchanged. Model, effort, sandbox, approval gates,
+worker selection, and iteration/call limits are unchanged.
+
+Focused Codex and worker-selection regressions passed 21 tests. `pnpm check`,
+all 491 tests across 28 files, and `pnpm build` passed. A fresh package was
+installed offline into an external consumer. Timing instrumentation remained
+in the external harness, with no changes to CLI approval or trace behavior.
+
+Four fresh clones used issue #80's `5a910ba` baseline and dependencies prepared
+with `npm ci`. Run order was JEV-1, standalone-1, standalone-2, JEV-2. All used
+Codex CLI 0.160.0, `gpt-5.6-terra`, and high effort. Both standalone controls
+received the same implementation-only prompt built by the installed adapter,
+with only the issue URL and no prepared evidence. Standalone live web search
+retrieved the exact issue. Both JEV runs used the installed CLI with
+`--worker codex` and direct TypeSafe `jev-latest`, served as `jev-1.13.0`.
+
+| Run | Preparation tool time | First observed edit | Worker time | Independent verify + build |
+| --- | ---: | ---: | ---: | ---: |
+| JEV + Codex, run 1 | 0.334 s | 39.9 s | 58.9 s | 10.6 s |
+| Standalone Codex, run 1 | Within worker | 47.7 s | 62.8 s | 11.1 s |
+| Standalone Codex, run 2 | Within worker | 32.4 s | 50.3 s | 11.0 s |
+| JEV + Codex, run 2 | 0.454 s | 55.2 s | 99.8 s | 11.5 s |
+
+First edit means an observed physical change to one of the three task files,
+sampled every 50 ms. Its origin is the approved worker handoff for JEV and
+subprocess launch for standalone. JEV worker duration comes from the adapter;
+standalone duration includes process startup and shutdown. Worker times exclude
+dependency setup and independent validation. JEV preparation tool time covers
+the issue and instruction reads, excluding evaluation and operator decisions.
+Elapsed preparation through worker approval was 24.6 s and 44.0 s, including
+operator pauses. Total workflow times include additional operator/harness
+pauses and are not used for the speed comparison. The measurements do not
+separate model reasoning, provider latency, or tool dispatch.
+
+JEV averaged 79.3 s versus the recorded earlier 136.0 s worker run, an observed
+42% reduction. Standalone averaged 56.6 s versus the earlier 132.7 s run, an
+observed 57% reduction. Both setups improved with the narrower handoff, while
+JEV showed no worker speed advantage over the matched standalone controls.
+Two current repetitions per setup and one historical observation per setup
+are too few to establish a general advantage or isolate the cause of the
+improvement. The earlier raw temporary artifacts are no longer available;
+their recorded timings remain in the preceding pilot notes. No lower-effort
+experiment was performed in this round.
+
+Both JEV loops finished in seven iterations with seven approvals, manual
+`CALL_CODEX` and `FINISH` alternatives, no evaluation recovery, one Codex call,
+and zero Claude calls. They prepared the exact issue, `CONTRIBUTING.md`, and
+`CLAUDE.md` before delegation, then separately approved fresh verify and build.
+Completion required acceptance review because confidence remained below 95%.
+Both worker summaries reported no validation in the worker; trace truncation
+prevents independently recovering their complete command lists. Complete
+standalone command events show inspection, edits, and diff review without
+validation. Neither standalone run explicitly read `CONTRIBUTING.md`; only
+the first explicitly read `CLAUDE.md`.
+
+All four patches were identical to the successful Claude rename patch and
+passed reverse-apply checking. Each run passed independent lint, typecheck,
+all 296 tests across 28 files, and build; full verification logs showed the
+original warning was absent. All 84 per-case acceptance/evidence checks passed.
+The original test checkout and orchestrator source were preserved before this
+documentation update; target HEAD, index, lockfile, and unrelated files were
+unchanged. Installed package, clones, invocations, timing records, transcripts,
+events, full verification logs, patches, fingerprints, per-case receipts, and
+the aggregate receipt are under
+`/home/peterc/.cache/jev-pilots/issue80-codex-implementation-20261005-g1ugj82n`.
+
 ## Reference, not a template
 
 [`gargpratyush/jev-router`](https://github.com/gargpratyush/jev-router) is a

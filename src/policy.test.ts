@@ -40,6 +40,19 @@ function assessment(overrides: Partial<AgentAssessment> = {}): AgentAssessment {
 }
 
 describe('applyPolicy', () => {
+  it.each([
+    ['codex', 'CALL_CODEX', 'CALL_CLAUDE'], ['claude', 'CALL_CLAUDE', 'CALL_CODEX'],
+  ] as const)('enforces the %s worker selection without changing confidence', (workerSelection, permitted, excluded) => {
+    const selectedState = { ...state, workerSelection };
+    expect(applyPolicy(selectedState, assessment({ nextAction: { choice: permitted, probabilities: { [permitted]: 0.8 }, confidence: 0.7 } }))).toMatchObject({ selected: permitted });
+    expect(applyPolicy(selectedState, assessment({ nextAction: { choice: excluded, probabilities: { [excluded]: 0.99 }, confidence: 0.99 } }))).toMatchObject({ selected: 'ASK_USER', override: true, reason: expect.stringContaining('worker selection') });
+    const ambiguous = assessment({ nextAction: { choice: permitted, probabilities: { [permitted]: 0.27 }, confidence: 0.8 } });
+    expect(applyPolicy(selectedState, ambiguous).selected).toBe('ASK_USER');
+    expect(ambiguous.nextAction.probabilities[permitted]).toBe(0.27);
+    expect(applyPolicy(selectedState, assessment({ nextAction: { choice: permitted, probabilities: { [permitted]: 0.9 }, confidence: 0.1 } })).selected).toBe('ASK_USER');
+    expect(applyPolicy(selectedState, assessment({ taskComplete: { probability: 0.99 } })).selected).not.toBe('FINISH');
+  });
+
   function issueState(): AgentState {
     return {
       ...state, task: 'https://github.com/owner/repo/issues/80', filesRead: [],
@@ -54,6 +67,23 @@ describe('applyPolicy', () => {
       requestedValidationScripts: ['test'], truncated: false,
     };
   }
+
+  it.each([
+    ['codex', 'CALL_CODEX', 'CALL_CLAUDE'], ['claude', 'CALL_CLAUDE', 'CALL_CODEX'],
+  ] as const)('keeps linked-task preparation and completion guards with a %s selection', (workerSelection, permitted, excluded) => {
+    const initial = issueState();
+    initial.workerSelection = workerSelection;
+    const request = assessment({ needsTesting: { probability: 0.99 }, nextAction: { choice: permitted, probabilities: { [permitted]: 0.9 }, confidence: 0.8 } });
+    expect(applyPolicy(initial, request).selected).toBe('READ_ISSUE');
+    readIssue(initial);
+    expect(applyPolicy(initial, request).selected).toBe('READ_FILE');
+    initial.filesRead = ['AGENTS.md', 'CONTRIBUTING.md', 'CLAUDE.md'];
+    expect(applyPolicy(initial, request).selected).toBe(permitted);
+    expect(applyPolicy(initial, assessment({ taskComplete: { probability: 0.95 } })).selected).not.toBe('FINISH');
+    expect(applyPolicy({ ...state, workerSelection, tests: { ran: true, passed: true } }, assessment({
+      taskComplete: { probability: 0.95 }, nextAction: { choice: excluded, probabilities: { [excluded]: 0.9 }, confidence: 0.8 },
+    })).selected).toBe('FINISH');
+  });
 
   it.each(['RUN_TESTS', 'CALL_CODEX', 'CALL_CLAUDE', 'FINISH'] as const)(
     'reads the linked issue before a confident %s request or high testing score', (choice) => {

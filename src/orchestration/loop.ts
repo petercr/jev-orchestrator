@@ -11,6 +11,7 @@ import { inspectRepo } from '../repo/inspect.js';
 import { isIssueContext, parseGitHubIssue } from '../repo/issue.js';
 import { hasFailedValidation, hasPassedValidation, pendingValidationScripts, selectPendingValidation } from '../repo/validation.js';
 import { evaluationFailure, type EvaluationFailure } from '../ai/errors.js';
+import { isWorkerActionAllowed } from '../agents/selection.js';
 import type {
   Action,
   AgentEvidence,
@@ -18,6 +19,7 @@ import type {
   EvaluationResult,
   PolicyDecision,
   RepoSnapshot,
+  WorkerSelection,
 } from '../types.js';
 import {
   EXECUTABLE_ACTIONS,
@@ -81,9 +83,10 @@ export type OrchestrationOptions = {
   initialPhase?: 'inspection';
 };
 
-export function createInitialState(repo: RepoSnapshot, task: string): AgentState {
+export function createInitialState(repo: RepoSnapshot, task: string, workerSelection?: WorkerSelection): AgentState {
   return {
     task,
+    ...(workerSelection === undefined ? {} : { workerSelection }),
     iteration: 1,
     currentGoal: 'Choose the safest useful first action.',
     repo,
@@ -238,6 +241,7 @@ function allowedAlternatives(
   if (state.evidence?.repoRefreshRequired) return ['ASK_USER'];
   const preparation = taskPreparation(state);
   return EXECUTABLE_ACTIONS.filter((action) => {
+    if (!isWorkerActionAllowed(action, state.workerSelection)) return false;
     if (preparation.nextAction !== null && requiresTaskPreparation(action)) return false;
     if (action === 'FINISH') {
       return hasPassedValidation(state) && (policy.selected === 'FINISH' ||
@@ -578,6 +582,7 @@ export async function runOrchestration(
   dependencies: OrchestrationDependencies,
   options: OrchestrationOptions = {},
 ): Promise<OrchestrationResult> {
+  const workerSelection = initialState.workerSelection;
   const maxIterations = options.maxIterations ?? MAX_ORCHESTRATION_ITERATIONS;
   if (!Number.isInteger(maxIterations) || maxIterations < 1 || maxIterations > MAX_ORCHESTRATION_ITERATIONS) {
     throw new Error(`Iteration limit must be between 1 and ${MAX_ORCHESTRATION_ITERATIONS}.`);
@@ -628,6 +633,8 @@ export async function runOrchestration(
 
     for (let iteration = 1; iteration <= maxIterations; iteration += 1) {
       state = { ...state, iteration };
+      if (workerSelection === undefined) delete state.workerSelection;
+      else state.workerSelection = workerSelection;
       interruptedIteration = iteration;
       stateBefore = state;
       evaluation = null;
@@ -721,17 +728,21 @@ export async function runOrchestration(
           (!hasPassedValidation(state) || !completionAllowed);
         const blockedValidation = proposal.action === 'RUN_TESTS' && selectPendingValidation(state) === undefined;
         const blockedPreparation = requiresTaskPreparation(proposal.action) && taskPreparation(state).nextAction !== null;
-        if (blockedRepeat || exhaustedCodex || exhaustedClaude || blockedCompletion || blockedValidation || blockedPreparation ||
+        const blockedWorker = !isWorkerActionAllowed(proposal.action, workerSelection) ||
+          (isCodingAgentProposal(proposal) && state.workerSelection !== workerSelection);
+        if (blockedRepeat || exhaustedCodex || exhaustedClaude || blockedCompletion || blockedValidation || blockedPreparation || blockedWorker ||
           (state.evidence?.repoRefreshRequired && proposal.action !== 'ASK_USER')) {
           decision = {
             kind: 'reject',
             reason: blockedRepeat
               ? 'The resolved candidate already failed with the same relevant evidence.'
-              : blockedPreparation
-                ? 'Linked-task preparation must complete before execution.'
-                : blockedCompletion || blockedValidation
-                  ? 'Current validation or completion policy prevents execution.'
-                  : 'Repository inspection or a worker call limit prevents execution.',
+              : blockedWorker
+                ? 'The worker selection for this run prevents execution.'
+                : blockedPreparation
+                  ? 'Linked-task preparation must complete before execution.'
+                  : blockedCompletion || blockedValidation
+                    ? 'Current validation or completion policy prevents execution.'
+                    : 'Repository inspection or a worker call limit prevents execution.',
           };
           approval.decisions.push(decision);
         }
