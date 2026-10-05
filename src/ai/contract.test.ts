@@ -15,6 +15,15 @@ function answers(): Record<string, Record<string, unknown>> {
 afterEach(() => vi.unstubAllEnvs());
 
 describe('evaluation contract diagnostics and progress', () => {
+  it.each(['codex', 'claude'] as const)('sends the %s selection and remaining worker capability to Jev', (workerSelection) => {
+    const initial = createInitialState({ root: '/repo', packageManager: 'npm', scripts: ['test'], validationScripts: ['test'], gitStatus: [], topLevelFiles: [] }, 'Fix task', workerSelection);
+    const action = workerSelection === 'codex' ? 'CALL_CODEX' : 'CALL_CLAUDE';
+    expect(boundAgentStateForEvaluation(initial).progress.workers).toEqual({ selection: workerSelection, allowedActions: [action] });
+    initial.codexCalls = 2;
+    initial.claudeCalls = 2;
+    expect(boundAgentStateForEvaluation(initial).progress.workers.allowedActions).toEqual([]);
+  });
+
   it.each([
     ['answers', 'shape', (data: Record<string, Record<string, unknown>>) => { delete data.stuck; }],
     ['answers', 'value', (data: Record<string, Record<string, unknown>>) => { data.stuck!.noul = 'raw upstream secret'; }],

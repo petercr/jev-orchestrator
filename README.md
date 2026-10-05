@@ -237,6 +237,27 @@ installed coding-agent CLI makes a real call, may edit the selected repository,
 and may consume tokens. Reject the candidate to execute nothing.
 Approving `READ_ISSUE` also performs its real bounded GitHub read in mock mode.
 
+Choose a coding worker for a run with `--worker codex` or `--worker claude`:
+
+```bash
+jev-agent ../my-app "Fix the linked issue" --orchestrate --worker codex
+```
+
+Omitting the flag leaves both workers available to Jev. An explicit selection
+restricts approved worker actions and manual alternatives; an excluded worker
+request becomes `ASK_USER`, with no automatic redirection or confidence boost.
+The selection persists through evaluation recovery and worker failures. An
+exhausted selected worker budget does not enable the other worker. Linked-issue
+preparation, separate action approval, fresh independent validation, and the
+eight-iteration/two-calls-per-worker limits still apply. The flag also applies
+to decision-only runs and mock-mode manual alternatives. It does not select
+the Jev evaluator provider or the coding worker's model.
+
+Both `--worker codex` and `--worker=codex` forms are accepted. Unsupported,
+missing, or repeated values return usage exit code 2. Literal flag-like task
+text belongs after `--`. Human output shows the selection; decision-only JSON
+adds `workerSelection` when explicitly provided, and traces retain it in state.
+
 Each approved worker request includes a bounded, labeled packet of prior user
 clarifications, repository findings, the latest independent validation result,
 and the previous worker outcome. The exact packet is shown before approval.
@@ -277,7 +298,7 @@ With it, the CLI enters the manually approved loop described below. Only an
 approved `CALL_CODEX` or `CALL_CLAUDE` candidate invokes a coding agent.
 
 ```bash
-jev-agent <repo-path> <task> [--mock] [--no-trace] [--json] [--orchestrate]
+jev-agent <repo-path> <task> [--mock] [--no-trace] [--json] [--orchestrate] [--worker codex|claude]
 ```
 
 - `--mock` uses the offline deterministic evaluation.
@@ -289,6 +310,8 @@ jev-agent <repo-path> <task> [--mock] [--no-trace] [--json] [--orchestrate]
   provider answers and provider metadata.
 - `--orchestrate` enters the interactive loop. It cannot be combined with
   `--json` or `--no-trace`; orchestration always records its safety trace.
+- `--worker codex|claude` restricts coding-agent choice for this run; omission
+  leaves both workers available. It requires the same approvals and validation.
 - `--version` prints the installed package version; `--help` (or `-h`) prints
   usage.
 
@@ -385,11 +408,27 @@ Both coding agents use small typed adapters and literal executables with direct
 arguments, never a shell. Codex is pinned to `gpt-5.6-terra` with `high`
 reasoning in a repository-rooted `workspace-write` sandbox; it ignores user
 configuration and execution rules, cannot request further approvals, and does
-not persist its session. Claude is pinned to Sonnet with `medium` effort and a
-restricted file-only tool set (`Read`, `Write`, `Edit`, `Glob`, and `Grep`), so
-the orchestrator—not Claude—runs validation separately. Each call has a
-15-minute deadline. Stdout and stderr are separately capped at 16 KiB and
-recorded as separate trace fields; only final stdout becomes the loop
+not persist its session. Its prompt assigns implementation only: inspect and
+edit, then return without running tests, typechecks, lint, builds, verification,
+or dependency installation. Original validation requirements remain required;
+the orchestrator schedules fresh checks with separate approval. Claude is
+pinned to Sonnet with `medium` effort and a
+restricted file tool set (`Read`, `Write`, `Edit`, `Glob`, and `Grep`) plus
+Jev's private `rename_file` MCP tool. The adapter supplies that local server
+through inline configuration and permits its single rename tool within the
+approved worker call. The CLI uses restricted mode, loads no user, project, or
+local settings, and disables non-managed hooks and automatic memory. Its
+explicit settings exclude project CLAUDE files and enable no plugins. Claude's
+safe mode disables MCP servers, so the adapter uses these settings with
+restricted mode and strict MCP configuration. MCP access is limited to Jev's
+inline server. Renames take two repository-relative paths, preserve content and
+permissions, and refuse existing destinations, traversal, symlinks, hard-linked
+sources, directories, secret and tooling paths, and files over 1 MiB. Parent
+directories must already exist. Each worker call permits eight rename attempts;
+invalid attempts consume that budget. The tool runs no commands and exposes no
+delete or overwrite operation. The orchestrator runs validation separately.
+Each call has a 15-minute deadline. Stdout and stderr are separately capped at
+16 KiB and recorded as separate trace fields; only final stdout becomes the loop
 observation. Each orchestration run permits at most two calls to each agent.
 After every attempt the loop refreshes repository metadata with exact untracked
 paths; generated trace files are excluded from the modified-source list, and

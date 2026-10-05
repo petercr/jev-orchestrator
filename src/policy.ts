@@ -1,6 +1,7 @@
 import type { AgentAssessment, AgentState, PolicyDecision } from './types.js';
 import { hasFailedValidation, hasOmittedValidationRequirements, hasPassedValidation, pendingValidationScripts } from './repo/validation.js';
 import { taskPreparation } from './repo/preparation.js';
+import { isWorkerActionAllowed } from './agents/selection.js';
 
 export type PolicyThresholds = {
   finish: number;
@@ -121,6 +122,13 @@ export function applyPolicy(
       selected: 'FINISH',
       override: requested !== 'FINISH',
       reason: 'Completion confidence is high and validation has passed.',
+    };
+  }
+
+  if (!isWorkerActionAllowed(requested, state.workerSelection)) {
+    return {
+      requested, selected: 'ASK_USER', override: true,
+      reason: 'The worker selection for this run excludes the requested coding agent; choose an allowed action.',
     };
   }
 

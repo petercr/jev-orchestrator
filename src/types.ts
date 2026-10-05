@@ -12,6 +12,8 @@ export const ACTIONS = [
 
 export type Action = (typeof ACTIONS)[number];
 
+export type WorkerSelection = 'codex' | 'claude';
+
 export type RepoSnapshot = {
   root: string;
   packageManager: 'pnpm' | 'npm' | 'yarn' | 'bun' | 'unknown';
@@ -77,6 +79,7 @@ export type AgentEvidence = {
 
 export type AgentState = {
   task: string;
+  workerSelection?: WorkerSelection;
   iteration: number;
   currentGoal: string;
   repo: RepoSnapshot;

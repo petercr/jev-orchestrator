@@ -3,6 +3,7 @@ import { createHash } from 'node:crypto';
 import path from 'node:path';
 import { buildWorkerContext, workerEvidenceKey, type WorkerContext } from '../agents/context.js';
 import { MAX_CLAUDE_CALLS, MAX_CODEX_CALLS } from '../agents/types.js';
+import { isWorkerActionAllowed } from '../agents/selection.js';
 import { requireBoundedTask } from '../limits.js';
 import type { Action, AgentState } from '../types.js';
 import { selectDiagnosticCommand, type DiagnosticCommandId } from './diagnostics.js';
@@ -257,6 +258,9 @@ export async function selectCandidate(
   state: AgentState,
   searchResults: string[] = [],
 ): Promise<CandidateProposal> {
+  if (!isWorkerActionAllowed(action, state.workerSelection)) {
+    return { action: 'ASK_USER', tool: null, input: null, reason: 'The worker selection for this run excludes the requested coding agent.' };
+  }
   const preparation = taskPreparation(state);
   if (preparation.nextAction !== null && requiresTaskPreparation(action)) {
     return {

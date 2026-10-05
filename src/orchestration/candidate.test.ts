@@ -51,6 +51,17 @@ afterEach(async () => {
 });
 
 describe('candidate selection', () => {
+  it.each([
+    ['codex', 'CALL_CODEX', 'CALL_CLAUDE'], ['claude', 'CALL_CLAUDE', 'CALL_CODEX'],
+  ] as const)('resolves only the %s worker and retains its call limit', async (workerSelection, permitted, excluded) => {
+    const initial = state(await temporaryRoot(), { workerSelection });
+    await expect(selectCandidate(permitted, initial)).resolves.toMatchObject({ action: permitted });
+    await expect(selectCandidate(excluded, initial)).resolves.toMatchObject({ action: 'ASK_USER', tool: null, input: null, reason: expect.stringContaining('worker selection') });
+    initial.codexCalls = MAX_CODEX_CALLS;
+    initial.claudeCalls = MAX_CLAUDE_CALLS;
+    await expect(selectCandidate(permitted, initial)).resolves.toMatchObject({ action: 'ASK_USER', reason: expect.stringContaining('call limit') });
+  });
+
   it('derives a small literal search from task text', () => {
     expect(deriveSearchTerms('Inspect this repo and fix Preview auth auth!')).toEqual([
       'fix',

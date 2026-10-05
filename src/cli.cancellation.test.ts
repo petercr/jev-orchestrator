@@ -8,7 +8,7 @@ import * as inspection from './repo/inspect.js';
 import * as evaluation from './ai/evaluate.js';
 import { JevEvaluationError } from './ai/errors.js';
 import { mockEvaluation } from './mock.js';
-import { main, runCliOrchestration, type CliOptions } from './cli.js';
+import { main, runCliOrchestration, runDecision, type CliOptions } from './cli.js';
 
 vi.mock('node:readline/promises', () => ({ createInterface: vi.fn() }));
 
@@ -46,6 +46,19 @@ async function options(): Promise<CliOptions> {
 }
 
 describe('CLI interruption lifecycle', () => {
+  it.each(['codex', 'claude'] as const)('wires the %s selection into both CLI modes and rejects the other alias', async (workerSelection) => {
+    const opts = { ...await options(), workerSelection };
+    const decision = await runDecision({ ...opts, noTrace: true });
+    expect(decision).toMatchObject({ status: 'unexecuted', mode: 'mock', workerSelection });
+    terminal.question.mockResolvedValueOnce(workerSelection === 'codex' ? 'CLAUDE' : 'CODEX').mockResolvedValueOnce('stop');
+    const result = await runCliOrchestration(opts);
+    expect(result).toMatchObject({ status: 'stopped', state: { workerSelection, codexCalls: 0, claudeCalls: 0 } });
+    expect(terminal.question).toHaveBeenCalledTimes(2);
+    expect(vi.mocked(console.log).mock.calls.flat().join('\n')).toContain(`Worker selection: ${workerSelection}`);
+    const record = JSON.parse((await readFile(result.tracePath, 'utf8')).trim());
+    expect(record).toMatchObject({ stateBefore: { workerSelection }, stateAfter: { workerSelection }, approval: { kind: 'stop' }, toolResult: null });
+  });
+
   it.each(['SIGINT', 'SIGTERM', 'readline'] as const)('handles %s once and restores signal listeners', async (signal) => {
     const opts = await options();
     const intCount = process.listenerCount('SIGINT');
