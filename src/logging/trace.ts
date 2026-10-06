@@ -3,6 +3,7 @@ import { appendFile, mkdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import type { AgentState, EvaluationAttribution, EvaluationResult, PolicyDecision } from '../types.js';
 import type { EvaluationFailure } from '../ai/errors.js';
+import type { RunMetrics, RunSummary } from '../orchestration/summary.js';
 
 export const TRACE_SCHEMA_VERSION = 1;
 export const ORCHESTRATION_TRACE_SCHEMA_VERSION = 2;
@@ -58,6 +59,8 @@ export type OrchestrationTracePayload = {
   workerRequest?: unknown;
   failure?: EvaluationFailure;
   recovery?: { available: boolean; decision?: 'continue' | 'stop' };
+  metrics?: RunMetrics;
+  summary?: RunSummary;
 };
 
 export class TraceWriteError extends Error {
@@ -277,6 +280,8 @@ export async function appendOrchestrationTrace(
     ...(payload.interruption ? { interruption: payload.interruption } : {}),
     ...(payload.failure ? { failure: sanitizeTraceValue(payload.failure, secretValues) } : {}),
     ...(payload.recovery ? { recovery: payload.recovery } : {}),
+    ...(payload.metrics ? { metrics: sanitizeTraceValue(payload.metrics, secretValues) } : {}),
+    ...(payload.summary ? { summary: sanitizeTraceValue(payload.summary, secretValues) } : {}),
   };
 
   try {

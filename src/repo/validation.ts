@@ -94,6 +94,17 @@ export function pendingValidationScripts(state: AgentState): string[] {
   return required.filter((script) => outcomes.get(script) !== true);
 }
 
+export type ValidationCheck = { script: string; status: 'passed' | 'failed' | 'pending' };
+
+export function validationChecks(state: AgentState): ValidationCheck[] {
+  const outcomes = validationOutcomes(state);
+  const pending = new Set(pendingValidationScripts(state));
+  return requiredValidationScripts(state).map((script) => ({
+    script,
+    status: !pending.has(script) ? 'passed' : outcomes.get(script) === false ? 'failed' : 'pending',
+  }));
+}
+
 export function hasFailedValidation(state: AgentState): boolean {
   const outcomes = validationOutcomes(state);
   return requiredValidationScripts(state).some((script) => outcomes.get(script) === false) ||

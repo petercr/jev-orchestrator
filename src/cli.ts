@@ -22,6 +22,7 @@ import {
   type EvaluationRecoveryContext,
 } from './orchestration/loop.js';
 import { applyPolicy } from './policy.js';
+import type { RunSummary } from './orchestration/summary.js';
 import { inspectRepo } from './repo/inspect.js';
 import type {
   Action,
@@ -435,7 +436,9 @@ export async function runCliOrchestration(options: CliOptions): Promise<Orchestr
   try {
     // Inspection is read-only and already bounded. Drain it before returning;
     // an initial interruption never enters evaluation or approval.
+    const inspectionStartedAt = performance.now();
     const repo = await inspectRepo(options.repoPath);
+    const initialInspectionMs = performance.now() - inspectionStartedAt;
     const state = createInitialState(repo, options.task, options.workerSelection, options.codexNetworkAccess);
     if (!options.mock && !controller.signal.aborted) resolveJevConfiguration();
     terminal = createInterface({ input: process.stdin, output: process.stdout });
@@ -459,6 +462,7 @@ export async function runCliOrchestration(options: CliOptions): Promise<Orchestr
       recoverEvaluation: async (context) => promptForEvaluationRecovery(prompts, context, executionOptions),
     }, {
       signal: controller.signal,
+      initialInspectionMs,
       ...(controller.signal.aborted ? { initialPhase: 'inspection' as const } : {}),
     });
     return { ...result, ...(exitCode === undefined ? {} : { exitCode }) };
@@ -497,6 +501,30 @@ function printEvaluationAttribution(evaluation: EvaluationAttribution): void {
   if (evaluation.provider) console.log(`Provider: ${evaluation.provider}`);
   if (evaluation.requestedModel) console.log(`Requested model: ${redactSensitiveText(evaluation.requestedModel)}`);
   if (evaluation.servedModel) console.log(`Served model: ${redactSensitiveText(evaluation.servedModel)}`);
+}
+
+export function formatRunSummary(summary: RunSummary): string {
+  const { timings, counts, validation } = summary;
+  const seconds = (ms: number): string => `${(ms / 1_000).toFixed(2)}s`;
+  const checks = validation.checks.map((check) => `${redactSensitiveText(check.script)}: ${check.status}`).join(', ');
+  const validationStatus = validation.passed ? 'passed'
+    : validation.checks.some((check) => check.status === 'failed') ? 'failed' : 'incomplete';
+  return [
+    '\nRun summary',
+    `Elapsed: ${seconds(timings.elapsedMs)}; active: ${seconds(timings.activeMs)} (excludes prompt waits)`,
+    `Evaluation: ${seconds(timings.evaluationMs)}; preparation: ${seconds(timings.preparationMs)}`,
+    `Worker: ${seconds(timings.workerMs)}; independent validation: ${seconds(timings.validationMs)}`,
+    `Approval wait: ${seconds(timings.approvalWaitMs)}; information wait: ${seconds(timings.informationWaitMs)}; recovery wait: ${seconds(timings.recoveryWaitMs)}`,
+    `Inspection: ${seconds(timings.inspectionMs)}; diagnostics: ${seconds(timings.diagnosticsMs)}; other: ${seconds(timings.otherMs)}`,
+    `Evaluations: ${counts.evaluations}; failures: ${counts.evaluationFailures}; explicit recoveries: ${counts.evaluationRecoveries}`,
+    `Approval requests: ${counts.approvalRequests}; approvals: ${counts.approvals}; rejections: ${counts.rejections}; alternatives: ${counts.alternatives}`,
+    `Worker calls: Codex ${counts.codexCalls}, Claude ${counts.claudeCalls}; retries: ${counts.workerRetries}`,
+    `Validation runs: ${counts.validationRuns}; failed: ${counts.validationFailures}`,
+    `Failed executions: ${counts.failedExecutions}; timed out: ${counts.timedOutExecutions}; cancelled: ${counts.cancelledExecutions}`,
+    `Independent checks (generation ${validation.generation}): ${validationStatus}. ${checks || 'No required checks detected.'}`,
+    ...(validation.requirementsOmitted ? ['Additional validation requirements were omitted; completion remains blocked.'] : []),
+    ...(validation.repoRefreshRequired ? ['Repository inspection requires recovery before validation can confirm completion.'] : []),
+  ].join('\n');
 }
 
 async function packageVersion(): Promise<string> {
@@ -574,6 +602,7 @@ export async function main(argv: string[] = process.argv.slice(2)): Promise<void
     if (result.status === 'iteration_limit') {
       console.log('Task completion was not approved before the iteration limit; edits and evidence are preserved. Exit code: 1.');
     }
+    console.log(formatRunSummary(result.summary));
     return;
   }
 

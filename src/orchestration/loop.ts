@@ -31,6 +31,7 @@ import {
   type ExecutableAction,
 } from './candidate.js';
 import { executeCandidate, type ToolResult } from './execute.js';
+import { createRunMetrics, executionTimingPhase, type RunMetricsCollector, type RunSummary } from './summary.js';
 
 export const MAX_ORCHESTRATION_ITERATIONS = 8;
 export const MAX_APPROVAL_ALTERNATIVES = 2;
@@ -57,6 +58,7 @@ export type OrchestrationResult = {
   state: AgentState;
   tracePath: string;
   iterations: number;
+  summary: RunSummary;
   exitCode?: number;
   failure?: EvaluationFailure;
 };
@@ -81,6 +83,7 @@ export type OrchestrationOptions = {
   maxIterations?: number;
   signal?: AbortSignal;
   initialPhase?: 'inspection';
+  initialInspectionMs?: number;
 };
 
 export function createInitialState(repo: RepoSnapshot, task: string, workerSelection?: WorkerSelection, codexNetworkAccess?: true): AgentState {
@@ -485,6 +488,7 @@ async function resolveApproval(
   policy: PolicyDecision,
   approve: OrchestrationDependencies['approve'],
   searchResults: string[],
+  metrics: RunMetricsCollector,
   signal?: AbortSignal,
   onProgress?: (proposals: CandidateProposal[], decisions: ApprovalDecision[]) => void,
 ): Promise<{
@@ -500,13 +504,17 @@ async function resolveApproval(
   for (let attempt = 0; attempt <= MAX_APPROVAL_ALTERNATIVES; attempt += 1) {
     onProgress?.(proposals, decisions);
     const alternatives = allowedAlternatives(state, policy);
-    const decision = await interruptible(() => approve({
-      state,
-      evaluation,
-      policy,
-      proposal: structuredClone(proposal),
-      allowedAlternatives: [...alternatives],
-    }), signal);
+    const decision = await metrics.measure('approvalWaitMs', () => interruptible(() => {
+      metrics.counts.approvalRequests += 1;
+      return approve({
+        state,
+        evaluation,
+        policy,
+        proposal: structuredClone(proposal),
+        allowedAlternatives: [...alternatives],
+      });
+    }, signal));
+    metrics.recordApproval(decision);
     decisions.push(decision);
     onProgress?.(proposals, decisions);
     if (decision.kind !== 'alternative') return { proposals, proposal, decision, decisions };
@@ -590,10 +598,12 @@ export async function runOrchestration(
     throw new Error(`Iteration limit must be between 1 and ${MAX_ORCHESTRATION_ITERATIONS}.`);
   }
 
+  const metrics = createRunMetrics(options.initialInspectionMs);
   const trace = await createOrchestrationTrace(initialState.repo.root);
   const execute = dependencies.execute ?? executeCandidate;
   const inspect = dependencies.inspect ?? inspectRepo;
   let state = initialState;
+  let lastSummary = metrics.summary(state);
   let searchResults: string[] = [];
   let phase: InterruptionPhase = options.initialPhase ?? 'evaluation';
   let interruptedPhase: InterruptionPhase | undefined;
@@ -615,6 +625,7 @@ export async function runOrchestration(
       currentGoal: 'Run interrupted without claiming completion.',
       observations: [...state.observations, 'Run interrupted by a signal.'],
     };
+    const summary = metrics.summary(state);
     await appendOrchestrationTrace(trace, {
       iteration: interruptedIteration,
       stateBefore,
@@ -627,8 +638,10 @@ export async function runOrchestration(
       stateAfter: state,
       interruption: { phase: interruptedPhase ?? phase, reason: 'signal' },
       ...(interruptedWorkerRequest === undefined ? {} : { workerRequest: interruptedWorkerRequest }),
+      metrics: { timings: summary.timings, counts: summary.counts },
+      summary,
     });
-    return { status: 'stopped', state, tracePath: trace.path, iterations: interruptedIteration };
+    return { status: 'stopped', state, tracePath: trace.path, iterations: interruptedIteration, summary };
   };
   try {
     throwIfInterrupted(options.signal);
@@ -650,10 +663,14 @@ export async function runOrchestration(
       interruptedWorkerRequest = undefined;
       phase = 'evaluation';
       try {
-        evaluation = await interruptible(() => dependencies.evaluate(state, executionOptions), options.signal);
+        evaluation = await metrics.measure('evaluationMs', () => interruptible(() => {
+          metrics.counts.evaluations += 1;
+          return dependencies.evaluate(state, executionOptions);
+        }, options.signal));
       } catch (error) {
         throwIfInterrupted(options.signal);
         if (error instanceof RunInterruptedError) throw error;
+        metrics.counts.evaluationFailures += 1;
         const failure = evaluationFailure(error);
         state = {
           ...state,
@@ -669,25 +686,31 @@ export async function runOrchestration(
         // Record the failure before prompting so cancellation or EOF cannot
         // erase the rejected evaluation. A continuation is a separate record.
         phase = 'trace';
-        await appendOrchestrationTrace(trace, { ...failurePayload, recovery: { available } });
+        await appendOrchestrationTrace(trace, { ...failurePayload, recovery: { available }, metrics: metrics.snapshot() });
         phase = 'recovery';
         const recovery = available && recoverEvaluation
-          ? await interruptible(() => recoverEvaluation({
+          ? await metrics.measure('recoveryWaitMs', () => interruptible(() => recoverEvaluation({
             state: structuredClone(state), failure: { ...failure }, remainingIterations: maxIterations - iteration, tracePath: trace.path,
-          }), options.signal)
+          }), options.signal))
           : 'stop';
         throwIfInterrupted(options.signal);
         const decision = recovery === 'continue' ? 'continue' : 'stop';
+        if (decision === 'continue') metrics.counts.evaluationRecoveries += 1;
         if (decision === 'continue') state = {
           ...state,
           currentGoal: 'Reassess preserved task evidence after explicit evaluation recovery.',
           observations: [...state.observations, 'User explicitly continued after evaluation failure; existing budgets and evidence are retained.'],
         };
         phase = 'trace';
-        await appendOrchestrationTrace(trace, { ...failurePayload, stateAfter: state, recovery: { available, decision } });
+        const summary = metrics.summary(state);
+        await appendOrchestrationTrace(trace, {
+          ...failurePayload, stateAfter: state, recovery: { available, decision },
+          metrics: { timings: summary.timings, counts: summary.counts },
+          ...(decision === 'stop' ? { summary } : {}),
+        });
         throwIfInterrupted(options.signal);
         if (decision === 'stop') return {
-          status: 'evaluation_failed', state, tracePath: trace.path, iterations: iteration, exitCode: 1, failure,
+          status: 'evaluation_failed', state, tracePath: trace.path, iterations: iteration, exitCode: 1, failure, summary,
         };
         // This failed evaluation consumes an iteration. No candidate from it
         // exists, and call counts, generations, and failure history stay intact.
@@ -710,6 +733,7 @@ export async function runOrchestration(
         policy,
         dependencies.approve,
         searchResults,
+        metrics,
         options.signal,
         (proposals, decisions) => {
           interruptedProposal = { considered: structuredClone(proposals), selected: structuredClone(proposals.at(-1)) };
@@ -777,7 +801,7 @@ export async function runOrchestration(
       } else if (proposal.action === 'ASK_USER') {
         phase = 'information';
         const information = truncateText(
-          (await interruptible(() => dependencies.askForInformation(state), options.signal)).trim(),
+          (await metrics.measure('informationWaitMs', () => interruptible(() => dependencies.askForInformation(state), options.signal))).trim(),
           MAX_OBSERVATION_LENGTH,
         );
         nextState = withClarification({
@@ -793,7 +817,7 @@ export async function runOrchestration(
         if (nextState.evidence?.repoRefreshRequired) {
           phase = 'refresh';
           try {
-            const refreshed = await inspect(state.repo.root);
+            const refreshed = await metrics.measure('inspectionMs', () => inspect(state.repo.root));
             const modified = modifiedFiles(refreshed);
             nextState = {
               ...nextState,
@@ -832,7 +856,8 @@ export async function runOrchestration(
         throwIfInterrupted(options.signal);
         interruptedInput = proposal.input;
         if (isCodingAgentProposal(proposal)) interruptedWorkerRequest = workerTraceRequest(proposal, stateBefore, decision);
-        toolResult = await safelyExecute(proposal, execute, executionOptions);
+        metrics.recordExecution(proposal.action);
+        toolResult = await metrics.measure(executionTimingPhase(proposal.action), () => safelyExecute(proposal, execute, executionOptions));
         interruptedResult = toolResult;
         if (proposal.action === 'SEARCH_REPO' && toolResult.ok) searchResults = toolResult.files;
         let refreshedRepo: RepoSnapshot | undefined;
@@ -840,7 +865,7 @@ export async function runOrchestration(
         if (isCodingAgentProposal(proposal)) {
           phase = 'refresh';
           try {
-            refreshedRepo = await inspect(state.repo.root);
+            refreshedRepo = await metrics.measure('inspectionMs', () => inspect(state.repo.root));
           } catch {
             refreshFailed = true;
             toolResult = {
@@ -851,6 +876,7 @@ export async function runOrchestration(
           }
         }
         if (options.signal?.aborted) toolResult = { ...toolResult, ok: false, cancelled: true };
+        metrics.recordResult(toolResult);
         nextState = applyToolResult(state, proposal, toolResult, refreshedRepo, refreshFailed);
         interruptedResult = toolResult;
       }
@@ -869,6 +895,8 @@ export async function runOrchestration(
       }
 
       phase = 'trace';
+      const summary = metrics.summary(nextState);
+      lastSummary = summary;
       await appendOrchestrationTrace(trace, {
         iteration,
         stateBefore,
@@ -879,6 +907,8 @@ export async function runOrchestration(
         toolInput: decision.kind === 'stop' ? null : proposal.input,
         toolResult,
         stateAfter: nextState,
+        metrics: { timings: summary.timings, counts: summary.counts },
+        ...(terminalStatus !== undefined || reachedLimit ? { summary } : {}),
         ...(isCodingAgentProposal(proposal) ? {
           workerRequest: workerTraceRequest(proposal, stateBefore, decision),
         } : {}),
@@ -892,6 +922,7 @@ export async function runOrchestration(
           state,
           tracePath: trace.path,
           iterations: iteration,
+          summary,
         };
       }
     }
@@ -903,6 +934,7 @@ export async function runOrchestration(
       tracePath: trace.path,
       iterations: maxIterations,
       exitCode: 1,
+      summary: lastSummary,
     };
   } catch (error) {
     if (error instanceof RunInterruptedError || options.signal?.aborted) return await stop();
