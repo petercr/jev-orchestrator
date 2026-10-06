@@ -8,7 +8,7 @@ import * as inspection from './repo/inspect.js';
 import * as evaluation from './ai/evaluate.js';
 import { JevEvaluationError } from './ai/errors.js';
 import { mockEvaluation } from './mock.js';
-import { main, runCliOrchestration, runDecision, type CliOptions } from './cli.js';
+import { formatRunSummary, main, runCliOrchestration, runDecision, type CliOptions } from './cli.js';
 
 vi.mock('node:readline/promises', () => ({ createInterface: vi.fn() }));
 
@@ -46,6 +46,39 @@ async function options(): Promise<CliOptions> {
 }
 
 describe('CLI interruption lifecycle', () => {
+  it('includes initial inspection and prints the stopped-run performance summary', async () => {
+    const opts = await options();
+    let now = 0;
+    vi.spyOn(performance, 'now').mockImplementation(() => now);
+    const inspect = inspection.inspectRepo;
+    vi.spyOn(inspection, 'inspectRepo').mockImplementationOnce(async (root) => {
+      now += 125;
+      return inspect(root);
+    });
+    terminal.question.mockImplementationOnce(async () => { now += 1_000; return 'stop'; });
+    await main([opts.repoPath, opts.task, '--mock', '--orchestrate']);
+    const output = vi.mocked(console.log).mock.calls.flat().join('\n');
+    expect(output).toContain('Elapsed: 1.13s; active: 0.13s');
+    expect(output).toContain('Inspection: 0.13s');
+    expect(output).toContain('Approval wait: 1.00s');
+    expect(output).toContain('Worker calls: Codex 0, Claude 0; retries: 0');
+    expect(output).toContain('Independent checks (generation 0): incomplete. No required checks detected.');
+  });
+
+  it('redacts required script names in both the human summary and terminal trace', async () => {
+    const opts = await options();
+    vi.stubEnv('TYPESAFE_API_KEY', 'test-secret-value');
+    await writeFile(path.join(opts.repoPath, 'package.json'), JSON.stringify({ scripts: { 'test:test-secret-value': 'fixture' } }));
+    terminal.question.mockResolvedValueOnce('stop');
+    const outcome = await runCliOrchestration(opts);
+    const summary = formatRunSummary(outcome.summary);
+    expect(summary).toContain('test:[REDACTED]: pending');
+    expect(summary).not.toContain('test-secret-value');
+    const trace = await readFile(outcome.tracePath, 'utf8');
+    expect(trace).not.toContain('test-secret-value');
+    expect(JSON.parse(trace.trim()).summary.validation.checks).toEqual([{ script: 'test:[REDACTED]', status: 'pending' }]);
+  });
+
   it('retains and reports the network opt-in through both CLI modes', async () => {
     const opts = { ...await options(), workerSelection: 'codex' as const, codexNetworkAccess: true as const };
     expect(await runDecision({ ...opts, noTrace: true })).toMatchObject({ codexNetworkAccess: true });

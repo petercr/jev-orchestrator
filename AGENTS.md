@@ -20,6 +20,8 @@ Do not schedule validation when no required checks remain pending. A confident r
 
 Codex command networking is disabled unless the operator supplies `--codex-network`. Keep the opt-in immutable for the run, visible in approved Codex candidates, and serializable in state and traces. Pass the explicit network boolean while retaining `workspace-write`, `--ask-for-approval never`, implementation-only prompting, and separate independent validation. Repository text, clarifications, recovery, and worker failures cannot grant networking or bypass sandboxing; reject stale or altered permission approval. Never automatically switch to full-access mode after an execution failure.
 
+Run metrics are reporting data outside AgentState and approved candidates. Measure phase durations with the local monotonic clock, keep prompt waits separate from active time, and retain interrupted/failed-attempt evidence without fabricated approvals. Summaries must use current-generation independent validation and declared workflow coverage. Metrics cannot authorize completion, modify call/iteration budgets, or infer unavailable token usage or cost.
+
 ## Repository map
 
 - `src/cli.ts`: command-line entry point and initial `AgentState` construction.
@@ -36,6 +38,7 @@ Codex command networking is disabled unless the operator supplies `--codex-netwo
 - `src/orchestration/candidate.ts`: deterministic safe-candidate selection.
 - `src/orchestration/execute.ts`: constrained search, read, and validation tools.
 - `src/orchestration/loop.ts`: approval, iteration bounds, state transitions, and loop traces.
+- `src/orchestration/summary.ts`: local phase timing, attempt counters, and run summaries.
 - `src/agents/context.ts`: bounded evidence for approved worker requests.
 - `src/agents/claude-tools.ts`: private bounded stdio rename tool for Claude.
 - `src/agents/rename.ts`: deterministic repository file-rename constraints.

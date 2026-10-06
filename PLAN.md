@@ -1316,6 +1316,74 @@ verification logs, actual Codex events, installed package, clone, fingerprints,
 and receipts are under
 `/home/peterc/.cache/jev-pilots/codex-permissions-20261005-5my184mp`.
 
+## CLI performance summary
+
+Implementation: add a returned and printed summary to every completed
+orchestration boundary, including completion, typed stop, iteration limit,
+evaluation failure, and interruption. A local monotonic clock measures
+evaluation, approved preparation, worker execution, independent validation,
+initial/refreshed inspection, and Git diagnostics. Approval, clarification,
+and explicit evaluation-recovery waits are reported separately from active
+time. Remaining loop overhead has its own total.
+
+Counters report evaluation attempts/failures/recoveries, actual approval
+responses, begun calls to each worker, repeated calls to the same adapter,
+validation attempts/failures, failed executions, timeouts, and cancellations.
+They remain outside AgentState, policy, candidate permissions, and budgets.
+No provider usage or cost is inferred. Elapsed time ends at the terminal trace
+snapshot so the printed/returned summary and trace match.
+
+Current-generation required checks retain passed/failed/pending status and
+declared conjunctive coverage; older-generation results cannot establish
+completion. Omitted requirements and repository refresh blockers remain
+visible. Each schema-v2 record gains cumulative metrics, and terminal records
+include the bounded, redacted summary without adding extra trace records.
+
+Verification passed 81 focused tests, `pnpm check`, all 526 tests across 29
+files, and `pnpm build`. A compiled-CLI offline fixture completed approved
+search, read, validation, and finish in four iterations. All 13 smoke receipt
+checks passed, including cumulative metrics, the terminal summary, independent
+validation, absence of worker calls, and balanced phase/wait totals. No live
+provider or coding-worker call was required.
+
+A fresh installed-package live issue #80 run then used the same `5a910ba`
+baseline, direct TypeSafe `jev-latest` (served as `jev-1.13.0`), Codex CLI
+0.160.0, Terra/high, `--worker codex`, and `--codex-network`. It completed in
+eight iterations with seven approvals, manual worker/finish alternatives,
+one rejected distribution sum and explicit evaluation recovery, and one
+successful Codex call. No worker retry, timeout, or cancelled execution occurred.
+
+| Summary phase | Time |
+| --- | ---: |
+| Evaluation | 2.404 s |
+| Approved preparation | 0.339 s |
+| Worker | 58.767 s |
+| Independent verify + build | 12.706 s |
+| Inspection + other overhead | 0.092 s |
+| Active total | 74.308 s |
+| Approval + evaluation-recovery waits | 114.385 s |
+| Elapsed total | 188.693 s |
+
+Waits include operator/harness pauses and acceptance-review auditing. Setup
+was outside the timed loop. This is one feature-verification run, not a new
+matched performance comparison. Separate full-log verification confirmed lint,
+typecheck, all 296 tests across 28 files, and absence of the original warning;
+the approved build also passed. The patch matched the previous successful
+pilots, target HEAD/index/lockfile were preserved, and original/source checkouts
+were unchanged before this documentation update.
+
+All 36 acceptance/evidence checks passed, including phase totals, prompt-wait
+exclusion, counters matching trace events, matching printed/trace summary,
+current-generation passed checks, and the approved network setting. Package,
+consumer, clone, invocation, timings, logs, patch, and receipt are under
+`/home/peterc/.cache/jev-pilots/issue80-cli-summary-20261005-cNUbfpyP`.
+
+Follow-up work is tracked in [issue #30](https://github.com/petercr/jev-orchestrator/issues/30)
+for the production bug-and-tests pilot on TrusTrove #949 and
+[issue #31](https://github.com/petercr/jev-orchestrator/issues/31) for matched
+JEV versus standalone Codex/Claude benchmarks. This milestone does not run
+new paid coding pilots or claim a speed improvement.
+
 ## Reference, not a template
 
 [`gargpratyush/jev-router`](https://github.com/gargpratyush/jev-router) is a

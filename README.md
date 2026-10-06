@@ -354,6 +354,49 @@ object on stderr with the same exit code.
 Stopping after an evaluation failure retains operational exit `1`; a later
 successful continuation uses the normal loop exit behavior.
 
+## Orchestration run summary
+
+Every returned `--orchestrate` run prints a performance summary after its loop
+status, including approved completion, typed stop, iteration limit, evaluation
+failure, and signal interruption. It reports elapsed time, active time excluding
+prompt waits, evaluation attempts and failures, explicit evaluation recoveries,
+approval responses, worker calls and retries, and validation outcomes.
+
+Times use one local monotonic clock around each boundary, rather than adding
+provider latency or worker-reported durations. Preparation covers approved
+issue reads, searches, and file reads. Worker time includes execution cleanup;
+independent validation is measured separately. Inspection includes the CLI's
+initial snapshot and subsequent repository refreshes. Approval, clarification,
+and recovery prompts have separate wait totals, including interrupted waits.
+Candidate selection, policy, earlier trace writes, and other loop overhead
+appear under `other`. Elapsed time covers initial inspection plus the loop up
+to the final trace snapshot; it excludes CLI startup, final trace writing, and
+summary printing. Millisecond values are rounded down.
+
+For example:
+
+```text
+Run summary
+Elapsed: 7.32s; active: 1.32s (excludes prompt waits)
+Evaluation: 0.06s; preparation: 0.05s
+Worker: 1.00s; independent validation: 0.15s
+Approval wait: 6.00s; information wait: 0.00s; recovery wait: 0.00s
+```
+
+Approval counts describe operator responses; final deterministic checks still
+control execution. Worker calls count begun attempts in this run, and retries
+count additional calls to the same adapter. Evaluation counts describe loop
+evaluations, including failed/interrupted attempts; they do not count individual
+provider requests or internal transport retries. Token usage and cost are not
+inferred from elapsed time.
+
+Independent checks are reported as `passed`, `failed`, or `pending` for the
+current validation generation. Passing declared conjunctive workflows covers
+their constituent scripts, while a new worker attempt invalidates earlier
+results. Omitted requirements and an unresolved repository refresh remain
+explicit completion blockers. The summary reports validation; task acceptance
+still requires the existing completion review and approval.
+
 ## Traces
 
 Unless `--no-trace` is set, each successful decision writes one JSONL record
@@ -372,6 +415,14 @@ candidates, approval decision, tool input and result, exit status, duration,
 and the before/after state. A rejection records an observation and executes no
 repository tool. Alternative selections and their final confirmation are kept
 as an approval-history array so manual completion overrides remain auditable.
+
+New orchestration records include cumulative `metrics` with numeric `timings`
+and `counts`. The terminal record also contains the returned `summary`, adding
+current-generation independent validation results. These are additive fields
+within schema version `2`; older traces may omit them. The summary uses the
+same bounded sanitization and credential redaction as other trace fields.
+Measurements stay outside `AgentState` and do not change policy inputs,
+permissions, approvals, or budgets.
 
 A failed evaluation adds a schema-v2 record with null evaluation, policy,
 approval, and tool fields, plus allowlisted `failure` diagnostics and recovery
