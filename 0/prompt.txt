@@ -1,17 +1,1 @@
-ok cool lets commit and pr then
-
----
-
-pr 29 is merged what can we do next
-
----
-
-greast thats a good list open issues for 2 and 3 then start work on 1
-
----
-
-well which mcp key bro
-
----
-
-ok well did we try a test run of the cli with issue 80 or something
+ok commiy and pr
