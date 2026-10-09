@@ -1384,6 +1384,81 @@ for the production bug-and-tests pilot on TrusTrove #949 and
 JEV versus standalone Codex/Claude benchmarks. This milestone does not run
 new paid coding pilots or claim a speed improvement.
 
+## Production bug-and-tests pilot: TrusTrove #949
+
+Live pilot completed on 2026-10-08 (America/New_York) for
+[issue #30](https://github.com/petercr/jev-orchestrator/issues/30), using
+[TrusTrove #949](https://github.com/TrusTrove/TrusTrove-app/issues/949).
+The upstream issue was open and unassigned. A fresh external clone at
+`6cae96e13e950a9e932130ef1a7aebbcddf9c58e` reproduced the defect for every
+string length from 1 through 10. Baseline `pnpm typecheck`, `pnpm build`,
+`pnpm lint`, and `pnpm test` all passed; the baseline contained 800 tests
+across 98 files. Dependency installation used the unchanged frozen lockfile.
+Setup and baseline checks were outside the timed loop.
+
+The installed package was built from orchestrator `933c4ec`. The CLI received
+only the exact issue URL as its task, with `--orchestrate --worker codex
+--codex-network`. Direct TypeSafe `jev-latest` was served as `jev-1.13.0`;
+Codex CLI 0.161.0 used Terra/high, the workspace file sandbox, no inner
+approval prompts, and implementation-only prompting. The environment used
+Node.js 24.21.0 and pnpm 10.30.3. No permissions or budgets were expanded.
+
+The loop read the issue and `CONTRIBUTING.md`, delegated once, separately
+approved root test/typecheck/lint/build, and completed after acceptance review.
+It used eight iterations, eight approvals, manual `CALL_CODEX` and `FINISH`
+alternatives, zero evaluation failures/recoveries, and zero worker retries,
+timeouts, or cancellations. Worker and completion confidence remained below
+their policy thresholds; manual alternatives did not increase confidence.
+
+| CLI summary phase | Time |
+| --- | ---: |
+| Evaluation | 2.181 s |
+| Approved preparation | 0.290 s |
+| Codex worker | 66.182 s |
+| Independent test/typecheck/lint/build | 114.032 s |
+| Inspection + other overhead | 0.085 s |
+| Active total | 182.770 s |
+| Approval waits | 330.396 s |
+| Elapsed total | 513.166 s |
+
+Approval waits include operator/harness pauses and additional acceptance
+audits. They are excluded from active time. This is one production-task run,
+without a matched standalone control or a speed claim.
+
+Only `apps/web/lib/format.ts` and the new `apps/web/lib/format.test.ts` changed.
+The formatter preserves inputs of length 10 or shorter and accepts
+undefined/null inputs. Five new Vitest cases cover a 56-character Stellar
+address, empty/undefined input, and lengths 1, 10, and 11. All five pass with
+the patch; the two short-input cases fail against the original function in a
+separate regression fixture. An independent 15-case probe also passed,
+including every short length. A separate full test log confirmed all 805
+tests across 99 files pass, including existing component suites. The CLI's
+four required checks passed in validation generation 1.
+
+All 35 acceptance/evidence receipt checks passed. The patch passed reverse
+checking; target HEAD, index, lockfiles, package scripts, and unrelated files
+were preserved. The original issue #80 checkout and orchestrator checkout
+were unchanged before this documentation update. No upstream contribution
+was published. Only TypeScript workspace checks were exercised; Go/database,
+browser E2E, dependency audit, and repository-wide formatting were outside
+this frontend pilot.
+
+Two limits were observed. Preparation, implementation, four validations, and
+acceptance review used all eight iterations, leaving no iteration for extra
+inspection, evaluation recovery, or repair. The terminal `stateAfter` exceeded
+the existing 8 KiB trace-value bound and became a truncated preview. The other
+15 state snapshots, final approval, metrics, and validation summary remained
+structured; missing terminal fields were not reconstructed. Worker command
+output and trace tool output are also bounded, so complete command capture
+is not claimed.
+
+The package, consumer, clone, configuration, invocation, baseline and acceptance
+probes, regression fixture, full test log, timings, trace, fingerprints, patch,
+and receipt are under
+`/home/peterc/.cache/jev-pilots/trustrove-949-20261008-0bmye6or`.
+Matched standalone comparisons remain tracked in
+[issue #31](https://github.com/petercr/jev-orchestrator/issues/31).
+
 ## Reference, not a template
 
 [`gargpratyush/jev-router`](https://github.com/gargpratyush/jev-router) is a
