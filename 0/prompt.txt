@@ -1,9 +1,1 @@
-ok commiy and pr
-
----
-
-pr 32 merged
-
----
-
-ok start on #30 then
+ok commit docs and pr
