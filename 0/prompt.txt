@@ -1,0 +1,9 @@
+ok with cloudflare releasing clef for decisions like jev qnd openai releasing their decisions api we need to re think jev being thr only model we use for thid router. lets adjust our plan to include at least those providers. send luna high sub agentd if you need to do any research
+
+---
+
+update plan we can acess ooenai decisions api thru openrouter
+
+---
+
+lets go ahead and plan for adding these as the v0.3.0 release
