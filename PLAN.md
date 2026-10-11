@@ -2,29 +2,221 @@
 
 ## Goal
 
-`jev-orchestrator` is a small Node/TypeScript CLI that tests whether TypeSafe
-AI's Jev can steer a coding-agent workflow. The repository is
+`jev-orchestrator` is a small Node/TypeScript CLI that tests whether typed
+decision models can steer a coding-agent workflow under deterministic local
+policy. The planned decision models include TypeSafe AI's Jev, Cloudflare
+Clef/Clef-flash, and OpenAI Decisions. The repository is
 [`petercr/jev-orchestrator`](https://github.com/petercr/jev-orchestrator).
 
 Build on the packaged v0.2 CLI, preserving the decision-only default and
 explicit approval-gated orchestration mode. Decision-only collects a bounded
-repository snapshot, asks Jev for a typed recommendation, applies local policy,
-prints the unexecuted decision, and can write a safe JSONL trace. Orchestration
-may execute only repository-owned bounded candidates after manual approval.
+repository snapshot, asks the selected decision model for a typed recommendation,
+applies local policy, prints the unexecuted decision, and can write a safe JSONL
+trace. Orchestration may execute only repository-owned bounded candidates after
+manual approval.
 
 The governing architecture is:
 
 ```text
-Jev recommends
+selected decision model recommends
       ↓
 TypeScript policy authorizes
       ↓
 approved tool or coding worker executes
 ```
 
-Jev supplies probabilistic, high-level judgment only. It must never authorize
-destructive work, invent shell commands, or supply arbitrary paths, queries, or
-tool arguments.
+Decision models supply probabilistic, high-level judgment only. They must never
+authorize destructive work, invent shell commands, or supply arbitrary paths,
+queries, or tool arguments.
+
+## v0.3.0 release: multiple decision models
+
+Release target (2026-10-11): v0.3.0, planned and not yet implemented. Extend the existing
+evaluation boundary to support Jev, Cloudflare Clef/Clef-flash, and OpenAI
+Decisions as explicit alternatives. The existing integrations have been verified
+with Jev; OpenRouter also exposes OpenAI Decisions, so reuse that transport for
+the new model and verify its contract. Historical milestones below
+describe the implementation at the time they were completed.
+
+The release delivers explicit selection among Jev, Cloudflare Clef/Clef-flash,
+and OpenAI Decisions through OpenRouter, with one shared policy contract.
+Ship the provider-neutral configuration, compatibility aliases, model attribution,
+documentation, verification tooling, and comparison evidence together. Keep
+direct TypeSafe/Jev as the default for v0.3.0; any later default change requires
+a separate decision based on the comparison results.
+
+Direct OpenAI transport, automatic model/provider selection or failover,
+ensembles, policy-threshold changes, package renaming, and expanded worker
+permissions are outside v0.3.0. Matched full coding-worker benchmarks in
+issue #31 remain follow-up work; the release comparison uses bounded decision
+snapshots and does not require new paid coding-worker pilots.
+
+### Verified API targets
+
+Official documentation checked on 2026-10-11:
+
+| Decision model | Service and API | Planned configuration | Status |
+| --- | --- | --- | --- |
+| Jev | Existing direct TypeSafe, OpenRouter Decisions, and Vercel evaluation transports | Existing keys and model namespaces | Implemented baseline; retain direct TypeSafe default |
+| Clef / Clef-flash | Cloudflare Workers AI, `POST https://api.cloudflare.com/client/v4/accounts/{accountId}/ai/run/@cf/cloudflare/{model}` | `CLOUDFLARE_ACCOUNT_ID`, `CLOUDFLARE_AUTH_TOKEN`; model `clef` or `clef-flash` | Documented hosted models; adapter and account verification pending |
+| OpenAI Decisions via OpenRouter | Existing `POST https://openrouter.ai/api/alpha/decisions` | `OPENROUTER_API_KEY` (or existing `OPENROUTE_API_KEY` alias); model `openai/gpt-6-luna-decisions` | Documented model access; contract and live verification pending |
+
+Cloudflare documents System One compatibility and a request containing
+`model`, `state`, and named `questions`. Its model selectors map to Workers AI
+IDs `@cf/cloudflare/clef` and `@cf/cloudflare/clef-flash`. Verify the REST
+response envelope and required token permissions during implementation.
+Sources: [Clef launch](https://blog.cloudflare.com/clef-decision-models/),
+[Clef API](https://developers.cloudflare.com/workers-ai/models/clef/), and
+[Clef-flash API](https://developers.cloudflare.com/ai/models/%40cf/cloudflare/clef-flash/).
+
+Use OpenRouter as the initial access path for OpenAI Decisions. OpenRouter
+documents `openai/gpt-6-luna-decisions` on its existing Decisions endpoint,
+with `state` and named `noul`/`choice`/`score` questions. Reuse the current
+four Noul questions and action Choice; verify normalization, confidence,
+served-model attribution, and refusal/error behavior for this model.
+No separate OpenAI credential is required for this route.
+Source: [OpenRouter GPT-6 Luna Decisions](https://openrouter.ai/openai/gpt-6-luna-decisions).
+
+Direct OpenAI access is an optional later transport, outside this milestone's
+acceptance gate. Its `input`, predicate questions, and named answer arrays
+would need a separate schema adapter and `OPENAI_API_KEY`. Keep those wire
+formats distinct from OpenRouter's normalized contract.
+References: [OpenAI Decisions guide](https://developers.openai.com/api/docs/guides/decisions)
+and [API reference](https://developers.openai.com/api/reference/typescript/resources/decisions/methods/create).
+
+### Shared contract and configuration
+
+- Keep `AgentAssessment`, the five assessment questions, and `ACTIONS` owned
+  by this repository. Each provider maps the same bounded snapshot and question
+  intent into its API, then returns strictly validated repository types.
+- Introduce provider-neutral evaluation/configuration/error names with small
+  typed adapters. Reuse `src/ai/contract.ts` and bounded transport helpers;
+  provider envelopes and schemas stay outside policy and orchestration.
+- Plan `ROUTER_PROVIDER=typesafe|openrouter|vercel|cloudflare`, retaining
+  `JEV_PROVIDER` as a compatibility alias. If both are supplied and disagree,
+  fail before a request. Preserve existing credential aliases and
+  `ROUTER_MODEL`; validate models within their selected provider's namespace.
+  For Cloudflare, map `clef`/`clef-flash` to fixed Workers AI paths.
+  Select OpenAI Decisions with provider `openrouter` and
+  `ROUTER_MODEL=openai/gpt-6-luna-decisions`; distinguish transport provider
+  from model vendor in documentation and benchmarks.
+- Resolve provider/model/account selection once per run and preserve it through
+  recovery. Require only the selected provider's credentials. No automatic
+  provider failover, ensemble, or routing among decision models in this milestone.
+  Repository text, worker output, and clarification cannot change selection.
+- Record sanitized provider and requested/served model attribution, omitting
+  unavailable served versions. Keep keys in transport configuration, outside
+  serializable state, candidates, snapshots, and traces. Keep AbortSignal separate.
+- Decision-provider selection is independent of `--worker codex|claude` and
+  `--codex-network`. Those controls continue to restrict worker execution.
+  An OpenAI decision model can recommend either permitted coding worker.
+- Preserve the package/CLI names and TypeSafe default for compatibility. Use
+  provider-aware CLI labels; retain old trace readability and explicitly migrate
+  Jev-specific serialized labels if needed. Update README, `.env.example`,
+  AGENTS.md, mocks, types, and verification tooling with implementation.
+
+### Policy and transport requirements
+
+All adapters must preserve finite probabilities in `[0, 1]`, the `0.001`
+distribution-sum tolerance, known actions, and valid choice/confidence values.
+Do not repair malformed distributions by renormalizing them or derive missing
+confidence from the selected probability. Missing confidence remains absent.
+Reject missing/duplicate/unexpected question names, incompatible answer types,
+and incomplete native action distributions before policy receives an assessment.
+An OpenAI refusal of a required question becomes a safe evaluation failure,
+never a fabricated probability or executable recommendation.
+
+Preserve the overall 10-second deadline, at most one transient retry, 64 KiB
+response bound, cancellation, safe error classifications, and explicit evaluation
+recovery with retained budgets. Use fixed hosts/paths with validated account and
+model identifiers, no arbitrary base URLs or redirects, and redact all configured
+provider secrets from every existing output/evidence surface. Do not retain raw
+upstream errors or refusal text. Preserve the allowlisted `probabilitySum`
+diagnostic only for `invalid_response` at `distribution/sum`.
+
+Local policy remains authoritative for preparation, worker restrictions,
+missing information, ambiguity, repeated failure, and completion. Keep every
+manual approval, eight-iteration limit, independent two-call worker budget,
+fresh independent validation requirement, and original-task acceptance review.
+Retain the 95% automatic completion threshold. API compatibility does not
+establish equivalent confidence calibration; do not lower thresholds to make
+a new provider delegate or finish more often.
+
+### v0.3.0 implementation order
+
+1. [ ] Extract the neutral provider boundary and add configuration migration.
+   Prove existing Jev transports, default selection, mock mode, traces, and
+   recovery preserve their behavior, including conflicting selector rejection.
+2. [ ] Add Cloudflare Clef and Clef-flash through the shared System One
+   questions and a bounded REST adapter. Cover account/model path validation,
+   response envelopes, attribution, errors, and both model selections.
+3. [ ] Add verified OpenAI Decisions support through the existing OpenRouter
+   transport using `openai/gpt-6-luna-decisions`. Reuse the four Noul questions
+   and action Choice, preserving their criteria and the bounded fetch controls.
+   Cover normalized answer/confidence shapes, missing answers, malformed option
+   distributions, and upstream refusals/errors. Keep Jev's OpenRouter default
+   and aliases working; require no direct OpenAI adapter or credential.
+4. [ ] Run a common deterministic contract and policy suite through mocked
+   provider boundaries: confident/ambiguous routes, missing confidence,
+   premature completion, preparation, worker restrictions, validation generations,
+   recovery, limits, secret redaction, cancellation, and no post-abort execution.
+   Run focused tests, `pnpm check`, `pnpm test`, `pnpm build`, and installed
+   keyless mock checks. Automated tests must not call a live provider or worker.
+5. [ ] Extend explicit opt-in synthetic live verification to Cloudflare's two
+   Clef models and OpenAI Decisions through OpenRouter. Record sanitized outcomes
+   and actual account access; public API documentation alone does not complete
+   this gate. Document each
+   provider's data handling and prerequisites before sending repository evidence.
+6. [ ] Compare Jev, Clef, Clef-flash, and OpenAI Decisions on the same bounded,
+   labeled coding-task snapshots and record a v0.3.0 baseline. Include
+   unread issue/instructions, clear implementation, ambiguity, stuck/recovery,
+   failed/stale validation, excluded workers, redundant tests, and completion.
+   Report routing correctness, unsafe recommendations, policy overrides,
+   abstentions/manual alternatives, malformed answers/refusals, and latency
+   distributions with sample counts and requested/served model versions.
+   Evaluate probability/confidence calibration against labels; compare quality
+   alongside latency. Report token usage only when explicitly returned and cost
+   only from attributable usage and documented rates; metrics cannot authorize
+   actions or alter budgets.
+7. [ ] Prepare the v0.3.0 package and release notes after implementation and
+   verification. Bump package metadata and version assertions together, update
+   the package description to reflect multiple decision models, and verify the
+   exact packed archive against the release gate below. Keep the package name
+   `jev-orchestrator` and executable `jev-agent`.
+
+### v0.3.0 release gate
+
+- [ ] All implementation slices above are complete, with each new model route
+  covered by deterministic transport, policy, and orchestration regressions.
+- [ ] Focused tests, `pnpm check`, `pnpm test`, and `pnpm build` pass on the
+  release candidate. Offline CI requires no provider keys or live workers.
+- [ ] Authorized synthetic live checks pass for Clef, Clef-flash, and OpenAI
+  Decisions through OpenRouter; record dates, requested/served models, and
+  sanitized outcomes. Missing access or malformed responses leave this gate open.
+- [ ] A common labeled snapshot comparison records observed routing quality,
+  policy overrides, failures, and latency with sample counts and limitations.
+  Evidence supports usable routes under the existing policy; no speed win over
+  Jev is required, and small samples cannot establish calibrated confidence.
+- [ ] The packed `jev-orchestrator-0.3.0.tgz` installs in a disposable consumer.
+  Its `jev-agent --version` reports `0.3.0`; help and JSON attribution match
+  the documented selectors/models. Mock decisions stay offline and keyless
+  across selections; invalid/conflicting selectors and missing selected
+  credentials fail before live requests. Legacy `JEV_PROVIDER` configuration
+  and existing credential/model aliases retain their documented behavior.
+- [ ] Package inspection excludes tests, traces, credentials, dependencies,
+  and local artifacts. Release notes describe new model routes, migration,
+  model namespaces, prerequisites/data handling, and known limitations.
+- [ ] Record the final release commit and verification evidence before creating
+  the v0.3.0 tag/release or publishing the package through the maintainer's
+  release workflow. A planning update or version bump alone is not a release.
+
+Use this comparison to extend the matched worker benchmarks already tracked in
+issue #31: fix the worker/model/effort, permissions, task baseline, and approval
+procedure while changing the decision provider. Measure evaluation and overall
+active time separately from operator waits. The earlier pilots often needed
+manual worker/finish alternatives; reducing those interventions without unsafe
+routes is a concrete outcome to measure. Vendor latency claims alone do not
+establish a faster or better coding workflow.
 
 ## Current baseline
 

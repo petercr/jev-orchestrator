@@ -40,6 +40,11 @@ Never commit `.env`; it is ignored by git.
 
 ## Evaluation providers
 
+The [planned v0.3.0 release](PLAN.md#v030-release-multiple-decision-models)
+plans Cloudflare Clef/Clef-flash and OpenAI Decisions through OpenRouter alongside
+Jev, using a shared assessment contract and the existing deterministic policy.
+These model integrations remain planned; the table below lists verified support.
+
 `JEV_PROVIDER` explicitly selects one provider. Unset selection uses direct TypeSafe
 with `jev-latest` and `TYPESAFE_API_KEY` (or `TYPESAFE_AI_API_KEY`);
 there is no automatic cross-provider failover. Only the selected credential is
