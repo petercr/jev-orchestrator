@@ -47,8 +47,8 @@ a separate decision based on the comparison results.
 
 Direct OpenAI transport, automatic model/provider selection or failover,
 ensembles, policy-threshold changes, package renaming, and expanded worker
-permissions are outside v0.3.0. Matched full coding-worker benchmarks in
-issue #31 remain follow-up work; the release comparison uses bounded decision
+permissions are outside v0.3.0. The matched coding-worker baseline from
+issue #31 is separate from this release's comparison, which uses bounded decision
 snapshots and does not require new paid coding-worker pilots.
 
 ### Verified API targets
@@ -1648,8 +1648,50 @@ The package, consumer, clone, configuration, invocation, baseline and acceptance
 probes, regression fixture, full test log, timings, trace, fingerprints, patch,
 and receipt are under
 `/home/peterc/.cache/jev-pilots/trustrove-949-20261008-0bmye6or`.
-Matched standalone comparisons remain tracked in
-[issue #31](https://github.com/petercr/jev-orchestrator/issues/31).
+Matched standalone comparisons were subsequently completed for
+[issue #31](https://github.com/petercr/jev-orchestrator/issues/31), as recorded below.
+
+## Matched worker comparison — issue #31
+
+Completed on 2026-10-13 (America/New_York): twelve first-attempt observations
+on TrusTrove #949, with three repetitions each of JEV + Codex, direct Codex,
+JEV + Claude, and direct Claude. Fresh external clones used the same `6cae96e`
+baseline, frozen dependency setup, task URL, installed v0.2 package, bounded
+issue/instruction evidence, worker models, effort, permissions, and separate
+project validation. Run order alternated within each worker pair. All six
+paired contexts and original/instrumented worker argument sets match.
+
+| Worker | JEV worker mean | Direct worker mean | Fully accepted patches |
+| --- | ---: | ---: | --- |
+| Codex, Terra / high | 68.7 s | 70.3 s | 2/3 for each setup |
+| Claude, Sonnet 5.5 / medium | 16.4 s | 15.8 s | JEV 3/3; direct 2/3 |
+
+Nine patches passed full acceptance and eight workflows completed successfully.
+One Codex observation per setup produced an incorrect 11-character test
+expectation, caught independently. One direct Claude build hit the unchanged
+120-second timeout. One JEV + Claude evaluation distribution totaled `0.99`;
+explicit continuation consumed the last iteration on build, leaving no
+completion approval. That loop returned `iteration_limit` and exit code 1
+despite all four current-generation checks passing. Failed and incomplete
+observations were retained without replacement or increased limits.
+
+Every JEV run needed a manual worker alternative; completed JEV loops also
+needed manual completion review. No worker retries were performed in this
+first-attempt protocol. Stopping a failed JEV observation leaves its state and
+metrics intact; remaining root checks are separately recorded acceptance audits.
+The benchmark does not exercise controlled repair or establish a general speed
+or quality advantage. Validation variation and the small single-task sample
+limit the timing conclusions.
+
+The [full report](docs/benchmarks/issue-31.md) records per-run and aggregate
+timings, successful-only statistics, actual reported usage, exceptions,
+configuration, practical limits, and reproduction. The
+[checked-in harness](scripts/benchmarks/README.md) keeps live execution opt-in
+and individual JEV approvals intact. All 81 preservation/configuration audit
+checks passed; original checkouts, runtime files, target heads/indexes,
+lockfiles, scripts, and unrelated files were preserved. Persistent receipts,
+patches, complete bounded logs, the exact archive, and aggregate JSON are under
+`/home/peterc/.cache/jev-pilots/issue31-matched-20261013-v1k7494x`.
 
 ## Reference, not a template
 
