@@ -45,6 +45,14 @@ plans Cloudflare Clef/Clef-flash and OpenAI Decisions through OpenRouter alongsi
 Jev, using a shared assessment contract and the existing deterministic policy.
 These model integrations remain planned; the table below lists verified support.
 
+The [matched worker benchmark](docs/benchmarks/issue-31.md) records twelve
+first-attempt observations on a production bug-and-tests task, with three
+repetitions per setup and matched worker contexts/permissions. It retains test
+failures, a build timeout, and an iteration-limit outcome alongside successful
+runs. This small sample does not establish a general speed or quality advantage.
+The [opt-in developer harness](scripts/benchmarks/README.md) documents
+reproduction and keeps live calls outside automated tests.
+
 `JEV_PROVIDER` explicitly selects one provider. Unset selection uses direct TypeSafe
 with `jev-latest` and `TYPESAFE_API_KEY` (or `TYPESAFE_AI_API_KEY`);
 there is no automatic cross-provider failover. Only the selected credential is
