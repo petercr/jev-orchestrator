@@ -1,13 +1,1 @@
-issue 35 & 36 are both the same lets do them now
-
----
-
-ok did we try a real live run
-
----
-
-do live run now bro
-
----
-
-did you document the results
+ok commit new work push and pr
