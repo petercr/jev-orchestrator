@@ -19,8 +19,13 @@
     "build": "tsc -p tsconfig.build.json",
     "check": "tsc -p tsconfig.json --noEmit",
     "dev": "node --import tsx src/cli.ts",
+    "dev:env": "varlock run --inject vars -- node --import tsx src/cli.ts",
+    "env:check": "varlock load --agent",
+    "env:check:schema": "varlock load --agent --path .env.schema",
+    "env:run": "varlock run --inject vars --",
     "prepack": "pnpm build",
     "start": "node dist/cli.js",
+    "start:env": "varlock run --inject vars -- node dist/cli.js",
     "test": "vitest run",
     "verify:jev": "node scripts/verify-jev.mjs"
   },
@@ -34,6 +39,7 @@
     "@types/node": "^24.0.0",
     "tsx": "^4.20.0",
     "typescript": "^5.9.0",
+    "varlock": "1.22.0",
     "vitest": "^3.2.0"
   },
   "packageManager": "pnpm@11.19.0"

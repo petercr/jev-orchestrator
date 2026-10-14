@@ -144,6 +144,13 @@ a new provider delegate or finish more often.
 
 ### v0.3.0 implementation order
 
+Preparation: Varlock 1.22.0 is pinned as development tooling, with a committed
+`.env.schema`, sensitive canonical keys/aliases, redacted configuration checks,
+and explicit `dev:env`/`start:env`/`env:run` wrappers. Schema-only CI and ordinary
+mock/test/build commands stay keyless. Local values are preserved and package
+runtime behavior is unchanged. This setup retains the current Jev selectors;
+provider-neutral configuration and new model routes remain the slices below.
+
 1. [ ] Extract the neutral provider boundary and add configuration migration.
    Prove existing Jev transports, default selection, mock mode, traces, and
    recovery preserve their behavior, including conflicting selector rejection.

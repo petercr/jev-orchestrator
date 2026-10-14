@@ -71,6 +71,8 @@ pnpm dev -- . "Inspect this repo and choose the safest useful first action" --mo
 
 Live evaluation requires only the selected `JEV_PROVIDER` credential: `AI_GATEWAY_API_KEY`, `OPENROUTER_API_KEY`, or `TYPESAFE_API_KEY`. Unset selection defaults to direct TypeSafe (`jev-latest`); `TYPESAFE_AI_API_KEY` and `OPENROUTE_API_KEY` are accepted aliases. Do not require a live model call in automated tests. Never print, trace, or commit credentials.
 
+Varlock is pinned development tooling. `.env.schema` owns environment validation and credential sensitivity; keep `.env.example` compatible when keys change. Use `pnpm env:check` for redacted local diagnostics, `pnpm env:check:schema` for the committed schema without local value files, and `pnpm dev:env`/`pnpm start:env` to load local values. Keep `--inject vars` on wrappers so the full Varlock configuration blob is not inherited by subprocesses. Mock, check, test, and build remain independent of local secrets; only the CLI's existing live preflight requires the selected credential. Do not read or edit ignored `.env`/`.env.local` value files or print unredacted Varlock output. Local encryption is operator-managed; Node's `--env-file` cannot decrypt encrypted values. Update the schema's selectors alongside the provider implementation, without enabling planned providers early.
+
 Before finishing a code change, run the narrowest relevant test first, then `pnpm check`, `pnpm test`, and `pnpm build` when practical. If a command cannot be run, state that explicitly.
 
 ## Architecture and safety invariants

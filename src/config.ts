@@ -23,7 +23,7 @@ export function resolveJevConfiguration(environment: NodeJS.ProcessEnv = process
     .find((value) => Boolean(value));
   if (!apiKey) {
     throw new Error(
-      `${settings.credential} is required for live Jev evaluation with ${selector}.${settings.credentialAliases.length > 0 ? ` Accepted alias: ${settings.credentialAliases.join(', ')}.` : ''} Add it to .env and run Node with --env-file=.env, or export it before running the CLI.`,
+      `${settings.credential} is required for live Jev evaluation with ${selector}.${settings.credentialAliases.length > 0 ? ` Accepted alias: ${settings.credentialAliases.join(', ')}.` : ''} Export it or load it with Varlock before running the CLI.`,
     );
   }
   const model = environment.ROUTER_MODEL?.trim() ||
