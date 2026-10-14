@@ -1,0 +1,67 @@
+{
+  "cli_version": "0.10.7-nightly.202609190623.ae303f31d",
+  "checkpoint_id": "01M4YCWZCBZN10GV4W96C2X1Z6",
+  "session_id": "01a13b17-ab4c-7142-b1c8-c7b4b1caee61",
+  "strategy": "manual-commit",
+  "created_at": "2026-10-14T23:45:28.913724428Z",
+  "branch": "feat/varlock-environment",
+  "checkpoints_count": 2,
+  "save_step_count": 1,
+  "files_touched": [
+    ".env.example",
+    ".env.schema",
+    ".github/workflows/verify.yml",
+    ".gitignore",
+    ".varlock/config.json",
+    "AGENTS.md",
+    "PLAN.md",
+    "README.md",
+    "package.json",
+    "pnpm-lock.yaml",
+    "src/config.ts",
+    "src/varlock.test.ts"
+  ],
+  "agent": "Codex",
+  "model": "gpt-6.1-sol",
+  "turn_id": "da6a0af3a83d",
+  "compact_transcript_start": 0,
+  "token_usage": {
+    "input_tokens": 375303,
+    "cache_creation_tokens": 0,
+    "cache_read_tokens": 6339328,
+    "output_tokens": 30495,
+    "api_call_count": 56,
+    "subagent_tokens_complete": true
+  },
+  "session_metrics": {
+    "turn_count": 2
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-10-14T23:45:28.863337932Z",
+    "agent_lines": 312,
+    "agent_removed": 12,
+    "human_added": 0,
+    "human_modified": 0,
+    "human_removed": 0,
+    "total_committed": 312,
+    "total_lines_changed": 324,
+    "agent_percentage": 100,
+    "metric_version": 2
+  },
+  "prompt_attributions": [
+    {
+      "checkpoint_number": 1,
+      "user_lines_added": 0,
+      "user_lines_removed": 0,
+      "agent_lines_added": 0,
+      "agent_lines_removed": 0
+    },
+    {
+      "checkpoint_number": 2,
+      "user_lines_added": 0,
+      "user_lines_removed": 0,
+      "agent_lines_added": 312,
+      "agent_lines_removed": 12
+    }
+  ]
+}

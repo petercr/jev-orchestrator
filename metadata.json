@@ -1,0 +1,38 @@
+{
+  "cli_version": "0.10.7-nightly.202609190623.ae303f31d",
+  "checkpoint_id": "01M4YCWZCBZN10GV4W96C2X1Z6",
+  "strategy": "manual-commit",
+  "branch": "feat/varlock-environment",
+  "checkpoints_count": 2,
+  "files_touched": [
+    ".env.example",
+    ".env.schema",
+    ".github/workflows/verify.yml",
+    ".gitignore",
+    ".varlock/config.json",
+    "AGENTS.md",
+    "PLAN.md",
+    "README.md",
+    "package.json",
+    "pnpm-lock.yaml",
+    "src/config.ts",
+    "src/varlock.test.ts"
+  ],
+  "sessions": [
+    {
+      "metadata": "/0/metadata.json",
+      "transcript": "/0/full.jsonl",
+      "compact_transcript": "/0/transcript.jsonl",
+      "content_hash": "/0/content_hash.txt",
+      "prompt": "/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 375303,
+    "cache_creation_tokens": 0,
+    "cache_read_tokens": 6339328,
+    "output_tokens": 30495,
+    "api_call_count": 56,
+    "subagent_tokens_complete": true
+  }
+}
