@@ -51,7 +51,8 @@ repetitions per setup and matched worker contexts/permissions. It retains test
 failures, a build timeout, and an iteration-limit outcome alongside successful
 runs. This small sample does not establish a general speed or quality advantage.
 The [opt-in developer harness](scripts/benchmarks/README.md) documents
-reproduction and keeps live calls outside automated tests.
+reproduction with Node.js 22+ and pnpm, without Python. Reporting can rebuild
+preserved evidence without live calls; worker execution stays opt-in.
 
 `JEV_PROVIDER` explicitly selects one provider. Unset selection uses direct TypeSafe
 with `jev-latest` and `TYPESAFE_API_KEY` (or `TYPESAFE_AI_API_KEY`);

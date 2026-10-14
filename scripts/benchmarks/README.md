@@ -11,7 +11,7 @@ uses the installed bounded readers and context builder, outside the worker;
 its time is recorded. This controls for evidence and tool access rather than
 comparing a prepared worker with an unrestricted worker discovering its task.
 The JEV loop still resolves policy and requires individual approval for every
-candidate, recovery, and completion. `run-case.py` forwards operator input;
+candidate, recovery, and completion. `run-case.mjs` forwards operator input;
 it does not generate approvals. Review acceptance before approving `FINISH`.
 
 Use an external output directory containing a `manifest.json` with the frozen
@@ -26,13 +26,13 @@ The fixed protocol uses one implementation attempt per observation. Retain a
 failed validation outcome and stop the observation rather than replacing or
 editing that sample. This isolates the first implementation attempt and does
 not exercise controlled repair; JEV's two-call adapter limit remains unchanged.
-After a stopped JEV loop, use `verify-case.py ... --validate-remaining` to audit
+After a stopped JEV loop, use `verify-case.mjs ... --validate-remaining` to audit
 root checks the loop did not attempt. These checks have separate receipts and
 timings; they do not change the loop state, counts, approvals, or completion.
 
 ```bash
 # Build and pack the source revision being measured into the output directory.
-python3 scripts/benchmarks/init.py /external/output
+node scripts/benchmarks/init.mjs /external/output
 pnpm check
 pnpm test
 pnpm build
@@ -41,25 +41,25 @@ pnpm pack --out /external/output/jev-orchestrator-0.2.0.tgz
 # The dependency seed must contain the pinned baseline's prepared dependencies.
 # Preparation makes new Git clones, copies independent dependency trees,
 # and installs from the frozen lockfile. No original checkout is edited.
-python3 scripts/benchmarks/prepare.py /external/output /prepared/dependency-seed
-python3 scripts/benchmarks/baseline.py /external/output
+node scripts/benchmarks/prepare.mjs /external/output /prepared/dependency-seed
+node scripts/benchmarks/baseline.mjs /external/output
 
 # Execute cases in manifest.runOrder. JEV reads sourceCheckout/.env privately.
 # Review each displayed JEV candidate, then enter a single response.
-python3 /external/output/harness/run-case.py /external/output codex-jev-1
+node /external/output/harness/run-case.mjs /external/output codex-jev-1
 
 # At JEV's completion-review prompt, independently inspect its patch and run:
-python3 /external/output/harness/verify-case.py /external/output codex-jev-1
+node /external/output/harness/verify-case.mjs /external/output codex-jev-1
 # Then choose FINISH if offered, review it, and approve only after acceptance.
 # Run the verifier again afterward to record the terminal summary.
 
 # Direct workers implement only. Run the four root checks outside the worker.
-python3 /external/output/harness/run-case.py /external/output codex-standalone-1
-python3 /external/output/harness/verify-case.py /external/output codex-standalone-1 --validate
+node /external/output/harness/run-case.mjs /external/output codex-standalone-1
+node /external/output/harness/verify-case.mjs /external/output codex-standalone-1 --validate
 
 # Repeat for the remaining Codex and Claude cases without replacing failures.
-python3 /external/output/harness/report.py /external/output
-python3 /external/output/harness/audit.py /external/output
+node /external/output/harness/report.mjs /external/output
+node /external/output/harness/audit.mjs /external/output
 ```
 
 The instrumentation proxy changes output format to structured events in both
@@ -70,8 +70,10 @@ MCP configuration, workspace sandbox, and explicit networking settings are
 preserved and recorded. Worker and validation timeouts remain 15 minutes and
 120 seconds respectively. Logs have an 8 MiB bound per stream. Provider keys
 are redacted and removed from worker/validation environments.
-The recorded environment uses Node.js 24.21.0 and Python 3; native TypeScript
-loading in Node 24 is used by the independent acceptance probes.
+The harness requires Node.js 22+ and the existing pnpm project tooling. It has
+no Python dependency. Independent TypeScript probes use the source checkout's
+installed `tsx` loader, including on Node 22 without native TypeScript loading.
+The original study used Node.js 24.21.0.
 
 Each observation retains original/instrumented arguments, full worker events,
 actual reported usage and cost when supplied, root validation exit statuses and
@@ -93,6 +95,25 @@ statistics with their own sample counts. A fast failed attempt is not a speed wi
 Offline instrumentation regressions use fake executable boundaries:
 
 ```bash
-pnpm exec vitest run src/benchmark-tools.test.ts
-PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s scripts/benchmarks -p test_report_helpers.py
+pnpm exec vitest run src/benchmark-tools.test.ts src/benchmark-receipts.test.ts
 ```
+
+Rebuild a preserved study without any provider or worker calls:
+
+```bash
+node scripts/benchmarks/report.mjs /preserved/evidence --output /external/rebuilt
+node scripts/benchmarks/audit.mjs /preserved/evidence --output /external/rebuilt --recorded-source
+```
+
+`--output` writes reporting artifacts separately and leaves the original evidence
+unchanged. For the issue #31 evidence directory, see the [recorded report](../../docs/benchmarks/issue-31.md#reproduction-and-evidence).
+The normal audit checks the current source checkout and other protected checkouts.
+Use `--recorded-source` only when auditing a historical study after the source
+checkout has advanced: it verifies the recorded source Git revision and marks
+that mode in the audit receipt. Other protected checkouts are still checked in
+place. It never executes commands stored in receipts.
+
+Inputs and command logs have an 8 MiB bound. Commands are passed as argument
+arrays, with fixed deadlines and process-group cleanup. Setup and case execution
+refuse to replace existing cases; verification reuses recorded attempts and
+never reruns failed observations. New verification logs are created exclusively.

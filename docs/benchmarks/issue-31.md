@@ -117,10 +117,12 @@ This is a first-attempt study with three observations per setup on one small fro
 The four focused Vitest instrumentation tests passed, covering preserved worker
 permissions, plain summary conversion, secret redaction, actual usage/model/cost
 reporting, incomplete/failed structured turns, and nonzero child exit status.
-The four Python receipt tests passed, covering failed/pending test counts,
+At recording time, four Python receipt tests passed, covering failed/pending test counts,
 Node warnings alongside probe JSON, failed validation/timeouts, and sample
-statistics without fabricated absent values. Default project tests remain
-Node-only; Python is required only for the opt-in benchmark tooling.
+statistics without fabricated absent values. The harness has since been ported
+to Node.js for issues #35 and #36; its current commands and offline Node tests
+are documented in the [harness README](../../scripts/benchmarks/README.md).
+Rebuilding these preserved receipts requires no Python or live calls.
 
 `pnpm check`, all 530 Vitest tests across 30 files, `pnpm build`, and
 `git diff --check` passed. The packed consumer's keyless mock smoke check passed.
@@ -128,3 +130,54 @@ A final scan of 984 retained text artifacts found no configured evaluation
 credential values. The 81-check preservation/configuration audit passed again
 after the documentation updates. Verification calls used no live provider or
 worker beyond the twelve recorded benchmark observations.
+
+## Node harness port verification
+
+Issues #35 and #36 replace the Python utilities with dependency-free Node.js
+scripts. The current harness retains the frozen setup, external clones, bounded
+logs, individual approvals, independent acceptance checks, and first-attempt
+protocol. TypeScript acceptance probes use the existing source `tsx` loader.
+
+All 31 focused harness checks passed on Node.js 22.23.3. The full project
+verification passed `pnpm check`, 557 tests across 31 files, `pnpm build`, and
+`git diff --check`. Tests use fake executable boundaries and require no live
+evaluation, worker calls, or credentials.
+
+The Node report rebuild reproduced the original `REPORT.md` byte-for-byte:
+twelve observations, nine accepted patches, eight successful workflows, and
+six matching evidence/argument pairs. All 81 audit checks passed using the
+explicit recorded-source mode. Original manifests, receipts, verification
+results, timings, and reports were preserved. Aggregate data matches except
+for floating-point rounding in four sample standard deviations, each differing
+by less than `1e-10` ms. No benchmark observation was rerun.
+
+### Fresh live smoke for the Node port
+
+On 2026-10-14, a new JEV + Codex observation completed on an isolated clone
+using the pinned TrusTrove task and baseline. It finished in eight iterations
+with exit code 0, one Codex call, and zero worker retries. The eight live Jev
+evaluations used requested/served `jev-1.13.0`; Codex requested
+`gpt-5.6-terra` with high effort and retained the workspace sandbox and explicit
+networking setting. Delegation and completion required reviewed alternatives
+and individual approvals.
+
+All four independent root checks passed in generation 1, including 806 workspace
+tests. The fifteen acceptance cases passed, and the new tests detected the
+original short-input defect. The patch changed only the formatter and its test
+file. Fifteen configuration, approval, and preservation audit checks passed
+before this documentation update. Worker time was 141.745 seconds, independent
+validation 143.839 seconds, and active time 288.495 seconds; prompt waits were
+reported separately. This single smoke observation adds no timing conclusion
+to the original study.
+
+The initial launch exposed a port bug: an unresolved pnpm package symlink
+caused the CLI entry-point guard to skip execution. That empty launch is retained
+separately; it made no evaluation or worker call. `prepare.mjs` now resolves
+`packageEntry` with `realpathSync`, and the regression fixture exercises the
+symlink and CLI entry-point check. A new corrected dataset was prepared. The
+passing pristine baseline receipts from the same session were reused with
+their original paths and hashes, without repeating any failed observation.
+
+The live patch, receipts, reported usage, trace, audit, and `LIVE-REPORT.md` are
+retained outside the repository at:
+`/home/peterc/.cache/jev-pilots/issue35-36-live-fixed-2026-10-14T13-53-19.006Z-87a7b3fc`.
