@@ -3,5 +3,8 @@ dist/
 traces/
 .env*
 !.env.example
+!.env.schema
+.varlock/*
+!.varlock/config.json
+.varlock-frozen-env
 *.tgz
-

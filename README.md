@@ -29,14 +29,48 @@ pnpm install
 cp .env.example .env
 ```
 
-Add your key to `.env`, then use Node's env-file support to load it:
+Add the selected provider's key to `.env` or `.env.local`, then validate and
+load it with the project's pinned [Varlock](https://varlock.dev) development tool
+(Node.js 22.3+):
 
 ```bash
-pnpm exec node --env-file=.env --import tsx src/cli.ts -- \
+pnpm env:check
+pnpm dev:env -- \
   . "Inspect this repo and choose the safest useful first action"
 ```
 
-Never commit `.env`; it is ignored by git.
+`.env.schema` owns the shared schema, provider default, and sensitivity markings
+for all canonical credentials and compatibility aliases. `.env.example` remains
+a plain template for existing dotenv workflows. Local values stay in ignored
+`.env`/`.env.local` files; process environment overrides take precedence. Never
+commit credentials.
+
+`env:check` prints redacted diagnostics and checks configuration shape. Credentials
+are optional in the schema so keyless mock runs and CI work; the CLI still
+requires only the selected provider's key before live evaluation. This check
+does not call a provider or establish account/model access. CI uses
+`pnpm env:check:schema` to validate the committed schema without loading local
+value files. Project-level Varlock telemetry is disabled.
+
+`dev:env` runs the source CLI and `start:env` runs the built CLI. Both use
+`varlock run --inject vars`, so subprocesses receive individual variables without
+Varlock's full configuration blob. For another explicitly chosen command, use
+`pnpm env:run <command> [arguments...]`. The normal `dev`, `start`, `check`, `test`,
+and `build` commands keep their existing behavior and do not load local env files.
+Use the normal `dev -- ... --mock` command for an offline check independent of
+local schema validation; the `:env` commands validate local configuration even
+when the CLI is in mock mode.
+
+For optional device-local encryption, run
+`pnpm exec varlock encrypt --file .env` (or `.env.local`) yourself. Encrypted
+values require a Varlock-backed command; Node's `--env-file` does not decrypt
+them. Setup does not rewrite your existing local values. See
+[Varlock's local encryption guide](https://varlock.dev/guides/local-encryption/).
+
+Varlock is checkout tooling, rather than a runtime dependency of the published
+`jev-agent`. Installed consumers can keep exporting credentials or use Node's
+`--env-file` with plaintext dotenv files; they can also supply environment values
+through their own Varlock setup.
 
 ## Evaluation providers
 
@@ -72,7 +106,7 @@ override in the namespace of the selected provider.
 Create a [Vercel Gateway key](https://vercel.com/ai-gateway), an
 [OpenRouter key](https://openrouter.ai/settings/keys), or a key in your
 [TypeSafe account](https://typesafe.ai). Set the selector and its key in `.env`,
-then use the env-file command above. For example, `JEV_PROVIDER=openrouter`
+then use the Varlock-backed command above. For example, `JEV_PROVIDER=openrouter`
 needs `OPENROUTER_API_KEY` and does not need a Gateway key.
 For the previous Gateway behavior, explicitly set `JEV_PROVIDER=vercel`.
 When switching providers, clear a previous provider's `ROUTER_MODEL` override
@@ -120,10 +154,13 @@ pnpm verify:jev --live openrouter
 pnpm verify:jev --live typesafe
 ```
 
+To load this checkout's local values with Varlock, use
+`pnpm env:run node scripts/verify-jev.mjs --live openrouter` (or `typesafe`).
+
 Each check sends a small synthetic state, performs at most two attempts within
 10 seconds, executes no repository tool, and emits only sanitized provider,
 requested/served model, and normalized outcome or error code. It does not load
-`.env` automatically; to use that file run
+`.env` automatically on its own; for a plaintext dotenv file you can also run
 `node --env-file=.env scripts/verify-jev.mjs --live openrouter` (or `typesafe`).
 The live opt-in is required and is never part of automated tests. Implementation
 and verification are tracked in `PLAN.md`. Authorized checks passed on
@@ -314,10 +351,10 @@ before completion, even if Git shows the same modified paths. The same failed
 worker request or validation script cannot be repeated without relevant new
 evidence or a new validation generation.
 
-Then run the live Jev evaluation with the key from `.env`:
+Then run the live Jev evaluation with your local values loaded by Varlock:
 
 ```bash
-pnpm exec node --env-file=.env --import tsx src/cli.ts -- \
+pnpm dev:env -- \
   . "Inspect this repo and choose the safest useful first action"
 ```
 
