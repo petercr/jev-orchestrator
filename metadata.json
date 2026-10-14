@@ -1,0 +1,42 @@
+{
+  "cli_version": "0.10.7-nightly.202609190623.ae303f31d",
+  "checkpoint_id": "01M4W2C6ZTQYW0Z2TA2J0JQEDQ",
+  "strategy": "manual-commit",
+  "branch": "docs/issue-31-matched-benchmarks",
+  "checkpoints_count": 2,
+  "files_touched": [
+    "PLAN.md",
+    "README.md",
+    "docs/benchmarks/issue-31.md",
+    "scripts/benchmarks/README.md",
+    "scripts/benchmarks/audit.py",
+    "scripts/benchmarks/baseline.py",
+    "scripts/benchmarks/direct-worker.mjs",
+    "scripts/benchmarks/init.py",
+    "scripts/benchmarks/prepare.py",
+    "scripts/benchmarks/report.py",
+    "scripts/benchmarks/report_helpers.py",
+    "scripts/benchmarks/run-case.py",
+    "scripts/benchmarks/test_report_helpers.py",
+    "scripts/benchmarks/verify-case.py",
+    "scripts/benchmarks/worker-proxy.mjs",
+    "src/benchmark-tools.test.ts"
+  ],
+  "sessions": [
+    {
+      "metadata": "/0/metadata.json",
+      "transcript": "/0/full.jsonl",
+      "compact_transcript": "/0/transcript.jsonl",
+      "content_hash": "/0/content_hash.txt",
+      "prompt": "/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 403520,
+    "cache_creation_tokens": 0,
+    "cache_read_tokens": 42570112,
+    "output_tokens": 170068,
+    "api_call_count": 201,
+    "subagent_tokens_complete": true
+  }
+}

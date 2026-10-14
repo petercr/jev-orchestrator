@@ -1,0 +1,71 @@
+{
+  "cli_version": "0.10.7-nightly.202609190623.ae303f31d",
+  "checkpoint_id": "01M4W2C6ZTQYW0Z2TA2J0JQEDQ",
+  "session_id": "01a13798-78c1-7fd2-a799-855f51dc57cc",
+  "strategy": "manual-commit",
+  "created_at": "2026-10-14T02:03:05.286249442Z",
+  "branch": "docs/issue-31-matched-benchmarks",
+  "checkpoints_count": 2,
+  "save_step_count": 1,
+  "files_touched": [
+    "PLAN.md",
+    "README.md",
+    "docs/benchmarks/issue-31.md",
+    "scripts/benchmarks/README.md",
+    "scripts/benchmarks/audit.py",
+    "scripts/benchmarks/baseline.py",
+    "scripts/benchmarks/direct-worker.mjs",
+    "scripts/benchmarks/init.py",
+    "scripts/benchmarks/prepare.py",
+    "scripts/benchmarks/report.py",
+    "scripts/benchmarks/report_helpers.py",
+    "scripts/benchmarks/run-case.py",
+    "scripts/benchmarks/test_report_helpers.py",
+    "scripts/benchmarks/verify-case.py",
+    "scripts/benchmarks/worker-proxy.mjs",
+    "src/benchmark-tools.test.ts"
+  ],
+  "agent": "Codex",
+  "model": "gpt-6-luna",
+  "turn_id": "01e3612f1dee",
+  "compact_transcript_start": 0,
+  "token_usage": {
+    "input_tokens": 403520,
+    "cache_creation_tokens": 0,
+    "cache_read_tokens": 42570112,
+    "output_tokens": 170068,
+    "api_call_count": 201,
+    "subagent_tokens_complete": true
+  },
+  "session_metrics": {
+    "turn_count": 2
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-10-14T02:03:05.14540823Z",
+    "agent_lines": 1219,
+    "agent_removed": 4,
+    "human_added": 0,
+    "human_modified": 0,
+    "human_removed": 0,
+    "total_committed": 1219,
+    "total_lines_changed": 1223,
+    "agent_percentage": 100,
+    "metric_version": 2
+  },
+  "prompt_attributions": [
+    {
+      "checkpoint_number": 1,
+      "user_lines_added": 0,
+      "user_lines_removed": 0,
+      "agent_lines_added": 0,
+      "agent_lines_removed": 0
+    },
+    {
+      "checkpoint_number": 2,
+      "user_lines_added": 0,
+      "user_lines_removed": 0,
+      "agent_lines_added": 1219,
+      "agent_lines_removed": 4
+    }
+  ]
+}
