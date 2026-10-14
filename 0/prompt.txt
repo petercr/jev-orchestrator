@@ -1,5 +1,1 @@
-lets look at PLAN.md and see what we need to do to start work on v0.3
-
----
-
-ok cool well lets bring in varlock first and set that up in this project
+ok commit and pr
