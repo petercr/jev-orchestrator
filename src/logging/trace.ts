@@ -89,7 +89,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 function configuredSecretValues(): string[] {
   return [...(redactionSecrets.getStore() ?? []),
-    ...['AI_GATEWAY_API_KEY', 'OPENROUTER_API_KEY', 'OPENROUTE_API_KEY', 'TYPESAFE_API_KEY', 'TYPESAFE_AI_API_KEY']
+    ...['AI_GATEWAY_API_KEY', 'OPENROUTER_API_KEY', 'OPENROUTE_API_KEY', 'TYPESAFE_API_KEY', 'TYPESAFE_AI_API_KEY', 'CLOUDFLARE_AUTH_TOKEN']
       .map((name) => process.env[name]?.trim()),
   ]
     .filter((value): value is string => Boolean(value))

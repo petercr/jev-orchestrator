@@ -108,7 +108,8 @@ function statusCode(error: unknown): number | undefined {
 export function normalizeEvaluationError(error: unknown, provider: EvaluationProvider = 'vercel'): EvaluationError {
   const failure = lastError(error);
   if (failure instanceof EvaluationError) return failure;
-  const label = provider === 'vercel' ? 'Gateway' : provider === 'openrouter' ? 'OpenRouter' : 'TypeSafe';
+  const label = provider === 'vercel' ? 'Gateway' : provider === 'openrouter' ? 'OpenRouter'
+    : provider === 'cloudflare' ? 'Cloudflare' : 'TypeSafe';
   const settings = EVALUATION_PROVIDERS[provider];
   const credential = [settings.credential, ...settings.credentialAliases].join(' or ');
   if ((RetryError.isInstance(error) && error.reason === 'abort') ||

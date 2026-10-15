@@ -121,7 +121,7 @@ export type AgentAssessment = {
   nextAction: ChoiceAssessment;
 };
 
-export type EvaluationProvider = 'vercel' | 'openrouter' | 'typesafe';
+export type EvaluationProvider = 'vercel' | 'openrouter' | 'typesafe' | 'cloudflare';
 export type JevProvider = EvaluationProvider;
 
 export type EvaluationAttribution = {

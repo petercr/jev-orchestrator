@@ -3,9 +3,10 @@ import { resolveEvaluationConfiguration, resolveEvaluationProvider } from '../di
 import { createInitialState } from '../dist/orchestration/loop.js';
 
 // Separate opt-in check: one synthetic evaluation, at most two HTTP attempts.
-const [optIn, provider, ...extra] = process.argv.slice(2);
-if (optIn !== '--live' || !['vercel', 'openrouter', 'typesafe'].includes(provider) || extra.length > 0) {
-  console.error('Usage: pnpm verify:jev --live <vercel|openrouter|typesafe> (requires a build and the selected credential).');
+const [optIn, provider, model, ...extra] = process.argv.slice(2);
+if (optIn !== '--live' || !['vercel', 'openrouter', 'typesafe', 'cloudflare'].includes(provider) || extra.length > 0 ||
+  (model !== undefined && (provider !== 'cloudflare' || !['clef', 'clef-flash'].includes(model)))) {
+  console.error('Usage: pnpm verify:provider --live <vercel|openrouter|typesafe|cloudflare> [clef|clef-flash] (model argument is cloudflare-only; requires a build and selected credentials).');
   process.exitCode = 2;
 } else {
   const state = createInitialState({
@@ -16,7 +17,9 @@ if (optIn !== '--live' || !['vercel', 'openrouter', 'typesafe'].includes(provide
     // Reject malformed/conflicting ambient selectors before applying the
     // explicit --live selection for this synthetic run, without mutating env.
     resolveEvaluationProvider();
-    const configuration = resolveEvaluationConfiguration({ ...process.env, ROUTER_PROVIDER: provider, JEV_PROVIDER: provider });
+    const configuration = resolveEvaluationConfiguration({ ...process.env, ROUTER_PROVIDER: provider, JEV_PROVIDER: provider,
+      ...(model === undefined ? {} : { ROUTER_MODEL: model }),
+    });
     const result = await createEvaluator(configuration)(state);
     console.log(JSON.stringify({
       provider: result.provider, requestedModel: result.requestedModel,

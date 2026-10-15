@@ -7,7 +7,7 @@ import { pathToFileURL } from 'node:url';
 
 export const maximumBytes = 8 * 1024 * 1024;
 export const rootScripts = ['test', 'typecheck', 'lint', 'build'];
-const credentialNames = ['AI_GATEWAY_API_KEY', 'OPENROUTER_API_KEY', 'OPENROUTE_API_KEY', 'TYPESAFE_API_KEY', 'TYPESAFE_AI_API_KEY'];
+const credentialNames = ['AI_GATEWAY_API_KEY', 'OPENROUTER_API_KEY', 'OPENROUTE_API_KEY', 'TYPESAFE_API_KEY', 'TYPESAFE_AI_API_KEY', 'CLOUDFLARE_AUTH_TOKEN'];
 
 export function requireCondition(condition, message) {
   if (!condition) throw new Error(message);

@@ -242,3 +242,11 @@ export const EVALUATION_QUESTIONS = {
     criteria: ACTION_CRITERIA,
   },
 } as const;
+
+export const NATIVE_EVALUATION_QUESTIONS = {
+  ...EVALUATION_QUESTIONS,
+  taskComplete: { ...EVALUATION_QUESTIONS.taskComplete, type: 'noul' },
+  needsMoreInformation: { ...EVALUATION_QUESTIONS.needsMoreInformation, type: 'noul' },
+  needsTesting: { ...EVALUATION_QUESTIONS.needsTesting, type: 'noul' },
+  stuck: { ...EVALUATION_QUESTIONS.stuck, type: 'noul' },
+} as const;

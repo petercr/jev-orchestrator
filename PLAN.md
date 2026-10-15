@@ -58,16 +58,20 @@ Official documentation checked on 2026-10-11:
 | Decision model | Service and API | Planned configuration | Status |
 | --- | --- | --- | --- |
 | Jev | Existing direct TypeSafe, OpenRouter Decisions, and Vercel evaluation transports | Existing keys and model namespaces | Implemented baseline; retain direct TypeSafe default |
-| Clef / Clef-flash | Cloudflare Workers AI, `POST https://api.cloudflare.com/client/v4/accounts/{accountId}/ai/run/@cf/cloudflare/{model}` | `CLOUDFLARE_ACCOUNT_ID`, `CLOUDFLARE_AUTH_TOKEN`; model `clef` or `clef-flash` | Documented hosted models; adapter and account verification pending |
+| Clef / Clef-flash | Cloudflare Workers AI, `POST https://api.cloudflare.com/client/v4/accounts/{accountId}/ai/run/@cf/cloudflare/{model}` | `CLOUDFLARE_ACCOUNT_ID`, `CLOUDFLARE_AUTH_TOKEN`; model `clef` or `clef-flash` | Adapter implemented locally; both models live-verified on the tested account on 2026-10-15 |
 | OpenAI Decisions via OpenRouter | Existing `POST https://openrouter.ai/api/alpha/decisions` | `OPENROUTER_API_KEY` (or existing `OPENROUTE_API_KEY` alias); model `openai/gpt-6-luna-decisions` | Documented model access; contract and live verification pending |
 
 Cloudflare documents System One compatibility and a request containing
 `model`, `state`, and named `questions`. Its model selectors map to Workers AI
-IDs `@cf/cloudflare/clef` and `@cf/cloudflare/clef-flash`. Verify the REST
-response envelope and required token permissions during implementation.
+IDs `@cf/cloudflare/clef` and `@cf/cloudflare/clef-flash`. Documentation rechecked
+on 2026-10-15: REST responses use the Workers AI `success`/`errors`/`result`
+envelope; tokens need Workers AI Read and Edit on the selected account. The
+adapter validates this envelope and the model's published answer schema.
+Authorized synthetic live checks normalized responses for both models on
+2026-10-15; other accounts must establish their own access.
 Sources: [Clef launch](https://blog.cloudflare.com/clef-decision-models/),
 [Clef API](https://developers.cloudflare.com/workers-ai/models/clef/), and
-[Clef-flash API](https://developers.cloudflare.com/ai/models/%40cf/cloudflare/clef-flash/).
+[Clef-flash API](https://developers.cloudflare.com/workers-ai/models/clef-flash/).
 
 Use OpenRouter as the initial access path for OpenAI Decisions. OpenRouter
 documents `openai/gpt-6-luna-decisions` on its existing Decisions endpoint,
@@ -170,9 +174,24 @@ new model routes remain the later slices below.
    A live TypeSafe CLI walkthrough passed: two iterations, one approved
    `READ_FILE`, then an explicit stop, with zero worker calls or source edits.
    New model adapters and their live verification remain pending below.
-2. [ ] Add Cloudflare Clef and Clef-flash through the shared System One
+2. [x] Add Cloudflare Clef and Clef-flash through the shared System One
    questions and a bounded REST adapter. Cover account/model path validation,
    response envelopes, attribution, errors, and both model selections.
+   Implemented locally on 2026-10-15: fixed model/account paths, immutable
+   account selection, shared Noul/Choice questions and normalization, strict
+   REST envelope/duplicate-key checks, bounded retries/cancellation, token
+   redaction, and Varlock/CLI setup. The opt-in verifier accepts both Cloudflare
+   selectors. Authorized live checks passed on 2026-10-15: requested and served
+   names matched `clef` and `clef-flash`; the service returned no pinned revision.
+   Only synthetic state was sent and no coding workers were called.
+   Validation passed: 736 deterministic tests, typecheck, build, schema-only
+   validation, and an offline install of the packed archive. Installed CLI and
+   verifier checks covered both model routes with mocked HTTP boundaries,
+   selected-credential preflight, attribution, and keyless mock behavior.
+   A live Clef CLI walkthrough on 2026-10-15 passed its read-and-stop audit:
+   two iterations, one successful approved `READ_FILE`, then a `FINISH` request
+   overridden to `ASK_USER` because the synthetic fixture had no validation
+   script. The operator stopped; no coding workers or source edits occurred.
 3. [ ] Add verified OpenAI Decisions support through the existing OpenRouter
    transport using `openai/gpt-6-luna-decisions`. Reuse the four Noul questions
    and action Choice, preserving their criteria and the bounded fetch controls.
@@ -190,6 +209,8 @@ new model routes remain the later slices below.
    and actual account access; public API documentation alone does not complete
    this gate. Document each
    provider's data handling and prerequisites before sending repository evidence.
+   Cloudflare's portion passed on 2026-10-15 for both models, with data-handling
+   and setup documentation in README. OpenAI Decisions verification remains pending.
 6. [ ] Compare Jev, Clef, Clef-flash, and OpenAI Decisions on the same bounded,
    labeled coding-task snapshots and record a v0.3.0 baseline. Include
    unread issue/instructions, clear implementation, ambiguity, stuck/recovery,

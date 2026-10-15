@@ -31,7 +31,7 @@ const stdoutFile = openSync(`${prefix}.${command === 'pnpm' ? 'stdout.log' : 'ev
 const stderrFile = openSync(`${prefix}.stderr.log`, 'wx', 0o600);
 const environment = { ...process.env };
 // Evaluation credentials are never needed by the worker or validation process.
-for (const name of ['AI_GATEWAY_API_KEY', 'OPENROUTER_API_KEY', 'OPENROUTE_API_KEY', 'TYPESAFE_API_KEY', 'TYPESAFE_AI_API_KEY']) delete environment[name];
+for (const name of ['AI_GATEWAY_API_KEY', 'OPENROUTER_API_KEY', 'OPENROUTE_API_KEY', 'TYPESAFE_API_KEY', 'TYPESAFE_AI_API_KEY', 'CLOUDFLARE_AUTH_TOKEN']) delete environment[name];
 const child = spawn(executable, args, { stdio: ['ignore', 'pipe', 'pipe'], env: environment });
 let pending = '';
 let stdoutBytes = 0;

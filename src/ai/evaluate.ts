@@ -1,6 +1,6 @@
 import type { Experimental_EvaluationModel as EvaluationModel } from 'ai';
 import { interruptible, RunInterruptedError, throwIfInterrupted, type ExecutionOptions } from '../cancellation.js';
-import { resolveEvaluationConfiguration, validateEvaluationModel, type EvaluationConfiguration } from '../config.js';
+import { resolveEvaluationConfiguration, validateCloudflareAccountId, validateEvaluationModel, type EvaluationConfiguration } from '../config.js';
 import { redactSensitiveText, withRedactionSecrets } from '../logging/trace.js';
 import type { AgentState, EvaluationResult } from '../types.js';
 import { boundAgentStateForEvaluation } from './contract.js';
@@ -10,6 +10,7 @@ import {
 } from './errors.js';
 import { evaluateNative } from './native.js';
 import { evaluateVercel } from './vercel.js';
+import { evaluateCloudflare } from './cloudflare.js';
 
 export { boundAgentStateForEvaluation } from './contract.js';
 export { EvaluationError, EVALUATION_MAX_RETRIES, EVALUATION_TIMEOUT_MS, normalizeEvaluationError } from './errors.js';
@@ -26,6 +27,7 @@ export function createEvaluator(
 ): Evaluator {
   const selected = Object.freeze({ ...configuration, model: typeof modelOverride === 'string' ? modelOverride : configuration.model });
   validateEvaluationModel(selected.provider, selected.model);
+  if (selected.provider === 'cloudflare') validateCloudflareAccountId(selected.accountId);
   if (modelOverride !== undefined && typeof modelOverride !== 'string' && selected.provider !== 'vercel') {
     throw new Error('An SDK evaluation model override requires ROUTER_PROVIDER=vercel.');
   }
@@ -74,9 +76,12 @@ async function evaluateConfiguredState(
   try {
     for (let attempt = 0; ; attempt += 1) {
       try {
-        const result = await interruptible(() => configuration.provider === 'vercel'
-          ? evaluateVercel(snapshot, configuration, signal, modelOverride)
-          : evaluateNative(snapshot, { ...configuration, provider: configuration.provider }, signal), signal);
+        const result = await interruptible(() => {
+          if (configuration.provider === 'cloudflare') return evaluateCloudflare(snapshot, configuration, signal);
+          return configuration.provider === 'vercel'
+            ? evaluateVercel(snapshot, configuration, signal, modelOverride)
+            : evaluateNative(snapshot, { ...configuration, provider: configuration.provider }, signal);
+        }, signal);
         throwIfInterrupted(signal);
         return {
           ...result,

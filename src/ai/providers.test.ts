@@ -8,18 +8,20 @@ import { buildWorkerContext } from '../agents/context.js';
 import { appendOrchestrationTrace, createOrchestrationTrace, writeTrace } from '../logging/trace.js';
 import { createInitialState, runOrchestration } from '../orchestration/loop.js';
 import { applyPolicy } from '../policy.js';
-import { ACTIONS, type Action, type JevProvider } from '../types.js';
+import { ACTIONS, type Action, type EvaluationProvider } from '../types.js';
 import { EVALUATION_QUESTIONS } from './contract.js';
 import { createEvaluator, evaluateAgentState, JEV_EVALUATION_TIMEOUT_MS } from './evaluate.js';
 import { NATIVE_JEV_ENDPOINTS } from './native.js';
 import { MAX_JEV_RESPONSE_BYTES } from './transport.js';
 
+type JevProvider = Exclude<EvaluationProvider, 'cloudflare'>;
 const providers: JevProvider[] = ['vercel', 'openrouter', 'typesafe'];
 const roots: string[] = [];
 const fetchMock = vi.fn<typeof fetch>();
 const keys = [
   'gateway-secret-value', 'openrouter-secret-value', 'typesafe-secret-value',
   'openroute-alias-secret-value', 'typesafe-alias-secret-value',
+  'cloudflare-secret-value',
 ];
 
 function state() {
@@ -63,6 +65,7 @@ beforeEach(() => {
   vi.stubEnv('TYPESAFE_API_KEY', keys[2]);
   vi.stubEnv('OPENROUTE_API_KEY', keys[3]);
   vi.stubEnv('TYPESAFE_AI_API_KEY', keys[4]);
+  vi.stubEnv('CLOUDFLARE_AUTH_TOKEN', keys[5]);
   vi.stubEnv('OPENROUTE_MODEL', '');
 });
 afterEach(async () => {

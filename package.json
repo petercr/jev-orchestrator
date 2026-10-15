@@ -27,7 +27,8 @@
     "start": "node dist/cli.js",
     "start:env": "varlock run --inject vars -- node dist/cli.js",
     "test": "vitest run",
-    "verify:jev": "node scripts/verify-jev.mjs"
+    "verify:jev": "node scripts/verify-jev.mjs",
+    "verify:provider": "node scripts/verify-jev.mjs"
   },
   "engines": {
     "node": ">=22"
