@@ -1,9 +1,1 @@
-ok commit push and pr
-
----
-
-Pr merged
-
----
-
-ok lets go
+ok commit and pr
