@@ -4,9 +4,13 @@ import { createInitialState } from '../dist/orchestration/loop.js';
 
 // Separate opt-in check: one synthetic evaluation, at most two HTTP attempts.
 const [optIn, provider, model, ...extra] = process.argv.slice(2);
+const modelSelections = {
+  cloudflare: ['clef', 'clef-flash'],
+  openrouter: ['typesafe/jev-1.13', 'openai/gpt-6-luna-decisions'],
+};
 if (optIn !== '--live' || !['vercel', 'openrouter', 'typesafe', 'cloudflare'].includes(provider) || extra.length > 0 ||
-  (model !== undefined && (provider !== 'cloudflare' || !['clef', 'clef-flash'].includes(model)))) {
-  console.error('Usage: pnpm verify:provider --live <vercel|openrouter|typesafe|cloudflare> [clef|clef-flash] (model argument is cloudflare-only; requires a build and selected credentials).');
+  (model !== undefined && !modelSelections[provider]?.includes(model))) {
+  console.error('Usage: pnpm verify:provider --live <vercel|openrouter|typesafe|cloudflare> [model] (cloudflare: clef|clef-flash; openrouter: typesafe/jev-1.13|openai/gpt-6-luna-decisions; requires a build and selected credentials).');
   process.exitCode = 2;
 } else {
   const state = createInitialState({

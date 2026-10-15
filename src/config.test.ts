@@ -46,6 +46,7 @@ describe('provider-neutral configuration', () => {
     ['typesafe', 'jev-1.13.0'],
     ['openrouter', 'typesafe/jev-1.13'],
     ['openrouter', '~typesafe/jev-latest'],
+    ['openrouter', 'openai/gpt-6-luna-decisions'],
     ['vercel', 'typesafe-ai/jev'],
   ] as const)('accepts a %s model in its namespace: %s', (provider, model) => {
     expect(resolveEvaluationConfiguration({ ROUTER_PROVIDER: provider,
@@ -67,6 +68,25 @@ describe('provider-neutral configuration', () => {
       expect((error as Error).message).toContain('ROUTER_MODEL must be');
       expect((error as Error).message).not.toContain(model);
     }
+  });
+});
+
+describe('OpenAI Decisions through OpenRouter', () => {
+  const model = 'openai/gpt-6-luna-decisions';
+
+  it('uses only the OpenRouter credential and retains the compatibility aliases', () => {
+    const expected = { provider: 'openrouter', model, apiKey: 'selected-key' };
+    expect(resolveEvaluationConfiguration({ ROUTER_PROVIDER: 'openrouter', ROUTER_MODEL: model,
+      OPENROUTER_API_KEY: ' selected-key ' })).toEqual(expected);
+    expect(resolveJevConfiguration({ JEV_PROVIDER: 'openrouter', OPENROUTE_MODEL: model,
+      OPENROUTE_API_KEY: 'selected-key' })).toEqual(expected);
+  });
+
+  it('keeps TypeSafe and OpenRouter Jev defaults and does not use a direct OpenAI key', () => {
+    expect(resolveEvaluationConfiguration({ TYPESAFE_API_KEY: 'key' }).model).toBe('jev-latest');
+    expect(resolveEvaluationConfiguration({ ROUTER_PROVIDER: 'openrouter', OPENROUTER_API_KEY: 'key' }).model).toBe('typesafe/jev-1.13');
+    expect(() => resolveEvaluationConfiguration({ ROUTER_PROVIDER: 'openrouter', ROUTER_MODEL: model,
+      OPENAI_API_KEY: 'unused-key' })).toThrow('OPENROUTER_API_KEY is required');
   });
 });
 

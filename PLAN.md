@@ -53,13 +53,14 @@ snapshots and does not require new paid coding-worker pilots.
 
 ### Verified API targets
 
-Official documentation checked on 2026-10-11:
+Official documentation checked on 2026-10-11; Cloudflare and OpenRouter Decisions
+contracts rechecked on 2026-10-15:
 
 | Decision model | Service and API | Planned configuration | Status |
 | --- | --- | --- | --- |
 | Jev | Existing direct TypeSafe, OpenRouter Decisions, and Vercel evaluation transports | Existing keys and model namespaces | Implemented baseline; retain direct TypeSafe default |
 | Clef / Clef-flash | Cloudflare Workers AI, `POST https://api.cloudflare.com/client/v4/accounts/{accountId}/ai/run/@cf/cloudflare/{model}` | `CLOUDFLARE_ACCOUNT_ID`, `CLOUDFLARE_AUTH_TOKEN`; model `clef` or `clef-flash` | Adapter implemented locally; both models live-verified on the tested account on 2026-10-15 |
-| OpenAI Decisions via OpenRouter | Existing `POST https://openrouter.ai/api/alpha/decisions` | `OPENROUTER_API_KEY` (or existing `OPENROUTE_API_KEY` alias); model `openai/gpt-6-luna-decisions` | Documented model access; contract and live verification pending |
+| OpenAI Decisions via OpenRouter | Existing `POST https://openrouter.ai/api/alpha/decisions` | `OPENROUTER_API_KEY` (or existing `OPENROUTE_API_KEY` alias); model `openai/gpt-6-luna-decisions` | Contract covered by deterministic regressions; live-verified on the tested account on 2026-10-15 |
 
 Cloudflare documents System One compatibility and a request containing
 `model`, `state`, and named `questions`. Its model selectors map to Workers AI
@@ -192,25 +193,53 @@ new model routes remain the later slices below.
    two iterations, one successful approved `READ_FILE`, then a `FINISH` request
    overridden to `ASK_USER` because the synthetic fixture had no validation
    script. The operator stopped; no coding workers or source edits occurred.
-3. [ ] Add verified OpenAI Decisions support through the existing OpenRouter
+3. [x] Add verified OpenAI Decisions support through the existing OpenRouter
    transport using `openai/gpt-6-luna-decisions`. Reuse the four Noul questions
    and action Choice, preserving their criteria and the bounded fetch controls.
    Cover normalized answer/confidence shapes, missing answers, malformed option
    distributions, and upstream refusals/errors. Keep Jev's OpenRouter default
    and aliases working; require no direct OpenAI adapter or credential.
+   Implemented locally on 2026-10-15: the existing transport accepts the explicit
+   OpenAI model selection and retains the same five questions. Shared native
+   normalization now requires exact question names; the bounded REST transports
+   share duplicate-key rejection. Required-question refusals, incompatible direct
+   OpenAI answer arrays, invalid probabilities/confidence, and malformed option
+   distributions fail safely without repaired answers or raw refusal text.
+   HTTP failures retain their status classification. Regression coverage runs
+   the OpenAI selection through the existing transport suite, including policy
+   guards, worker limits, fresh validation, explicit recovery, redaction, retries,
+   cancellation, and no post-abort approval/execution. Typecheck, all 890 tests,
+   build, and schema validation passed. The opt-in verifier accepts an explicit
+   OpenRouter model argument. A synthetic live check on 2026-10-15 normalized
+   the requested model, served as `openai/gpt-6-luna-decisions-20261006`.
+   The direct TypeSafe default, OpenRouter's Jev default, and credential/model
+   aliases are preserved; no direct OpenAI credential is used.
+   A live CLI walkthrough with the same served model completed an approved
+   `READ_FILE`, then overrode `FINISH` to `ASK_USER` for unavailable independent
+   validation. The operator stopped after two iterations, with one approval,
+   zero evaluation failures/recoveries, and no coding workers or source edits.
+   The packed archive installed offline and passed installed CLI checks for the
+   OpenAI route, compatibility aliases, model attribution, retained Jev default,
+   selected-credential preflight, and keyless mocks. Mocked verifier checks also
+   covered explicit OpenRouter model overrides and invalid opt-in arguments.
 4. [ ] Run a common deterministic contract and policy suite through mocked
    provider boundaries: confident/ambiguous routes, missing confidence,
    premature completion, preparation, worker restrictions, validation generations,
    recovery, limits, secret redaction, cancellation, and no post-abort execution.
    Run focused tests, `pnpm check`, `pnpm test`, `pnpm build`, and installed
    keyless mock checks. Automated tests must not call a live provider or worker.
-5. [ ] Extend explicit opt-in synthetic live verification to Cloudflare's two
+5. [x] Extend explicit opt-in synthetic live verification to Cloudflare's two
    Clef models and OpenAI Decisions through OpenRouter. Record sanitized outcomes
    and actual account access; public API documentation alone does not complete
    this gate. Document each
    provider's data handling and prerequisites before sending repository evidence.
    Cloudflare's portion passed on 2026-10-15 for both models, with data-handling
-   and setup documentation in README. OpenAI Decisions verification remains pending.
+   and setup documentation in README. OpenAI Decisions through OpenRouter also
+   passed on 2026-10-15, served as `openai/gpt-6-luna-decisions-20261006`, using
+   synthetic state and no coding workers. README documents the OpenRouter/OpenAI
+   data path, account prerequisites, and retention limitations. These checks
+   establish access for the tested accounts only, without claiming comparable
+   routing quality or calibrated confidence; the comparison remains step 6.
 6. [ ] Compare Jev, Clef, Clef-flash, and OpenAI Decisions on the same bounded,
    labeled coding-task snapshots and record a v0.3.0 baseline. Include
    unread issue/instructions, clear implementation, ambiguity, stuck/recovery,

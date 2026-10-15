@@ -3,7 +3,7 @@ import type { EvaluationConfiguration } from '../config.js';
 import { redactSensitiveText, sanitizeTraceValue } from '../logging/trace.js';
 import { NATIVE_EVALUATION_QUESTIONS, isRecord, normalizeAssessment, servedModel, type ProviderEvaluation } from './contract.js';
 import { EvaluationError, EvaluationHttpError, retryAfterMs } from './errors.js';
-import { boundedResponse } from './transport.js';
+import { boundedResponse, parseEvaluationJson } from './transport.js';
 
 export const NATIVE_EVALUATION_ENDPOINTS = {
   openrouter: 'https://openrouter.ai/api/alpha/decisions',
@@ -45,16 +45,15 @@ export async function evaluateNative(
   }), signal);
   let body: unknown;
   try {
-    body = await response.json();
+    body = parseEvaluationJson(await response.text());
   } catch {
     if (!response.ok) throw new EvaluationHttpError(response.status, retryAfterMs(response.headers.get('retry-after')));
     throw new EvaluationError('invalid_response', 'Decision provider returned invalid JSON evaluation data.', { stage: 'json', category: 'shape' });
   }
-  const status = errorStatus(body);
   if (!response.ok || (isRecord(body) && body.error !== undefined)) {
-    throw new EvaluationHttpError(status ?? (response.ok ? 400 : response.status), retryAfterMs(response.headers.get('retry-after')));
+    throw new EvaluationHttpError(response.ok ? errorStatus(body) ?? 400 : response.status, retryAfterMs(response.headers.get('retry-after')));
   }
-  if (!isRecord(body) || !isRecord(body.answers)) {
+  if (!isRecord(body) || body.refusal !== undefined || !isRecord(body.answers)) {
     throw new EvaluationError('invalid_response', 'Decision provider returned invalid evaluation data.', { stage: 'answers', category: 'shape' });
   }
   const nextAction = body.answers.nextAction;

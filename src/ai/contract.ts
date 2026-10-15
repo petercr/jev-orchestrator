@@ -62,6 +62,14 @@ function isAction(value: unknown): value is Action {
 
 export function normalizeAssessment(answers: unknown, confidence: unknown, native = false): AgentAssessment {
   if (!isRecord(answers)) invalidAnswer({ stage: 'answers', category: 'shape' });
+  if (native && (Object.keys(answers).length !== Object.keys(NATIVE_EVALUATION_QUESTIONS).length ||
+    Object.keys(NATIVE_EVALUATION_QUESTIONS).some((key) => !Object.hasOwn(answers, key)))) {
+    invalidAnswer({ stage: 'answers', category: 'shape' });
+  }
+  if (Object.values(answers).some((answer) => isRecord(answer) &&
+    (answer.refusal !== undefined || answer.error !== undefined))) {
+    invalidAnswer({ stage: 'answers', category: 'shape' });
+  }
   const nextAction = answers.nextAction;
   if (!isRecord(nextAction) || nextAction.type !== 'choice') invalidAnswer({ stage: 'next_action', category: 'shape' });
   if (!isAction(nextAction.choice)) invalidAnswer({ stage: 'next_action', category: 'unknown_action' });

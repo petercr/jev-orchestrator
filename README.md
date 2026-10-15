@@ -78,7 +78,9 @@ The [v0.3.0 release](PLAN.md#v030-release-multiple-decision-models) adds decisio
 models alongside Jev, using the same assessment contract and deterministic policy.
 Cloudflare Clef/Clef-flash have an adapter with deterministic transport tests
 and successful live synthetic checks on 2026-10-15. OpenAI Decisions through
-OpenRouter remains planned. The table lists implemented transports.
+OpenRouter uses the same bounded transport and assessment contract, with
+deterministic regression coverage and a successful live synthetic check on
+2026-10-15. The table lists implemented transports.
 
 The [matched worker benchmark](docs/benchmarks/issue-31.md) records twelve
 first-attempt observations on a production bug-and-tests task, with three
@@ -122,6 +124,20 @@ For the previous Gateway behavior, explicitly set `ROUTER_PROVIDER=vercel`.
 When migrating, remove the old selector or set both to the same provider.
 When switching providers, clear a previous provider's `ROUTER_MODEL` override
 or replace it with a model in the new provider's namespace.
+
+For [OpenAI Decisions](https://openrouter.ai/openai/gpt-6-luna-decisions), set
+`ROUTER_PROVIDER=openrouter` and `ROUTER_MODEL=openai/gpt-6-luna-decisions`.
+Use `OPENROUTER_API_KEY` or its `OPENROUTE_API_KEY` alias; this route requires
+no direct OpenAI key. The OpenRouter default remains `typesafe/jev-1.13`, and
+`OPENROUTE_MODEL` remains the model fallback when `ROUTER_MODEL` is blank.
+OpenRouter's [Decisions API](https://openrouter.ai/docs/api/api-reference/alphadecisions/submit-a-decisions-request)
+accepts our shared `state` and named Noul/Choice questions and returns named
+answer objects. Direct OpenAI's predicate questions and answer arrays are a
+different wire format and are rejected here. Native REST adapters reject
+missing, unexpected, or duplicate question names, incomplete action
+distributions, refusals, and invalid probabilities/confidence. They keep the
+existing `0.001` sum tolerance, without renormalizing or deriving missing
+confidence from the chosen probability.
 
 Model identifiers are limited to 256 characters: direct TypeSafe accepts
 `jev-*`; Vercel and OpenRouter accept `vendor/model` identifiers, with an optional
@@ -201,6 +217,7 @@ credentials, then run one synthetic evaluation per selected provider:
 ```bash
 pnpm build
 pnpm verify:jev --live openrouter
+pnpm verify:provider --live openrouter openai/gpt-6-luna-decisions
 pnpm verify:jev --live typesafe
 pnpm verify:provider --live cloudflare clef
 pnpm verify:provider --live cloudflare clef-flash
@@ -211,8 +228,11 @@ To load this checkout's local values with Varlock, use
 For the Cloudflare models, run
 `pnpm env:run node scripts/verify-jev.mjs --live cloudflare clef`, then repeat
 with `clef-flash`. `verify:jev` and `verify:provider` invoke the same opt-in tool.
-The optional model argument is restricted to Cloudflare's two selectors and
-overrides `ROUTER_MODEL` for that check. The explicit provider argument selects
+For OpenAI Decisions, run
+`pnpm env:run node scripts/verify-jev.mjs --live openrouter openai/gpt-6-luna-decisions`.
+The optional model argument accepts Cloudflare's two selectors or OpenRouter's
+`typesafe/jev-1.13` and `openai/gpt-6-luna-decisions`, and overrides `ROUTER_MODEL`
+for that check. The explicit provider argument selects
 the synthetic check after validating ambient selectors for conflicts.
 
 Each check sends a small synthetic state, performs at most two attempts within
@@ -239,6 +259,17 @@ A live Clef CLI walkthrough on 2026-10-15 also completed two iterations in a
 synthetic repository: an approved `READ_FILE` succeeded, then a `FINISH`
 recommendation became `ASK_USER` because no validation script was available.
 The operator stopped at that prompt. No coding worker ran or source file changed.
+
+On 2026-10-15, OpenAI Decisions through OpenRouter also passed a synthetic live
+check: `openai/gpt-6-luna-decisions` was served as
+`openai/gpt-6-luna-decisions-20261006`. The response normalized under the same
+question contract and policy thresholds. The check called no coding workers
+and establishes access only for the tested account.
+
+A live CLI walkthrough with that OpenAI model also completed two iterations:
+an approved `READ_FILE` succeeded, then a `FINISH` recommendation became
+`ASK_USER` because the synthetic fixture had no validation script. The operator
+stopped; no coding worker ran or source file changed.
 
 ## Run
 
@@ -818,11 +849,16 @@ boundary.
 Live evaluation sends the bounded task, repository metadata, and gathered
 observations to the selected service. Vercel retains the existing
 `zeroDataRetention: false` setting and routes to TypeSafe through its Gateway.
-OpenRouter's Decisions API routes through OpenRouter to TypeSafe; this client
+OpenRouter's Decisions API routes through OpenRouter to TypeSafe for Jev or to
+OpenAI for `openai/gpt-6-luna-decisions`. Selecting that model sends the same
+bounded task and repository evidence to OpenRouter and OpenAI. This client
 does not request a retention override, so account and provider privacy settings
 apply. Direct TypeSafe bypasses both intermediaries and uses its account terms.
-[OpenRouter's retention documentation](https://github.com/OpenRouterTeam/docs/blob/main/guides/features/zdr.mdx)
+[OpenRouter's retention documentation](https://openrouter.ai/docs/guides/features/zdr)
 describes its account controls and upstream retention policies.
+[OpenAI's data controls](https://developers.openai.com/api/docs/guides/your-data)
+describe API data handling and eligibility for retention controls; routing
+through OpenRouter does not establish that this account has those controls.
 [TypeSafe's legal documentation](https://docs.typesafe.ai/legal) states that it
 does not train on user data and offers enterprise zero data retention. This
 client does not guarantee zero retention for any provider. Review the selected
