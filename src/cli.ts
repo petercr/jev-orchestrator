@@ -109,13 +109,15 @@ Examples:
   pnpm dev -- ../my-app "Investigate preview auth" --mock --orchestrate
 
 Environment:
-  ROUTER_PROVIDER     typesafe (default), vercel, or openrouter
+  ROUTER_PROVIDER     typesafe (default), vercel, openrouter, or cloudflare
   JEV_PROVIDER        Compatibility alias; must agree with ROUTER_PROVIDER if both are set
   AI_GATEWAY_API_KEY  Vercel AI Gateway key (vercel only)
   OPENROUTER_API_KEY  OpenRouter key (openrouter only)
   OPENROUTE_API_KEY   Accepted OpenRouter key alias
   TYPESAFE_API_KEY    TypeSafe AI key (typesafe only)
   TYPESAFE_AI_API_KEY Accepted TypeSafe key alias
+  CLOUDFLARE_ACCOUNT_ID  Cloudflare account ID (cloudflare only)
+  CLOUDFLARE_AUTH_TOKEN  Workers AI token (cloudflare only)
   ROUTER_MODEL        Selected provider's model override
   OPENROUTE_MODEL     OpenRouter model fallback when ROUTER_MODEL is blank
 

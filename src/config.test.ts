@@ -37,7 +37,7 @@ describe('provider-neutral configuration', () => {
   });
 
   it.each(['ROUTER_PROVIDER', 'JEV_PROVIDER'])('rejects malformed %s values without echoing them', (selector) => {
-    for (const value of ['', ' typesafe ', 'cloudflare', 'private-selector-value']) {
+    for (const value of ['', ' typesafe ', 'unavailable-provider', 'private-selector-value']) {
       expect(() => resolveEvaluationConfiguration({ [selector]: value })).toThrow(`${selector} must be`);
     }
   });
@@ -67,6 +67,47 @@ describe('provider-neutral configuration', () => {
       expect((error as Error).message).toContain('ROUTER_MODEL must be');
       expect((error as Error).message).not.toContain(model);
     }
+  });
+});
+
+describe('Cloudflare configuration', () => {
+  const accountId = 'a'.repeat(32);
+  const credentials = { CLOUDFLARE_AUTH_TOKEN: ' synthetic-cloudflare-token ', CLOUDFLARE_ACCOUNT_ID: accountId };
+
+  it.each(['clef', 'clef-flash'])('selects %s using only the Cloudflare token and account', (model) => {
+    expect(resolveEvaluationConfiguration({ ...credentials, ROUTER_PROVIDER: 'cloudflare', ROUTER_MODEL: model }))
+      .toEqual({ provider: 'cloudflare', apiKey: 'synthetic-cloudflare-token', accountId, model });
+  });
+
+  it('defaults to clef and permits the agreeing compatibility selector', () => {
+    expect(resolveEvaluationConfiguration({ ...credentials, ROUTER_PROVIDER: 'cloudflare', JEV_PROVIDER: 'cloudflare',
+      OPENROUTE_MODEL: 'ignored/model' })).toEqual({ provider: 'cloudflare', apiKey: 'synthetic-cloudflare-token', accountId, model: 'clef' });
+    expect(resolveEvaluationConfiguration({ ...credentials, JEV_PROVIDER: 'cloudflare' }).provider).toBe('cloudflare');
+  });
+
+  it.each([undefined, '', '../private', `${'a'.repeat(32)}/..`, 'g'.repeat(32), 'a'.repeat(31), 'a'.repeat(33),
+    `https://private.example/${'a'.repeat(32)}`, `${'a'.repeat(31)}\n`])('rejects an invalid account ID before a request: %j', (invalid) => {
+    const environment: NodeJS.ProcessEnv = { ...credentials, ROUTER_PROVIDER: 'cloudflare', ...(invalid === undefined ? {} : { CLOUDFLARE_ACCOUNT_ID: invalid }) };
+    if (invalid === undefined) delete environment.CLOUDFLARE_ACCOUNT_ID;
+    expect(() => resolveEvaluationConfiguration(environment)).toThrow('CLOUDFLARE_ACCOUNT_ID must be');
+  });
+
+  it.each(['@cf/cloudflare/clef', 'other-model', 'clef/../clef-flash', 'clef?account=private', 'clef flash', 'https://private.example'])
+    ('rejects model paths instead of the fixed selectors: %s', (model) => {
+      expect(() => resolveEvaluationConfiguration({ ...credentials, ROUTER_PROVIDER: 'cloudflare', ROUTER_MODEL: model }))
+        .toThrow('ROUTER_MODEL for cloudflare must be clef or clef-flash.');
+    });
+
+  it('rejects a missing token and conflicting provider without consulting another credential', () => {
+    expect(() => resolveEvaluationConfiguration({ ROUTER_PROVIDER: 'cloudflare', CLOUDFLARE_ACCOUNT_ID: accountId, TYPESAFE_API_KEY: 'unrelated-key' }))
+      .toThrow('CLOUDFLARE_AUTH_TOKEN is required');
+    expect(() => resolveEvaluationConfiguration({ ...credentials, ROUTER_PROVIDER: 'cloudflare', JEV_PROVIDER: 'typesafe' }))
+      .toThrow('must agree');
+  });
+
+  it('does not require or inspect Cloudflare settings for another provider', () => {
+    expect(resolveEvaluationConfiguration({ TYPESAFE_API_KEY: 'key', CLOUDFLARE_ACCOUNT_ID: 'unused-invalid-value' }))
+      .toEqual({ provider: 'typesafe', apiKey: 'key', model: 'jev-latest' });
   });
 });
 

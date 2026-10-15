@@ -74,10 +74,11 @@ through their own Varlock setup.
 
 ## Evaluation providers
 
-The [planned v0.3.0 release](PLAN.md#v030-release-multiple-decision-models)
-plans Cloudflare Clef/Clef-flash and OpenAI Decisions through OpenRouter alongside
-Jev, using a shared assessment contract and the existing deterministic policy.
-These model integrations remain planned; the table below lists verified support.
+The [v0.3.0 release](PLAN.md#v030-release-multiple-decision-models) adds decision
+models alongside Jev, using the same assessment contract and deterministic policy.
+Cloudflare Clef/Clef-flash have an adapter with deterministic transport tests
+and successful live synthetic checks on 2026-10-15. OpenAI Decisions through
+OpenRouter remains planned. The table lists implemented transports.
 
 The [matched worker benchmark](docs/benchmarks/issue-31.md) records twelve
 first-attempt observations on a production bug-and-tests task, with three
@@ -99,8 +100,8 @@ nonblank canonical names take precedence. `OPENROUTE_MODEL` supplies an
 OpenRouter-only model fallback when `ROUTER_MODEL` is blank. Keep a global
 override in the namespace of the selected provider.
 
-The CLI resolves provider, model, and credential once for each live run. The same
-selection survives evaluation recovery, clarification, and worker failures;
+The CLI resolves provider, model, credential, and any account ID once for each
+live run. The same selection survives evaluation recovery, clarification, and worker failures;
 repository text and worker output cannot switch it. This selection is separate
 from `--worker` and `--codex-network`. Credentials stay in transport configuration,
 outside serializable task state and approval candidates.
@@ -110,6 +111,7 @@ outside serializable task state and approval candidates.
 | `typesafe` | `TYPESAFE_API_KEY` | `jev-latest` | `POST https://api.typesafe.ai/v1/systemone` |
 | `vercel` | `AI_GATEWAY_API_KEY` | `typesafe-ai/jev` | Existing Vercel AI SDK evaluation API |
 | `openrouter` | `OPENROUTER_API_KEY` | `typesafe/jev-1.13` | `POST https://openrouter.ai/api/alpha/decisions` |
+| `cloudflare` | `CLOUDFLARE_AUTH_TOKEN` plus `CLOUDFLARE_ACCOUNT_ID` | `clef` | Workers AI REST API, fixed account/model path |
 
 Create a [Vercel Gateway key](https://vercel.com/ai-gateway), an
 [OpenRouter key](https://openrouter.ai/settings/keys), or a key in your
@@ -125,8 +127,30 @@ Model identifiers are limited to 256 characters: direct TypeSafe accepts
 `jev-*`; Vercel and OpenRouter accept `vendor/model` identifiers, with an optional
 leading `~` for OpenRouter aliases. URLs, whitespace, and path traversal are
 rejected locally. Syntax validation does not establish model availability or
-contract compatibility. Cloudflare and OpenAI Decisions verification remain
-later v0.3 steps.
+contract compatibility. Account-specific live verification results are recorded below.
+
+For Cloudflare, set `ROUTER_PROVIDER=cloudflare`, a 32-character hexadecimal
+`CLOUDFLARE_ACCOUNT_ID`, and `CLOUDFLARE_AUTH_TOKEN` through Varlock or your process
+environment. Use a token scoped to that account with Workers AI Read and Edit
+permissions, as described in [Cloudflare's REST setup](https://developers.cloudflare.com/workers-ai/get-started/rest-api/).
+Set `ROUTER_MODEL=clef` or `clef-flash`; unset/blank uses `clef`.
+These selectors map only to `@cf/cloudflare/clef` and `@cf/cloudflare/clef-flash`
+under `https://api.cloudflare.com/client/v4/accounts/{accountId}/ai/run/`.
+The [Clef](https://developers.cloudflare.com/workers-ai/models/clef/) and
+[Clef-flash](https://developers.cloudflare.com/workers-ai/models/clef-flash/)
+APIs use the shared four Noul questions and action Choice. The adapter unwraps
+the Workers AI `success`/`errors`/`result` envelope and rejects missing,
+unexpected, or duplicate question names, invalid answers, and incomplete action
+distributions. Confidence is validated when present; absent confidence stays
+absent. Served-model attribution comes from `result.model`, without inferring a
+version from the requested model or endpoint.
+
+Selecting Cloudflare sends the bounded task snapshot, including collected
+repository/issue text and worker evidence, to your account's Workers AI service.
+[Cloudflare's data policy](https://developers.cloudflare.com/workers-ai/platform/data-usage/)
+classifies inputs and outputs as customer content and says it does not use that
+content for model training or service improvement without explicit consent.
+Content may be stored when using Cloudflare storage services alongside Workers AI.
 
 Model namespaces differ: keep `typesafe-ai/jev` on Vercel; OpenRouter documents
 `typesafe/jev-1.13` and the moving alias `~typesafe/jev-latest`; direct TypeSafe
@@ -178,10 +202,18 @@ credentials, then run one synthetic evaluation per selected provider:
 pnpm build
 pnpm verify:jev --live openrouter
 pnpm verify:jev --live typesafe
+pnpm verify:provider --live cloudflare clef
+pnpm verify:provider --live cloudflare clef-flash
 ```
 
 To load this checkout's local values with Varlock, use
 `pnpm env:run node scripts/verify-jev.mjs --live openrouter` (or `typesafe`).
+For the Cloudflare models, run
+`pnpm env:run node scripts/verify-jev.mjs --live cloudflare clef`, then repeat
+with `clef-flash`. `verify:jev` and `verify:provider` invoke the same opt-in tool.
+The optional model argument is restricted to Cloudflare's two selectors and
+overrides `ROUTER_MODEL` for that check. The explicit provider argument selects
+the synthetic check after validating ambient selectors for conflicts.
 
 Each check sends a small synthetic state, performs at most two attempts within
 10 seconds, executes no repository tool, and emits only sanitized provider,
@@ -197,6 +229,16 @@ account/model access remains unverified. A live TypeSafe CLI walkthrough also
 completed one approved file read and then stopped, with no worker calls or
 source edits. These checks apply to the tested accounts; other accounts must
 verify their own access.
+
+On 2026-10-15, separate authorized Cloudflare checks normalized responses for
+both `clef` and `clef-flash`. Each returned its matching model name; no pinned
+upstream revision was reported. The checks sent synthetic state only and called
+no coding workers.
+
+A live Clef CLI walkthrough on 2026-10-15 also completed two iterations in a
+synthetic repository: an approved `READ_FILE` succeeded, then a `FINISH`
+recommendation became `ASK_USER` because no validation script was available.
+The operator stopped at that prompt. No coding worker ran or source file changed.
 
 ## Run
 

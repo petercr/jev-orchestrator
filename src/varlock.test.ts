@@ -13,12 +13,12 @@ const varlock = path.resolve('node_modules/varlock/bin/cli.js');
 const cli = path.resolve('src/cli.ts');
 const configurationModule = pathToFileURL(path.resolve('src/config.ts')).href;
 const tsxLoader = pathToFileURL(createRequire(import.meta.url).resolve('tsx')).href;
-const credentialNames = ['AI_GATEWAY_API_KEY', 'OPENROUTER_API_KEY', 'OPENROUTE_API_KEY', 'TYPESAFE_API_KEY', 'TYPESAFE_AI_API_KEY'];
+const credentialNames = ['AI_GATEWAY_API_KEY', 'OPENROUTER_API_KEY', 'OPENROUTE_API_KEY', 'TYPESAFE_API_KEY', 'TYPESAFE_AI_API_KEY', 'CLOUDFLARE_AUTH_TOKEN'];
 
 function isolatedEnvironment(): NodeJS.ProcessEnv {
   const environment = { ...process.env };
   for (const key of Object.keys(environment)) {
-    if (credentialNames.includes(key) || ['ROUTER_PROVIDER', 'JEV_PROVIDER', 'ROUTER_MODEL', 'OPENROUTE_MODEL'].includes(key) ||
+    if (credentialNames.includes(key) || ['ROUTER_PROVIDER', 'JEV_PROVIDER', 'ROUTER_MODEL', 'OPENROUTE_MODEL', 'CLOUDFLARE_ACCOUNT_ID'].includes(key) ||
       /^_*VARLOCK/u.test(key)) delete environment[key];
   }
   return { ...environment, VARLOCK_TELEMETRY_DISABLED: 'true' };
@@ -78,9 +78,10 @@ describe('Varlock environment tooling', () => {
     ['openrouter', 'OPENROUTE_API_KEY', 'typesafe/jev-1.13'],
     ['typesafe', 'TYPESAFE_API_KEY', 'jev-latest'],
     ['typesafe', 'TYPESAFE_AI_API_KEY', 'jev-latest'],
+    ['cloudflare', 'CLOUDFLARE_AUTH_TOKEN', 'clef'],
   ])('loads only a supplied %s credential through %s without a metadata blob', async (provider, key, model) => {
     const secret = 'synthetic-selected-credential';
-    const directory = await fixture(`JEV_PROVIDER=${provider}\n${key}=${secret}\n`);
+    const directory = await fixture(`JEV_PROVIDER=${provider}\n${key}=${secret}\n${provider === 'cloudflare' ? `CLOUDFLARE_ACCOUNT_ID=${'a'.repeat(32)}\n` : ''}`);
     const result = await invoke(directory, ['run', '--inject', 'vars', '--', process.execPath,
       '--import', tsxLoader, '--input-type=module', '-e',
       `const { resolveJevConfiguration } = await import(${JSON.stringify(configurationModule)});
@@ -112,6 +113,7 @@ console.log(JSON.stringify({ provider: selected.provider, model: selected.model,
     ['an unknown selector', 'JEV_PROVIDER=unknown'],
     ['an unknown canonical selector', 'ROUTER_PROVIDER=unknown'],
     ['an oversized model', `ROUTER_MODEL=${'x'.repeat(257)}`],
+    ['an invalid account ID', 'CLOUDFLARE_ACCOUNT_ID=../private'],
   ])('blocks child execution for %s', async (_name, values) => {
     const directory = await fixture(`${values}\n`);
     const marker = path.join(directory, 'executed');

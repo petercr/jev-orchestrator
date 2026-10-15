@@ -26,7 +26,8 @@ Run metrics are reporting data outside AgentState and approved candidates. Measu
 
 - `src/cli.ts`: command-line entry point and initial `AgentState` construction.
 - `src/types.ts`: shared action, state, assessment, and policy types.
-- `src/ai/evaluate.ts`: bounded provider-neutral evaluation, with shared normalization in `src/ai/contract.ts` and Vercel/OpenRouter/TypeSafe transport boundaries. Bind `createEvaluator` once per run; keep transport configuration outside serializable state.
+- `src/ai/evaluate.ts`: bounded provider-neutral evaluation, with shared normalization in `src/ai/contract.ts` and Vercel/OpenRouter/TypeSafe/Cloudflare transport boundaries. Bind `createEvaluator` once per run; keep transport configuration outside serializable state.
+- `src/ai/cloudflare.ts`: bounded Clef/Clef-flash REST adapter, strict Workers AI envelope and duplicate-key validation, and allowlisted Cloudflare error classifications.
 - `src/policy.ts`: deterministic safety and confidence rules. This is the final authority over model recommendations.
 - `src/policy.test.ts`: policy behavior tests.
 - `src/repo/inspect.ts`: read-only repository metadata collection.
@@ -69,7 +70,7 @@ Run the approval-gated mock loop interactively:
 pnpm dev -- . "Inspect this repo and choose the safest useful first action" --mock --orchestrate
 ```
 
-Live evaluation requires only the selected `ROUTER_PROVIDER` credential: `AI_GATEWAY_API_KEY`, `OPENROUTER_API_KEY`, or `TYPESAFE_API_KEY`. `JEV_PROVIDER` remains a compatibility alias; reject conflicting, empty, or unknown selectors before a request. Unset selection defaults to direct TypeSafe (`jev-latest`); `TYPESAFE_AI_API_KEY` and `OPENROUTE_API_KEY` are accepted aliases. Validate model identifier namespaces and freeze the resolved selection across recovery, clarification, and worker failures. Do not require a live model call in automated tests. Never print, trace, or commit credentials.
+Live evaluation requires only the selected `ROUTER_PROVIDER` credential: `AI_GATEWAY_API_KEY`, `OPENROUTER_API_KEY`, `TYPESAFE_API_KEY`, or `CLOUDFLARE_AUTH_TOKEN`. Cloudflare also requires a validated `CLOUDFLARE_ACCOUNT_ID` and accepts only `clef`/`clef-flash` model selectors mapped to fixed Workers AI paths. `JEV_PROVIDER` remains a compatibility alias; reject conflicting, empty, or unknown selectors before a request. Unset selection defaults to direct TypeSafe (`jev-latest`); `TYPESAFE_AI_API_KEY` and `OPENROUTE_API_KEY` are accepted aliases. Validate model identifier namespaces and freeze the resolved selection across recovery, clarification, and worker failures. Do not require a live model call in automated tests. Never print, trace, or commit credentials.
 
 Varlock is pinned development tooling. `.env.schema` owns environment validation and credential sensitivity; keep `.env.example` compatible when keys change. Use `pnpm env:check` for redacted local diagnostics, `pnpm env:check:schema` for the committed schema without local value files, and `pnpm dev:env`/`pnpm start:env` to load local values. Keep `--inject vars` on wrappers so the full Varlock configuration blob is not inherited by subprocesses. Mock, check, test, and build remain independent of local secrets; only the CLI's existing live preflight requires the selected credential. Do not read or edit ignored `.env`/`.env.local` value files or print unredacted Varlock output. Local encryption is operator-managed; Node's `--env-file` cannot decrypt encrypted values. Update the schema's selectors alongside the provider implementation, without enabling planned providers early.
 

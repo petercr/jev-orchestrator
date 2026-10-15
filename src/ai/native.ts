@@ -1,7 +1,7 @@
 import type { AgentState } from '../types.js';
 import type { EvaluationConfiguration } from '../config.js';
 import { redactSensitiveText, sanitizeTraceValue } from '../logging/trace.js';
-import { EVALUATION_QUESTIONS, isRecord, normalizeAssessment, servedModel, type ProviderEvaluation } from './contract.js';
+import { NATIVE_EVALUATION_QUESTIONS, isRecord, normalizeAssessment, servedModel, type ProviderEvaluation } from './contract.js';
 import { EvaluationError, EvaluationHttpError, retryAfterMs } from './errors.js';
 import { boundedResponse } from './transport.js';
 
@@ -12,13 +12,7 @@ export const NATIVE_EVALUATION_ENDPOINTS = {
 
 export const NATIVE_JEV_ENDPOINTS = NATIVE_EVALUATION_ENDPOINTS;
 
-export const NATIVE_EVALUATION_QUESTIONS = {
-  ...EVALUATION_QUESTIONS,
-  taskComplete: { ...EVALUATION_QUESTIONS.taskComplete, type: 'noul' },
-  needsMoreInformation: { ...EVALUATION_QUESTIONS.needsMoreInformation, type: 'noul' },
-  needsTesting: { ...EVALUATION_QUESTIONS.needsTesting, type: 'noul' },
-  stuck: { ...EVALUATION_QUESTIONS.stuck, type: 'noul' },
-} as const;
+export { NATIVE_EVALUATION_QUESTIONS } from './contract.js';
 
 function errorStatus(body: unknown): number | undefined {
   if (!isRecord(body) || !isRecord(body.error)) return undefined;
