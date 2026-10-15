@@ -20,6 +20,7 @@ export async function runCase(directory, name) {
   let command;
   if (kind === 'jev') {
     const launcher = `import { pathToFileURL } from 'node:url';
+process.env.ROUTER_PROVIDER = 'typesafe';
 process.env.JEV_PROVIDER = 'typesafe';
 process.env.ROUTER_MODEL = 'jev-1.13.0';
 const entry = ${JSON.stringify(entry)};

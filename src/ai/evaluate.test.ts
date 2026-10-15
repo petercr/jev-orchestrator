@@ -9,11 +9,14 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   boundAgentStateForEvaluation,
   evaluateAgentState,
+  createEvaluator,
+  EvaluationError,
   JevEvaluationError,
   JEV_EVALUATION_MAX_RETRIES,
   JEV_EVALUATION_TIMEOUT_MS,
   normalizeJevEvaluationError,
 } from './evaluate.js';
+import { EvaluationHttpError, JevHttpError, normalizeEvaluationError } from './errors.js';
 import type { AgentState } from '../types.js';
 import {
   MAX_EVALUATION_COMMAND_OUTPUT_LENGTH,
@@ -28,6 +31,7 @@ vi.mock('ai', async () => {
 });
 
 beforeEach(() => {
+  vi.stubEnv('ROUTER_PROVIDER', undefined);
   vi.stubEnv('JEV_PROVIDER', 'vercel');
   vi.stubEnv('AI_GATEWAY_API_KEY', 'test-gateway-key');
 });
@@ -94,6 +98,24 @@ describe('evaluateAgentState', () => {
     evaluateMock.mockReset();
   });
 
+  it('retains legacy error constructors and normalization as aliases', () => {
+    expect(JevEvaluationError).toBe(EvaluationError);
+    expect(JevHttpError).toBe(EvaluationHttpError);
+    expect(normalizeJevEvaluationError).toBe(normalizeEvaluationError);
+  });
+
+  it('validates string model overrides before invoking a transport', async () => {
+    await expect(evaluateAgentState(state, 'jev-latest')).rejects.toThrow('ROUTER_MODEL must be');
+    expect(evaluateMock).not.toHaveBeenCalled();
+  });
+
+  it('rejects SDK overrides outside the Gateway transport before a request', () => {
+    const model = { specificationVersion: 'v1' } as never;
+    expect(() => createEvaluator({ provider: 'typesafe', model: 'jev-latest', apiKey: 'key' }, model))
+      .toThrow('requires ROUTER_PROVIDER=vercel');
+    expect(evaluateMock).not.toHaveBeenCalled();
+  });
+
   it('passes a bounded request policy and normalizes valid confidence metadata', async () => {
     evaluateMock.mockResolvedValue(evaluationResult());
 
@@ -114,7 +136,7 @@ describe('evaluateAgentState', () => {
 
     await expect(evaluateAgentState(state)).rejects.toMatchObject({
       code: 'invalid_response',
-      message: 'Jev returned invalid provider metadata.',
+      message: 'Decision provider returned invalid provider metadata.',
     });
   });
 
@@ -123,7 +145,7 @@ describe('evaluateAgentState', () => {
 
     await expect(evaluateAgentState(state)).rejects.toMatchObject({
       code: 'rate_limit',
-      message: 'Jev Gateway rate limit reached. Wait before retrying the evaluation.',
+      message: 'Gateway rate limit reached. Wait before retrying the evaluation.',
     });
   });
 

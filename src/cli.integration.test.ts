@@ -42,6 +42,7 @@ describe('offline CLI integration', () => {
     const root = await temporaryRepository();
     const log = vi.spyOn(console, 'log').mockImplementation(() => undefined);
     vi.stubEnv('JEV_PROVIDER', 'unknown');
+    vi.stubEnv('ROUTER_PROVIDER', 'also-unknown');
     for (const name of ['AI_GATEWAY_API_KEY', 'OPENROUTER_API_KEY', 'OPENROUTE_API_KEY', 'TYPESAFE_API_KEY', 'TYPESAFE_AI_API_KEY']) vi.stubEnv(name, '');
     const fetch = vi.spyOn(globalThis, 'fetch').mockRejectedValue(new Error('Unexpected network request'));
 
@@ -95,6 +96,7 @@ describe('offline CLI integration', () => {
   it('fails before live evaluation when the default TypeSafe key is missing', async () => {
     const root = await temporaryRepository();
     vi.stubEnv('JEV_PROVIDER', undefined);
+    vi.stubEnv('ROUTER_PROVIDER', undefined);
     vi.stubEnv('TYPESAFE_API_KEY', '');
     vi.stubEnv('TYPESAFE_AI_API_KEY', '');
 

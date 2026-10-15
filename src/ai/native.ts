@@ -1,14 +1,16 @@
 import type { AgentState } from '../types.js';
-import type { JevConfiguration } from '../config.js';
+import type { EvaluationConfiguration } from '../config.js';
 import { redactSensitiveText, sanitizeTraceValue } from '../logging/trace.js';
 import { EVALUATION_QUESTIONS, isRecord, normalizeAssessment, servedModel, type ProviderEvaluation } from './contract.js';
-import { JevEvaluationError, JevHttpError, retryAfterMs } from './errors.js';
+import { EvaluationError, EvaluationHttpError, retryAfterMs } from './errors.js';
 import { boundedResponse } from './transport.js';
 
-export const NATIVE_JEV_ENDPOINTS = {
+export const NATIVE_EVALUATION_ENDPOINTS = {
   openrouter: 'https://openrouter.ai/api/alpha/decisions',
   typesafe: 'https://api.typesafe.ai/v1/systemone',
 } as const;
+
+export const NATIVE_JEV_ENDPOINTS = NATIVE_EVALUATION_ENDPOINTS;
 
 export const NATIVE_EVALUATION_QUESTIONS = {
   ...EVALUATION_QUESTIONS,
@@ -37,10 +39,10 @@ function errorStatus(body: unknown): number | undefined {
 
 export async function evaluateNative(
   state: AgentState,
-  configuration: JevConfiguration & { provider: 'openrouter' | 'typesafe' },
+  configuration: EvaluationConfiguration & { provider: 'openrouter' | 'typesafe' },
   signal: AbortSignal,
 ): Promise<ProviderEvaluation> {
-  const response = await boundedResponse(await fetch(NATIVE_JEV_ENDPOINTS[configuration.provider], {
+  const response = await boundedResponse(await fetch(NATIVE_EVALUATION_ENDPOINTS[configuration.provider], {
     method: 'POST',
     headers: { Authorization: `Bearer ${configuration.apiKey}`, 'Content-Type': 'application/json' },
     body: JSON.stringify({ model: configuration.model, state, questions: NATIVE_EVALUATION_QUESTIONS }),
@@ -51,15 +53,15 @@ export async function evaluateNative(
   try {
     body = await response.json();
   } catch {
-    if (!response.ok) throw new JevHttpError(response.status, retryAfterMs(response.headers.get('retry-after')));
-    throw new JevEvaluationError('invalid_response', 'Jev returned invalid JSON evaluation data.', { stage: 'json', category: 'shape' });
+    if (!response.ok) throw new EvaluationHttpError(response.status, retryAfterMs(response.headers.get('retry-after')));
+    throw new EvaluationError('invalid_response', 'Decision provider returned invalid JSON evaluation data.', { stage: 'json', category: 'shape' });
   }
   const status = errorStatus(body);
   if (!response.ok || (isRecord(body) && body.error !== undefined)) {
-    throw new JevHttpError(status ?? (response.ok ? 400 : response.status), retryAfterMs(response.headers.get('retry-after')));
+    throw new EvaluationHttpError(status ?? (response.ok ? 400 : response.status), retryAfterMs(response.headers.get('retry-after')));
   }
   if (!isRecord(body) || !isRecord(body.answers)) {
-    throw new JevEvaluationError('invalid_response', 'Jev returned invalid evaluation data.', { stage: 'answers', category: 'shape' });
+    throw new EvaluationError('invalid_response', 'Decision provider returned invalid evaluation data.', { stage: 'answers', category: 'shape' });
   }
   const nextAction = body.answers.nextAction;
   return {

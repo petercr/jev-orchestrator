@@ -18,7 +18,7 @@ const credentialNames = ['AI_GATEWAY_API_KEY', 'OPENROUTER_API_KEY', 'OPENROUTE_
 function isolatedEnvironment(): NodeJS.ProcessEnv {
   const environment = { ...process.env };
   for (const key of Object.keys(environment)) {
-    if (credentialNames.includes(key) || ['JEV_PROVIDER', 'ROUTER_MODEL', 'OPENROUTE_MODEL'].includes(key) ||
+    if (credentialNames.includes(key) || ['ROUTER_PROVIDER', 'JEV_PROVIDER', 'ROUTER_MODEL', 'OPENROUTE_MODEL'].includes(key) ||
       /^_*VARLOCK/u.test(key)) delete environment[key];
   }
   return { ...environment, VARLOCK_TELEMETRY_DISABLED: 'true' };
@@ -54,7 +54,7 @@ describe('Varlock environment tooling', () => {
     const directory = await fixture('JEV_PROVIDER=invalid-local-selector\n');
     const result = await invoke(directory, ['load', '--agent', '--path', '.env.schema']);
     expect(result.exitCode).toBe(0);
-    expect(JSON.parse(result.stdout)).toEqual({ JEV_PROVIDER: 'typesafe' });
+    expect(JSON.parse(result.stdout)).toEqual({});
   });
 
   it('redacts every canonical credential and compatibility alias in diagnostics and child output', async () => {
@@ -110,7 +110,7 @@ console.log(JSON.stringify({ provider: selected.provider, model: selected.model,
 
   it.each([
     ['an unknown selector', 'JEV_PROVIDER=unknown'],
-    ['an empty selector', 'JEV_PROVIDER=""'],
+    ['an unknown canonical selector', 'ROUTER_PROVIDER=unknown'],
     ['an oversized model', `ROUTER_MODEL=${'x'.repeat(257)}`],
   ])('blocks child execution for %s', async (_name, values) => {
     const directory = await fixture(`${values}\n`);
@@ -120,6 +120,35 @@ console.log(JSON.stringify({ provider: selected.provider, model: selected.model,
     ]);
     expect(result.exitCode).not.toBe(0);
     await expect(access(marker)).rejects.toThrow();
+  });
+
+  it.each([
+    ['ROUTER_PROVIDER=openrouter', 'openrouter'],
+    ['JEV_PROVIDER=openrouter', 'openrouter'],
+    ['ROUTER_PROVIDER=openrouter\nJEV_PROVIDER=openrouter', 'openrouter'],
+    ['', 'typesafe'],
+  ])('does not inject a conflicting default for selectors: %s', async (selectors, provider) => {
+    const directory = await fixture(`${selectors}\nOPENROUTE_API_KEY=synthetic-openrouter-key\nTYPESAFE_API_KEY=synthetic-typesafe-key\n`);
+    const result = await invoke(directory, ['run', '--inject', 'vars', '--', process.execPath,
+      '--import', tsxLoader, '--input-type=module', '-e',
+      `const { resolveEvaluationConfiguration } = await import(${JSON.stringify(configurationModule)});
+console.log(resolveEvaluationConfiguration().provider);`,
+    ]);
+    expect(result.exitCode).toBe(0);
+    expect(result.stdout.trim()).toBe(provider);
+  });
+
+  it.each([
+    ['ROUTER_PROVIDER=typesafe\nJEV_PROVIDER=openrouter', 'must agree'],
+    ['ROUTER_PROVIDER=""', 'ROUTER_PROVIDER must be'],
+    ['JEV_PROVIDER=""', 'JEV_PROVIDER must be'],
+  ])('retains CLI selector preflight through Varlock: %s', async (selectors, message) => {
+    const directory = await fixture(`${selectors}\n`);
+    const result = await invoke(directory, ['run', '--inject', 'vars', '--', process.execPath,
+      '--import', tsxLoader, cli, directory, 'Inspect fixture', '--no-trace',
+    ]);
+    expect(result.exitCode).toBe(1);
+    expect(result.stderr).toContain(message);
   });
 
   it('runs a keyless offline mock through the environment wrapper', async () => {

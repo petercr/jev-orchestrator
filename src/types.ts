@@ -121,10 +121,11 @@ export type AgentAssessment = {
   nextAction: ChoiceAssessment;
 };
 
-export type JevProvider = 'vercel' | 'openrouter' | 'typesafe';
+export type EvaluationProvider = 'vercel' | 'openrouter' | 'typesafe';
+export type JevProvider = EvaluationProvider;
 
 export type EvaluationAttribution = {
-  provider?: JevProvider | 'mock';
+  provider?: EvaluationProvider | 'mock';
   requestedModel?: string;
   servedModel?: string;
 };
@@ -142,5 +143,6 @@ export type PolicyDecision = {
   selected: Action;
   override: boolean;
   reason: string;
+  // Retain the v0.2 serialized label for trace compatibility across providers.
   completionReview?: 'jev_finish' | 'validation_complete';
 };

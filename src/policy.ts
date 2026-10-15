@@ -180,6 +180,6 @@ export function applyPolicy(
     requested,
     selected: requested,
     override: false,
-    reason: 'Jev recommendation clears the deterministic policy thresholds.',
+    reason: 'Evaluator recommendation clears the deterministic policy thresholds.',
   };
 }

@@ -1,14 +1,14 @@
 import { createGateway, experimental_evaluate as evaluate, type Experimental_EvaluationModel as EvaluationModel } from 'ai';
 import type { AgentState } from '../types.js';
-import type { JevConfiguration } from '../config.js';
+import type { EvaluationConfiguration } from '../config.js';
 import { sanitizeTraceValue } from '../logging/trace.js';
 import { EVALUATION_QUESTIONS, normalizeAssessment, nextActionConfidence, type ProviderEvaluation } from './contract.js';
-import { JevEvaluationError } from './errors.js';
+import { EvaluationError } from './errors.js';
 import { boundedResponse } from './transport.js';
 
 export async function evaluateVercel(
   state: AgentState,
-  configuration: JevConfiguration,
+  configuration: EvaluationConfiguration,
   signal: AbortSignal,
   modelOverride?: EvaluationModel,
 ): Promise<ProviderEvaluation> {
@@ -17,7 +17,7 @@ export async function evaluateVercel(
     baseURL: 'https://ai-gateway.vercel.sh/v4/ai',
     fetch: async (url, init) => {
       if (String(url) !== 'https://ai-gateway.vercel.sh/v4/ai/evaluation-model') {
-        throw new JevEvaluationError('request_failed', 'Unexpected Jev Gateway endpoint.');
+        throw new EvaluationError('request_failed', 'Unexpected Gateway endpoint.');
       }
       return boundedResponse(await fetch(url, { ...init, redirect: 'error' }), signal);
     },

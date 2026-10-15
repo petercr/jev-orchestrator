@@ -1,11 +1,11 @@
 import { APICallError, InvalidResponseDataError, JSONParseError, NoSuchModelError, RetryError, TypeValidationError } from 'ai';
-import { JEV_PROVIDERS } from '../config.js';
-import { ACTIONS, type JevProvider } from '../types.js';
+import { EVALUATION_PROVIDERS } from '../config.js';
+import { ACTIONS, type EvaluationProvider } from '../types.js';
 
-export const JEV_EVALUATION_TIMEOUT_MS = 10_000;
-export const JEV_EVALUATION_MAX_RETRIES = 1;
+export const EVALUATION_TIMEOUT_MS = 10_000;
+export const EVALUATION_MAX_RETRIES = 1;
 
-export type JevEvaluationErrorCode =
+export type EvaluationErrorCode =
   | 'timeout'
   | 'authentication'
   | 'authorization'
@@ -23,25 +23,25 @@ export type EvaluationDiagnostic = {
   probabilitySum?: number;
 };
 
-export type EvaluationFailure = EvaluationDiagnostic & { code: JevEvaluationErrorCode };
+export type EvaluationFailure = EvaluationDiagnostic & { code: EvaluationErrorCode };
 
-export class JevEvaluationError extends Error {
+export class EvaluationError extends Error {
   constructor(
-    readonly code: JevEvaluationErrorCode,
+    readonly code: EvaluationErrorCode,
     message: string,
     readonly diagnostic: EvaluationDiagnostic = { stage: 'transport', category: 'request' },
   ) {
     super(message);
-    this.name = 'JevEvaluationError';
+    this.name = 'EvaluationError';
   }
 }
 
 /** Never forward exception messages, causes, response bodies, or headers. */
 export function evaluationFailure(error: unknown): EvaluationFailure {
-  if (error instanceof JevEvaluationError) {
+  if (error instanceof EvaluationError) {
     // Select fields explicitly; even a malformed injected exception cannot
     // introduce provider-controlled strings into failure diagnostics.
-    const codes: JevEvaluationErrorCode[] = ['timeout', 'authentication', 'authorization', 'billing', 'rate_limit', 'model_unavailable', 'invalid_response', 'service_unavailable', 'request_failed'];
+    const codes: EvaluationErrorCode[] = ['timeout', 'authentication', 'authorization', 'billing', 'rate_limit', 'model_unavailable', 'invalid_response', 'service_unavailable', 'request_failed'];
     const stages: EvaluationDiagnostic['stage'][] = ['transport', 'json', 'answers', 'next_action', 'distribution', 'confidence', 'metadata', 'model'];
     const categories: EvaluationDiagnostic['category'][] = ['request', 'shape', 'value', 'sum', 'choice', 'missing_action', 'unknown_action', 'size'];
     const fields: NonNullable<EvaluationDiagnostic['field']>[] = ['taskComplete', 'needsMoreInformation', 'needsTesting', 'stuck'];
@@ -61,9 +61,9 @@ export function evaluationFailure(error: unknown): EvaluationFailure {
 }
 
 /** Only status and allowlisted classifications survive the transport boundary. */
-export class JevHttpError extends Error {
+export class EvaluationHttpError extends Error {
   constructor(readonly statusCode: number, readonly retryAfterMs = 250) {
-    super('Jev provider request failed.');
+    super('Decision provider request failed.');
   }
 }
 
@@ -76,7 +76,7 @@ export function retryAfterMs(value: string | null | undefined): number {
 
 export function evaluationRetryDelay(error: unknown): number {
   const failure = lastError(error);
-  if (failure instanceof JevHttpError) return failure.retryAfterMs;
+  if (failure instanceof EvaluationHttpError) return failure.retryAfterMs;
   return APICallError.isInstance(failure) ? retryAfterMs(failure.responseHeaders?.['retry-after']) : 250;
 }
 
@@ -87,7 +87,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 function lastError(error: unknown): unknown {
   let current = RetryError.isInstance(error) ? error.lastError : error;
   for (let depth = 0; depth < 4; depth += 1) {
-    if (current instanceof JevEvaluationError || InvalidResponseDataError.isInstance(current) ||
+    if (current instanceof EvaluationError || InvalidResponseDataError.isInstance(current) ||
       JSONParseError.isInstance(current) || TypeValidationError.isInstance(current)) return current;
     // SDKs wrap local parsing/fetch errors. Keep the HTTP status authoritative
     // for actual HTTP failures and only unwrap successful-response/local errors.
@@ -105,41 +105,41 @@ function statusCode(error: unknown): number | undefined {
   return typeof error.statusCode === 'number' ? error.statusCode : undefined;
 }
 
-export function normalizeJevEvaluationError(error: unknown, provider: JevProvider = 'vercel'): JevEvaluationError {
+export function normalizeEvaluationError(error: unknown, provider: EvaluationProvider = 'vercel'): EvaluationError {
   const failure = lastError(error);
-  if (failure instanceof JevEvaluationError) return failure;
+  if (failure instanceof EvaluationError) return failure;
   const label = provider === 'vercel' ? 'Gateway' : provider === 'openrouter' ? 'OpenRouter' : 'TypeSafe';
-  const settings = JEV_PROVIDERS[provider];
+  const settings = EVALUATION_PROVIDERS[provider];
   const credential = [settings.credential, ...settings.credentialAliases].join(' or ');
   if ((RetryError.isInstance(error) && error.reason === 'abort') ||
     (failure instanceof Error && ['AbortError', 'TimeoutError'].includes(failure.name))) {
-    return new JevEvaluationError('timeout', `Jev evaluation timed out after ${JEV_EVALUATION_TIMEOUT_MS / 1000} seconds.`);
+    return new EvaluationError('timeout', `Decision evaluation timed out after ${EVALUATION_TIMEOUT_MS / 1000} seconds.`);
   }
   if (InvalidResponseDataError.isInstance(failure) || JSONParseError.isInstance(failure) || TypeValidationError.isInstance(failure)) {
-    return new JevEvaluationError('invalid_response', 'Jev returned invalid evaluation data.', {
+    return new EvaluationError('invalid_response', 'Decision provider returned invalid evaluation data.', {
       stage: JSONParseError.isInstance(failure) ? 'json' : 'answers', category: 'shape',
     });
   }
   const status = statusCode(failure);
   if (NoSuchModelError.isInstance(failure) || status === 404) {
-    return new JevEvaluationError('model_unavailable', `The configured Jev model is unavailable. Check ROUTER_MODEL and ${label} access.`);
+    return new EvaluationError('model_unavailable', `The configured decision model is unavailable. Check ROUTER_MODEL and ${label} access.`);
   }
   switch (status) {
     case 401:
-      return new JevEvaluationError('authentication', `Jev ${label} rejected the credential. Check ${credential}.`);
+      return new EvaluationError('authentication', `${label} rejected the credential. Check ${credential}.`);
     case 403:
-      return new JevEvaluationError('authorization', `Jev ${label} denied access. Check account permissions and model/plan eligibility; a valid key and credit balance do not guarantee model access.`);
+      return new EvaluationError('authorization', `${label} denied access. Check account permissions and model/plan eligibility; a valid key and credit balance do not guarantee model access.`);
     case 402:
-      return new JevEvaluationError('billing', `Jev ${label} billing prevented evaluation. Check account credits and billing limits.`);
+      return new EvaluationError('billing', `${label} billing prevented evaluation. Check account credits and billing limits.`);
     case 408:
     case 504:
-      return new JevEvaluationError('timeout', `Jev ${label} request timed out. Try the evaluation again later.`);
+      return new EvaluationError('timeout', `${label} request timed out. Try the evaluation again later.`);
     case 429:
-      return new JevEvaluationError('rate_limit', `Jev ${label} rate limit reached. Wait before retrying the evaluation.`);
+      return new EvaluationError('rate_limit', `${label} rate limit reached. Wait before retrying the evaluation.`);
     default:
       return status !== undefined && status >= 500
-        ? new JevEvaluationError('service_unavailable', `Jev ${label} is temporarily unavailable. Try the evaluation again later.`)
-        : new JevEvaluationError('request_failed', 'Jev evaluation failed. Check provider configuration and try again later.');
+        ? new EvaluationError('service_unavailable', `${label} is temporarily unavailable. Try the evaluation again later.`)
+        : new EvaluationError('request_failed', 'Decision evaluation failed. Check provider configuration and try again later.');
   }
 }
 
@@ -149,3 +149,10 @@ export function isTransientEvaluationError(error: unknown): boolean {
   return status === 408 || status === 429 || (status !== undefined && status >= 500 && status <= 599) ||
     (status === undefined && (failure instanceof TypeError || (APICallError.isInstance(failure) && failure.isRetryable)));
 }
+
+// Compatibility exports use the same constructors so instanceof remains valid.
+export { EvaluationError as JevEvaluationError, EvaluationHttpError as JevHttpError };
+export type JevEvaluationErrorCode = EvaluationErrorCode;
+export const normalizeJevEvaluationError = normalizeEvaluationError;
+export const JEV_EVALUATION_TIMEOUT_MS = EVALUATION_TIMEOUT_MS;
+export const JEV_EVALUATION_MAX_RETRIES = EVALUATION_MAX_RETRIES;
