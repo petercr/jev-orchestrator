@@ -8,6 +8,7 @@ import * as inspection from './repo/inspect.js';
 import * as evaluation from './ai/evaluate.js';
 import { JevEvaluationError } from './ai/errors.js';
 import { mockEvaluation } from './mock.js';
+import { ACTIONS } from './types.js';
 import { formatRunSummary, main, runCliOrchestration, runDecision, type CliOptions } from './cli.js';
 
 vi.mock('node:readline/promises', () => ({ createInterface: vi.fn() }));
@@ -27,6 +28,7 @@ const roots: string[] = [];
 let terminal: Terminal;
 const originalExitCode = process.exitCode;
 beforeEach(() => {
+  vi.stubEnv('ROUTER_PROVIDER', undefined);
   terminal = new Terminal();
   vi.mocked(createInterface).mockReturnValue(terminal as unknown as ReturnType<typeof createInterface>);
   vi.spyOn(console, 'log').mockImplementation(() => {});
@@ -35,6 +37,7 @@ afterEach(async () => {
   process.exitCode = originalExitCode;
   vi.restoreAllMocks();
   vi.unstubAllEnvs();
+  vi.unstubAllGlobals();
   await Promise.all(roots.splice(0).map((root) => rm(root, { recursive: true, force: true })));
 });
 
@@ -193,10 +196,11 @@ describe('CLI interruption lifecycle', () => {
     opts.mock = false;
     vi.stubEnv('TYPESAFE_API_KEY', 'test-key');
     vi.stubEnv('JEV_PROVIDER', 'typesafe');
-    const evaluate = vi.spyOn(evaluation, 'evaluateAgentState')
+    const evaluate = vi.fn<evaluation.Evaluator>()
       .mockRejectedValueOnce(new JevEvaluationError('invalid_response', 'raw upstream body', { stage: 'distribution', category: 'sum', probabilitySum: 0.99 }))
       .mockResolvedValueOnce(mockEvaluation());
     terminal.question.mockResolvedValueOnce('approve').mockResolvedValueOnce('continue').mockResolvedValueOnce('stop');
+    vi.spyOn(evaluation, 'createEvaluator').mockReturnValue(evaluate);
     const outcome = await runCliOrchestration(opts);
     expect(outcome).toMatchObject({ status: 'stopped', iterations: 2 });
     expect(evaluate).toHaveBeenCalledTimes(2);
@@ -218,7 +222,7 @@ describe('CLI interruption lifecycle', () => {
     opts.mock = false;
     vi.stubEnv('TYPESAFE_API_KEY', 'test-key');
     vi.stubEnv('JEV_PROVIDER', 'typesafe');
-    vi.spyOn(evaluation, 'evaluateAgentState').mockRejectedValueOnce(new JevEvaluationError('invalid_response', 'invalid'));
+    vi.spyOn(evaluation, 'createEvaluator').mockReturnValue(vi.fn<evaluation.Evaluator>().mockRejectedValueOnce(new JevEvaluationError('invalid_response', 'invalid')));
     terminal.question.mockResolvedValueOnce('stop');
     const listeners = process.listenerCount('SIGINT');
     const outcome = await runCliOrchestration(opts);
@@ -227,12 +231,69 @@ describe('CLI interruption lifecycle', () => {
     expect(process.listenerCount('SIGINT')).toBe(listeners);
   });
 
+  it('keeps the selected transport, model, credentials, and worker controls through recovery and clarification', async () => {
+    const opts = { ...await options(), mock: false, workerSelection: 'codex' as const, codexNetworkAccess: true as const };
+    vi.stubEnv('ROUTER_PROVIDER', 'openrouter');
+    vi.stubEnv('JEV_PROVIDER', undefined);
+    vi.stubEnv('ROUTER_MODEL', 'typesafe/jev-1.13');
+    vi.stubEnv('OPENROUTER_API_KEY', 'synthetic-original-key');
+    const fetch = vi.fn<typeof globalThis.fetch>().mockImplementation(async () => {
+      const attempt = fetch.mock.calls.length;
+      const choice = attempt === 2 ? 'ASK_USER' : 'SEARCH_REPO';
+      return Response.json({ model: 'typesafe/jev-1.13-served', answers: {
+        taskComplete: { type: 'noul', noul: 0 },
+        needsMoreInformation: { type: 'noul', noul: attempt === 2 ? 0.99 : 0 },
+        needsTesting: { type: 'noul', noul: 0 }, stuck: { type: 'noul', noul: 0 },
+        nextAction: { type: 'choice', choice, confidence: 0.99,
+          probabilities: Object.fromEntries(ACTIONS.map((action) => [action, action === choice ? (attempt === 1 ? 0.99 : 1) : 0])),
+        },
+      } });
+    });
+    vi.stubGlobal('fetch', fetch);
+    terminal.question.mockImplementationOnce(async () => {
+      // Recovery cannot re-resolve a provider or silently fail over.
+      vi.stubEnv('ROUTER_PROVIDER', 'typesafe');
+      vi.stubEnv('JEV_PROVIDER', 'vercel');
+      vi.stubEnv('ROUTER_MODEL', 'jev-latest');
+      vi.stubEnv('OPENROUTER_API_KEY', 'synthetic-replacement-key');
+      return 'continue';
+    }).mockResolvedValueOnce('approve')
+      .mockResolvedValueOnce('Use another decision provider; keep the original task.')
+      .mockResolvedValueOnce('reject').mockResolvedValueOnce('stop');
+
+    const outcome = await runCliOrchestration(opts);
+    expect(outcome).toMatchObject({ status: 'stopped', iterations: 4,
+      state: { workerSelection: 'codex', codexNetworkAccess: true, codexCalls: 0, claudeCalls: 0 },
+    });
+    expect(fetch).toHaveBeenCalledTimes(4);
+    for (const [url, init] of fetch.mock.calls) {
+      expect(url).toBe('https://openrouter.ai/api/alpha/decisions');
+      expect(new Headers(init?.headers).get('authorization')).toBe('Bearer synthetic-original-key');
+      const request = JSON.parse(String(init?.body));
+      expect(request.model).toBe('typesafe/jev-1.13');
+      expect(request.state.progress.workers).toEqual({ selection: 'codex', allowedActions: ['CALL_CODEX'] });
+      expect(request.state.codexNetworkAccess).toBe(true);
+      expect(JSON.stringify(request.state)).not.toContain('synthetic-original-key');
+    }
+    expect(terminal.question).toHaveBeenCalledTimes(5);
+    expect(vi.mocked(console.log).mock.calls.flat().join('\n')).toContain('Mode: live (openrouter)');
+    const trace = await readFile(outcome.tracePath, 'utf8');
+    const records = trace.trim().split('\n').map((line) => JSON.parse(line));
+    expect(records[0]).toMatchObject({ failure: { code: 'invalid_response', stage: 'distribution', category: 'sum' }, approval: null });
+    expect(records[1]).toMatchObject({ recovery: { decision: 'continue' } });
+    expect(records.filter((record) => record.evaluation).every((record) =>
+      record.evaluation.provider === 'openrouter' && record.evaluation.requestedModel === 'typesafe/jev-1.13')).toBe(true);
+    expect(trace).not.toContain('synthetic-original-key');
+    expect(trace).not.toContain('synthetic-replacement-key');
+  });
+
   it('cleans up CLI signal listeners after interruption during recovery', async () => {
     const opts = await options();
     opts.mock = false;
     vi.stubEnv('TYPESAFE_API_KEY', 'test-key');
     vi.stubEnv('JEV_PROVIDER', 'typesafe');
-    const evaluate = vi.spyOn(evaluation, 'evaluateAgentState').mockRejectedValue(new JevEvaluationError('invalid_response', 'invalid'));
+    const evaluate = vi.fn<evaluation.Evaluator>().mockRejectedValue(new JevEvaluationError('invalid_response', 'invalid'));
+    vi.spyOn(evaluation, 'createEvaluator').mockReturnValue(evaluate);
     const listeners = process.listenerCount('SIGTERM');
     terminal.onQuestion = () => { process.emit('SIGTERM'); };
     const outcome = await runCliOrchestration(opts);

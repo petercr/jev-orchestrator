@@ -5,10 +5,10 @@ import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { createInterface, type Interface } from 'node:readline/promises';
 import { pathToFileURL } from 'node:url';
-import { evaluateAgentState } from './ai/evaluate.js';
+import { createEvaluator } from './ai/evaluate.js';
 import { PROBABILITY_SUM_TOLERANCE } from './ai/contract.js';
-import { evaluationFailure, JevEvaluationError, type EvaluationFailure } from './ai/errors.js';
-import { resolveJevConfiguration } from './config.js';
+import { evaluationFailure, EvaluationError, type EvaluationFailure } from './ai/errors.js';
+import { resolveEvaluationConfiguration } from './config.js';
 import { requireBoundedTask } from './limits.js';
 import { writeTrace } from './logging/trace.js';
 import { evaluationAttribution, redactSensitiveText } from './logging/trace.js';
@@ -98,7 +98,7 @@ Options:
   --no-trace   Do not write a JSONL trace.
   --json       Write one machine-readable decision to stdout.
   --orchestrate  Enter the bounded, manually approved execution loop.
-  --worker     Restrict coding work to codex or claude; otherwise Jev may choose either.
+  --worker     Restrict coding work to codex or claude; otherwise the evaluator may choose either.
   --codex-network  Allow Codex command networking, including local sockets; keep its file sandbox.
   --version    Print the installed package version.
   --help, -h   Print this help text.
@@ -109,7 +109,8 @@ Examples:
   pnpm dev -- ../my-app "Investigate preview auth" --mock --orchestrate
 
 Environment:
-  JEV_PROVIDER        typesafe (default), vercel, or openrouter
+  ROUTER_PROVIDER     typesafe (default), vercel, or openrouter
+  JEV_PROVIDER        Compatibility alias; must agree with ROUTER_PROVIDER if both are set
   AI_GATEWAY_API_KEY  Vercel AI Gateway key (vercel only)
   OPENROUTER_API_KEY  OpenRouter key (openrouter only)
   OPENROUTE_API_KEY   Accepted OpenRouter key alias
@@ -306,8 +307,7 @@ export async function runDecision(
   const state = createInitialState(repo, options.task, options.workerSelection, options.codexNetworkAccess);
   const mode: DecisionOutput['mode'] = options.mock ? 'mock' : 'live';
 
-  if (!options.mock) resolveJevConfiguration();
-  const evaluation = options.mock ? mockEvaluation() : await evaluateAgentState(state);
+  const evaluation = options.mock ? mockEvaluation() : await createEvaluator()(state);
   const policy = applyPolicy(state, evaluation.assessment);
   const tracePath = options.noTrace
     ? undefined
@@ -355,7 +355,7 @@ export function printApprovalProposal(context: ApprovalContext): void {
   const { evaluation, policy, proposal } = context;
   const { assessment } = evaluation;
   console.log(`\nIteration ${context.state.iteration}`);
-  console.log(`Jev requested: ${policy.requested}`);
+  console.log(`Evaluator requested: ${policy.requested}`);
   printEvaluationAttribution(evaluation);
   console.log('Next-action distribution');
   printDistribution(assessment.nextAction.probabilities);
@@ -440,7 +440,8 @@ export async function runCliOrchestration(options: CliOptions): Promise<Orchestr
     const repo = await inspectRepo(options.repoPath);
     const initialInspectionMs = performance.now() - inspectionStartedAt;
     const state = createInitialState(repo, options.task, options.workerSelection, options.codexNetworkAccess);
-    if (!options.mock && !controller.signal.aborted) resolveJevConfiguration();
+    const configuration = options.mock || controller.signal.aborted ? undefined : resolveEvaluationConfiguration();
+    const evaluate = configuration ? createEvaluator(configuration) : mockEvaluation;
     terminal = createInterface({ input: process.stdin, output: process.stdout });
     terminal.on('SIGINT', sigint);
     const prompts = terminal;
@@ -448,15 +449,14 @@ export async function runCliOrchestration(options: CliOptions): Promise<Orchestr
     console.log('\nJev Orchestrator — approval-gated orchestration');
     console.log(`Repo: ${redactSensitiveText(repo.root)}`);
     console.log(`Task: ${redactSensitiveText(options.task)}`);
-    console.log(`Mode: ${options.mock ? 'mock' : 'live Jev'}`);
+    console.log(`Mode: ${options.mock ? 'mock' : `live (${configuration?.provider ?? 'interrupted'})`}`);
+    if (configuration) printEvaluationAttribution({ provider: configuration.provider, requestedModel: configuration.model });
     console.log(`Worker selection: ${options.workerSelection ?? 'Codex or Claude'}`);
     if (options.codexNetworkAccess) console.log('Codex command network: enabled; workspace file sandbox retained.');
     console.log('No repository action runs without approval.');
 
     const result = await runOrchestration(state, {
-      evaluate: async (currentState) => options.mock
-        ? mockEvaluation(currentState)
-        : evaluateAgentState(currentState, undefined, executionOptions),
+      evaluate: async (currentState) => evaluate(currentState, executionOptions),
       approve: async (context) => promptForApproval(prompts, context, executionOptions),
       askForInformation: async () => prompts.question('Provide the required information: ', executionOptions),
       recoverEvaluation: async (context) => promptForEvaluationRecovery(prompts, context, executionOptions),
@@ -482,14 +482,14 @@ function printHumanDecision(decision: DecisionOutput): void {
   console.log(`Task: ${decision.task}`);
   if (decision.workerSelection) console.log(`Worker selection: ${decision.workerSelection}`);
   if (decision.codexNetworkAccess) console.log('Codex command network: enabled; workspace file sandbox retained.');
-  console.log(`Mode: ${decision.mode === 'mock' ? 'mock' : 'live Jev'}\n`);
+  console.log(`Mode: ${decision.mode === 'mock' ? 'mock' : `live (${decision.provider})`}\n`);
   console.log(`Task complete       ${percent(assessment.taskComplete.probability)}`);
   console.log(`Needs information  ${percent(assessment.needsMoreInformation.probability)}`);
   console.log(`Needs testing      ${percent(assessment.needsTesting.probability)}`);
   console.log(`Stuck              ${percent(assessment.stuck.probability)}\n`);
   console.log('Next-action distribution');
   printDistribution(assessment.nextAction.probabilities);
-  console.log(`\nJev requested: ${policy.requested}`);
+  console.log(`\nEvaluator requested: ${policy.requested}`);
   console.log(`Policy selected (unexecuted): ${policy.selected}${policy.override ? ' (override)' : ''}`);
   console.log(`Reason: ${policy.reason}`);
   console.log(`Latency: ${decision.latencyMs}ms`);
@@ -555,7 +555,7 @@ export function formatEvaluationFailure(failure: EvaluationFailure): string {
 
 export function createErrorOutput(error: unknown): ErrorOutput {
   const usage = error instanceof CliUsageError;
-  const failure = error instanceof JevEvaluationError ? evaluationFailure(error) : undefined;
+  const failure = error instanceof EvaluationError ? evaluationFailure(error) : undefined;
   return {
     schemaVersion: 1,
     status: 'error',

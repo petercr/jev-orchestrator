@@ -88,7 +88,9 @@ The [opt-in developer harness](scripts/benchmarks/README.md) documents
 reproduction with Node.js 22+ and pnpm, without Python. Reporting can rebuild
 preserved evidence without live calls; worker execution stays opt-in.
 
-`JEV_PROVIDER` explicitly selects one provider. Unset selection uses direct TypeSafe
+`ROUTER_PROVIDER` explicitly selects one decision provider. `JEV_PROVIDER` remains
+a compatibility alias. If both are supplied, they must agree; conflicting,
+empty, or unknown selectors fail before a request. Leave both unset to use direct TypeSafe
 with `jev-latest` and `TYPESAFE_API_KEY` (or `TYPESAFE_AI_API_KEY`);
 there is no automatic cross-provider failover. Only the selected credential is
 required. `ROUTER_MODEL` overrides its model; leave it blank to use the default.
@@ -97,7 +99,13 @@ nonblank canonical names take precedence. `OPENROUTE_MODEL` supplies an
 OpenRouter-only model fallback when `ROUTER_MODEL` is blank. Keep a global
 override in the namespace of the selected provider.
 
-| `JEV_PROVIDER` | Credential | Default model | Transport |
+The CLI resolves provider, model, and credential once for each live run. The same
+selection survives evaluation recovery, clarification, and worker failures;
+repository text and worker output cannot switch it. This selection is separate
+from `--worker` and `--codex-network`. Credentials stay in transport configuration,
+outside serializable task state and approval candidates.
+
+| `ROUTER_PROVIDER` (or `JEV_PROVIDER`) | Credential | Default model | Transport |
 | --- | --- | --- | --- |
 | `typesafe` | `TYPESAFE_API_KEY` | `jev-latest` | `POST https://api.typesafe.ai/v1/systemone` |
 | `vercel` | `AI_GATEWAY_API_KEY` | `typesafe-ai/jev` | Existing Vercel AI SDK evaluation API |
@@ -106,11 +114,19 @@ override in the namespace of the selected provider.
 Create a [Vercel Gateway key](https://vercel.com/ai-gateway), an
 [OpenRouter key](https://openrouter.ai/settings/keys), or a key in your
 [TypeSafe account](https://typesafe.ai). Set the selector and its key in `.env`,
-then use the Varlock-backed command above. For example, `JEV_PROVIDER=openrouter`
+then use the Varlock-backed command above. For example, `ROUTER_PROVIDER=openrouter`
 needs `OPENROUTER_API_KEY` and does not need a Gateway key.
-For the previous Gateway behavior, explicitly set `JEV_PROVIDER=vercel`.
+For the previous Gateway behavior, explicitly set `ROUTER_PROVIDER=vercel`.
+When migrating, remove the old selector or set both to the same provider.
 When switching providers, clear a previous provider's `ROUTER_MODEL` override
 or replace it with a model in the new provider's namespace.
+
+Model identifiers are limited to 256 characters: direct TypeSafe accepts
+`jev-*`; Vercel and OpenRouter accept `vendor/model` identifiers, with an optional
+leading `~` for OpenRouter aliases. URLs, whitespace, and path traversal are
+rejected locally. Syntax validation does not establish model availability or
+contract compatibility. Cloudflare and OpenAI Decisions verification remain
+later v0.3 steps.
 
 Model namespaces differ: keep `typesafe-ai/jev` on Vercel; OpenRouter documents
 `typesafe/jev-1.13` and the moving alias `~typesafe/jev-latest`; direct TypeSafe
@@ -143,6 +159,16 @@ and optional `servedModel`, while retaining the existing `model` field and
 schema versions. Native responses report their served version. The Gateway SDK
 echoes the requested model ID, so `servedModel` is omitted there instead of
 claiming a verified upstream version.
+The existing `mock/jev` model and serialized `jev_finish` completion-review
+label are retained for trace compatibility; the latter describes an evaluator
+finish recommendation regardless of provider. No trace schema version changes.
+
+Programmatic integrations can use `resolveEvaluationConfiguration`,
+`EvaluationProvider`, `EvaluationError`, and `createEvaluator`. Create one
+evaluator per run, then pass each state and a separate execution signal to it.
+`evaluateAgentState` remains a one-shot convenience function. Existing Jev-named
+configuration, error, and transport exports remain compatibility aliases;
+legacy error imports still share the same constructor for `instanceof` checks.
 
 For separate opt-in live verification from this repository checkout, build
 first and export only authorized
@@ -163,10 +189,14 @@ requested/served model, and normalized outcome or error code. It does not load
 `.env` automatically on its own; for a plaintext dotenv file you can also run
 `node --env-file=.env scripts/verify-jev.mjs --live openrouter` (or `typesafe`).
 The live opt-in is required and is never part of automated tests. Implementation
-and verification are tracked in `PLAN.md`. Authorized checks passed on
-2026-10-03: OpenRouter served `typesafe/jev-1.13-20260917` and direct TypeSafe
-served `jev-1.13.0`, with both responses normalized. These checks establish
-access for the tested accounts; other accounts must verify their own access.
+and verification are tracked in `PLAN.md`. Authorized checks on 2026-10-03,
+repeated on 2026-10-14, normalized OpenRouter responses served by
+`typesafe/jev-1.13-20260917` and direct TypeSafe responses served by `jev-1.13.0`.
+The 2026-10-14 Vercel check failed with an authorization classification; its
+account/model access remains unverified. A live TypeSafe CLI walkthrough also
+completed one approved file read and then stopped, with no worker calls or
+source edits. These checks apply to the tested accounts; other accounts must
+verify their own access.
 
 ## Run
 

@@ -1,5 +1,5 @@
 import { ACTIONS, type Action, type AgentAssessment, type AgentState } from '../types.js';
-import { JevEvaluationError, type EvaluationDiagnostic } from './errors.js';
+import { EvaluationError, type EvaluationDiagnostic } from './errors.js';
 import { buildWorkerContext, type WorkerContext } from '../agents/context.js';
 import { availableWorkerActions } from '../agents/selection.js';
 import { hasOmittedValidationRequirements, hasPassedValidation, pendingValidationScripts, requiredValidationScripts } from '../repo/validation.js';
@@ -45,7 +45,7 @@ function isProbability(value: unknown): value is number {
 }
 
 function invalidAnswer(diagnostic: EvaluationDiagnostic): never {
-  throw new JevEvaluationError('invalid_response', 'Jev returned invalid evaluation data.', diagnostic);
+  throw new EvaluationError('invalid_response', 'Decision provider returned invalid evaluation data.', diagnostic);
 }
 
 function booleanAnswer(answers: Record<string, unknown>, key: NonNullable<EvaluationDiagnostic['field']>, native: boolean): { probability: number } {
@@ -86,7 +86,7 @@ export function normalizeAssessment(answers: unknown, confidence: unknown, nativ
     invalidAnswer({ stage: 'distribution', category: 'choice' });
   }
   if (confidence !== undefined && !isProbability(confidence)) {
-    throw new JevEvaluationError('invalid_response', 'Jev returned invalid provider metadata.', { stage: 'confidence', category: 'value' });
+    throw new EvaluationError('invalid_response', 'Decision provider returned invalid provider metadata.', { stage: 'confidence', category: 'value' });
   }
   return {
     taskComplete: booleanAnswer(answers, 'taskComplete', native),

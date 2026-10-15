@@ -1,7 +1,8 @@
-import { JevEvaluationError } from './errors.js';
+import { EvaluationError } from './errors.js';
 import { throwIfInterrupted } from '../cancellation.js';
 
-export const MAX_JEV_RESPONSE_BYTES = 64 * 1024;
+export const MAX_EVALUATION_RESPONSE_BYTES = 64 * 1024;
+export const MAX_JEV_RESPONSE_BYTES = MAX_EVALUATION_RESPONSE_BYTES;
 
 /** Enforce a byte cap while reading, including chunked and error responses. */
 export async function boundedResponse(response: Response, signal: AbortSignal): Promise<Response> {
@@ -21,9 +22,9 @@ export async function boundedResponse(response: Response, signal: AbortSignal): 
       throwIfInterrupted(signal);
       if (done) break;
       size += value.byteLength;
-      if (size > MAX_JEV_RESPONSE_BYTES) {
+      if (size > MAX_EVALUATION_RESPONSE_BYTES) {
         void reader.cancel().catch(() => undefined);
-        throw new JevEvaluationError('invalid_response', 'Jev response exceeded the bounded output limit.', { stage: 'transport', category: 'size' });
+        throw new EvaluationError('invalid_response', 'Decision response exceeded the bounded output limit.', { stage: 'transport', category: 'size' });
       }
       chunks.push(value);
     }

@@ -1,3 +1,4 @@
+import { AsyncLocalStorage } from 'node:async_hooks';
 import { randomUUID } from 'node:crypto';
 import { appendFile, mkdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
@@ -20,6 +21,12 @@ const TRUNCATED = '[TRUNCATED]';
 const SENSITIVE_KEY = /api[-_ ]?key|authorization|token|secret|password|credential|cookie|session/i;
 const KEY_VALUE_SECRET = /((?:api[-_ ]?key|authorization|token|secret|password|credential|cookie|session)\s*[:=]\s*)(?:(?:Bearer\s+)[^\s,;\\]+|"[^"]*"|'[^']*'|[^\s,;\\]+)/gi;
 const BEARER_TOKEN = /(\bBearer\s+)[A-Za-z0-9._~+/=-]+/gi;
+const redactionSecrets = new AsyncLocalStorage<readonly string[]>();
+
+/** Keep bound transport secrets redacted even when they are not in process.env. */
+export function withRedactionSecrets<T>(secrets: readonly string[], operation: () => T): T {
+  return redactionSecrets.run([...(redactionSecrets.getStore() ?? []), ...secrets], operation);
+}
 
 export type TraceValue =
   | null
@@ -81,8 +88,10 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 function configuredSecretValues(): string[] {
-  return ['AI_GATEWAY_API_KEY', 'OPENROUTER_API_KEY', 'OPENROUTE_API_KEY', 'TYPESAFE_API_KEY', 'TYPESAFE_AI_API_KEY']
-    .map((name) => process.env[name]?.trim())
+  return [...(redactionSecrets.getStore() ?? []),
+    ...['AI_GATEWAY_API_KEY', 'OPENROUTER_API_KEY', 'OPENROUTE_API_KEY', 'TYPESAFE_API_KEY', 'TYPESAFE_AI_API_KEY']
+      .map((name) => process.env[name]?.trim()),
+  ]
     .filter((value): value is string => Boolean(value))
     .sort((a, b) => b.length - a.length);
 }

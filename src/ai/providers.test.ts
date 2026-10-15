@@ -10,7 +10,7 @@ import { createInitialState, runOrchestration } from '../orchestration/loop.js';
 import { applyPolicy } from '../policy.js';
 import { ACTIONS, type Action, type JevProvider } from '../types.js';
 import { EVALUATION_QUESTIONS } from './contract.js';
-import { evaluateAgentState, JEV_EVALUATION_TIMEOUT_MS } from './evaluate.js';
+import { createEvaluator, evaluateAgentState, JEV_EVALUATION_TIMEOUT_MS } from './evaluate.js';
 import { NATIVE_JEV_ENDPOINTS } from './native.js';
 import { MAX_JEV_RESPONSE_BYTES } from './transport.js';
 
@@ -54,6 +54,7 @@ function respond(provider: JevProvider, choice: Action = 'SEARCH_REPO', confiden
 }
 
 beforeEach(() => {
+  vi.stubEnv('ROUTER_PROVIDER', undefined);
   fetchMock.mockReset();
   vi.stubGlobal('fetch', fetchMock);
   vi.stubEnv('ROUTER_MODEL', '');
@@ -114,12 +115,55 @@ describe.each(providers)('%s evaluation transport', (provider) => {
 
   it('sends only the selected key and supports a pinned override', async () => {
     for (const item of providers) if (item !== provider) vi.stubEnv(JEV_PROVIDERS[item].credential, '');
-    vi.stubEnv('ROUTER_MODEL', 'pinned-model');
+    const pinned = provider === 'typesafe' ? 'jev-1.13.0' : `${provider === 'vercel' ? 'typesafe-ai' : 'typesafe'}/jev-1.13`;
+    vi.stubEnv('ROUTER_MODEL', pinned);
     respond(provider);
     const result = await evaluateAgentState(state());
-    expect(result.requestedModel).toBe('pinned-model');
+    expect(result.requestedModel).toBe(pinned);
     const init = fetchMock.mock.calls[0]?.[1];
-    expect(provider === 'vercel' ? new Headers(init?.headers).get('ai-model-id') : JSON.parse(String(init?.body)).model).toBe('pinned-model');
+    expect(provider === 'vercel' ? new Headers(init?.headers).get('ai-model-id') : JSON.parse(String(init?.body)).model).toBe(pinned);
+  });
+
+  it('copies configuration and retains it across evaluations and transient retries', async () => {
+    const originalModel = JEV_PROVIDERS[provider].model;
+    const configuration: { provider: JevProvider; model: string; apiKey: string } = {
+      provider, model: originalModel, apiKey: 'synthetic-bound-key',
+    };
+    const evaluate = createEvaluator(configuration);
+    configuration.provider = provider === 'typesafe' ? 'openrouter' : 'typesafe';
+    configuration.model = 'wrong/model';
+    configuration.apiKey = 'synthetic-altered-key';
+    vi.stubEnv('ROUTER_PROVIDER', 'invalid-later-selector');
+    fetchMock.mockResolvedValueOnce(new Response('', { status: 503 }))
+      .mockImplementation(async () => Response.json(body(provider)));
+
+    for (let index = 0; index < 2; index += 1) {
+      expect(await evaluate(state())).toMatchObject({ provider, requestedModel: originalModel });
+    }
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+    for (const [url, init] of fetchMock.mock.calls) {
+      expect(String(url)).toBe(provider === 'vercel' ? 'https://ai-gateway.vercel.sh/v4/ai/evaluation-model' : NATIVE_JEV_ENDPOINTS[provider]);
+      expect(new Headers(init?.headers).get('authorization')).toBe('Bearer synthetic-bound-key');
+      expect(provider === 'vercel' ? new Headers(init?.headers).get('ai-model-id') : JSON.parse(String(init?.body)).model).toBe(originalModel);
+    }
+  });
+
+  it('redacts the bound key from snapshots and returned evidence without relying on the ambient key', async () => {
+    const key = 'synthetic-bound-secret-value';
+    const evaluate = createEvaluator({ provider, model: JEV_PROVIDERS[provider].model, apiKey: key });
+    const payload = body(provider);
+    payload.model = `jev-${key}`;
+    if (provider === 'vercel') payload.providerMetadata = { typesafe: { confidence: { nextAction: 0.8 }, note: key } };
+    else (payload.answers as Record<string, unknown>).additionalField = key;
+    fetchMock.mockImplementation(async () => Response.json(payload));
+    const initial = state();
+    initial.task += ` ${key}`;
+    initial.observations.push(key);
+    initial.evidence!.clarifications.push({ iteration: 1, text: key });
+    const result = await evaluate(initial);
+    expect(String(fetchMock.mock.calls[0]?.[1]?.body)).not.toContain(key);
+    expect(JSON.stringify(result)).not.toContain(key);
+    expect(JSON.stringify(result)).toContain('[REDACTED]');
   });
 
   it.each(['ambiguous', 'missing'] as const)('routes %s confidence to ASK_USER', async (mode) => {

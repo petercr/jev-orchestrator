@@ -31,7 +31,7 @@ queries, or tool arguments.
 
 ## v0.3.0 release: multiple decision models
 
-Release target (2026-10-11): v0.3.0, planned and not yet implemented. Extend the existing
+Release target (2026-10-11): v0.3.0, implementation in progress. Extend the existing
 evaluation boundary to support Jev, Cloudflare Clef/Clef-flash, and OpenAI
 Decisions as explicit alternatives. The existing integrations have been verified
 with Jev; OpenRouter also exposes OpenAI Decisions, so reuse that transport for
@@ -148,12 +148,28 @@ Preparation: Varlock 1.22.0 is pinned as development tooling, with a committed
 `.env.schema`, sensitive canonical keys/aliases, redacted configuration checks,
 and explicit `dev:env`/`start:env`/`env:run` wrappers. Schema-only CI and ordinary
 mock/test/build commands stay keyless. Local values are preserved and package
-runtime behavior is unchanged. This setup retains the current Jev selectors;
-provider-neutral configuration and new model routes remain the slices below.
+runtime behavior is unchanged. Provider-neutral configuration follows in step 1;
+new model routes remain the later slices below.
 
-1. [ ] Extract the neutral provider boundary and add configuration migration.
+1. [x] Extract the neutral provider boundary and add configuration migration.
    Prove existing Jev transports, default selection, mock mode, traces, and
    recovery preserve their behavior, including conflicting selector rejection.
+   Implemented locally on 2026-10-14: neutral configuration/types/errors with
+   legacy export aliases, `ROUTER_PROVIDER` plus conflict-checked `JEV_PROVIDER`,
+   model namespace validation, and one bound evaluator per CLI run. Varlock
+   selectors have no schema defaults so neither alias shadows the other; code
+   retains the direct TypeSafe default. Existing trace schemas, `mock/jev`, and
+   the serialized `jev_finish` label remain compatible. Validation passed:
+   typecheck, 609 deterministic tests, build, schema and local preflight checks,
+   and an offline install of the exact packed archive with mock, configuration,
+   attribution, and synthetic verifier checks. Those checks used no live calls.
+   Authorized live follow-up on 2026-10-14 normalized direct TypeSafe
+   (`jev-latest` served `jev-1.13.0`) and OpenRouter
+   (`typesafe/jev-1.13` served `typesafe/jev-1.13-20260917`). Vercel failed
+   with an authorization classification; account/model access remains unverified.
+   A live TypeSafe CLI walkthrough passed: two iterations, one approved
+   `READ_FILE`, then an explicit stop, with zero worker calls or source edits.
+   New model adapters and their live verification remain pending below.
 2. [ ] Add Cloudflare Clef and Clef-flash through the shared System One
    questions and a bounded REST adapter. Cover account/model path validation,
    response envelopes, attribution, errors, and both model selections.
