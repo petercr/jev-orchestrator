@@ -1,17 +1,1 @@
-ok commit and pr
-
----
-
-38 merged
-
----
-
-ok lets start with v0.3
-
----
-
-did you run live check
-
----
-
-run live run thru check
+ok cimmit and pr
