@@ -1,17 +1,1 @@
-ok cimmit and pr
-
----
-
-39 merged lets do the next item on v0.3 list
-
----
-
-details on the CF tokens again
-
----
-
-ready
-
----
-
-try live run with it
+ok commit push and pr
