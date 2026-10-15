@@ -1,0 +1,48 @@
+{
+  "cli_version": "0.10.7-nightly.202609190623.ae303f31d",
+  "checkpoint_id": "01M50BA15RSV0BPPVFQW3MQ65E",
+  "strategy": "manual-commit",
+  "branch": "feat/cloudflare-clef",
+  "checkpoints_count": 5,
+  "files_touched": [
+    ".env.example",
+    ".env.schema",
+    "AGENTS.md",
+    "PLAN.md",
+    "README.md",
+    "package.json",
+    "scripts/benchmarks/lib.mjs",
+    "scripts/benchmarks/worker-proxy.mjs",
+    "scripts/verify-jev.mjs",
+    "src/ai/cloudflare.test.ts",
+    "src/ai/cloudflare.ts",
+    "src/ai/contract.ts",
+    "src/ai/errors.ts",
+    "src/ai/evaluate.ts",
+    "src/ai/native.ts",
+    "src/ai/providers.test.ts",
+    "src/cli.ts",
+    "src/config.test.ts",
+    "src/config.ts",
+    "src/logging/trace.ts",
+    "src/types.ts",
+    "src/varlock.test.ts"
+  ],
+  "sessions": [
+    {
+      "metadata": "/0/metadata.json",
+      "transcript": "/0/full.jsonl",
+      "compact_transcript": "/0/transcript.jsonl",
+      "content_hash": "/0/content_hash.txt",
+      "prompt": "/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 614389,
+    "cache_creation_tokens": 0,
+    "cache_read_tokens": 12118656,
+    "output_tokens": 49411,
+    "api_call_count": 51,
+    "subagent_tokens_complete": true
+  }
+}
