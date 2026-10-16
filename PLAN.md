@@ -256,7 +256,7 @@ new model routes remain the later slices below.
    data path, account prerequisites, and retention limitations. These checks
    establish access for the tested accounts only, without claiming comparable
    routing quality or calibrated confidence; the comparison remains step 6.
-6. [ ] Compare Jev, Clef, Clef-flash, and OpenAI Decisions on the same bounded,
+6. [x] Compare Jev, Clef, Clef-flash, and OpenAI Decisions on the same bounded,
    labeled coding-task snapshots and record a v0.3.0 baseline. Include
    unread issue/instructions, clear implementation, ambiguity, stuck/recovery,
    failed/stale validation, excluded workers, redundant tests, and completion.
@@ -267,6 +267,27 @@ new model routes remain the later slices below.
    alongside latency. Report token usage only when explicitly returned and cost
    only from attributable usage and documented rates; metrics cannot authorize
    actions or alter budgets.
+   Completed locally on 2026-10-16: the [decision snapshot report](docs/benchmarks/v0.3-decisions.md)
+   and [aggregate JSON](docs/benchmarks/v0.3-decisions-summary.json) retain all
+   168 scheduled observations (14 pre-labeled synthetic states × three
+   repetitions × four fixed routes). The opt-in [harness](scripts/decisions/README.md)
+   rotates order, verifies identical bounded evidence/questions, freezes route
+   configuration, and preserves failures without executing tools or workers.
+   Raw reference matches out of 42: Jev 22, Clef 36, Clef-flash 36, OpenAI 39.
+   Guarded matches: 19, 33, 30, and 39; conservative ASK_USER stops are recorded
+   separately from unsafe selections. Jev's two rejected distributions totaled
+   about 0.99. No fixture-forbidden selection survived policy among 166
+   normalized observations. Median evaluation latency was 114, 282, 563, and
+   218 ms respectively, with full counts/distributions in the report. Probability
+   Brier and separate confidence-reliability diagnostics include their valid
+   sample counts; the small correlated synthetic cohort does not establish
+   general calibration or a universal model ranking. Actual returned usage is
+   recorded with coverage; unavailable totals/costs are not inferred. The direct
+   TypeSafe default and policy thresholds remain unchanged. Independent schedule,
+   input/source hash, scoring, aggregate-recomputation, and credential/account
+   exclusion audits passed. Verification passed: 11 focused benchmark tests,
+   all 1,084 tests, typecheck, build, and a 56-observation mocked full-protocol
+   rehearsal. The report records measured source/harness attribution and limits.
 7. [ ] Prepare the v0.3.0 package and release notes after implementation and
    verification. Bump package metadata and version assertions together, update
    the package description to reflect multiple decision models, and verify the
@@ -282,7 +303,7 @@ new model routes remain the later slices below.
 - [ ] Authorized synthetic live checks pass for Clef, Clef-flash, and OpenAI
   Decisions through OpenRouter; record dates, requested/served models, and
   sanitized outcomes. Missing access or malformed responses leave this gate open.
-- [ ] A common labeled snapshot comparison records observed routing quality,
+- [x] A common labeled snapshot comparison records observed routing quality,
   policy overrides, failures, and latency with sample counts and limitations.
   Evidence supports usable routes under the existing policy; no speed win over
   Jev is required, and small samples cannot establish calibrated confidence.
