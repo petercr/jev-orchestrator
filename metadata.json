@@ -1,0 +1,37 @@
+{
+  "cli_version": "0.10.7-nightly.202609190623.ae303f31d",
+  "checkpoint_id": "01M533AFGABJENGJFW76B6DZ44",
+  "strategy": "manual-commit",
+  "branch": "feat/decision-snapshot-baseline",
+  "checkpoints_count": 2,
+  "files_touched": [
+    "AGENTS.md",
+    "PLAN.md",
+    "README.md",
+    "docs/benchmarks/v0.3-decisions-summary.json",
+    "docs/benchmarks/v0.3-decisions.md",
+    "package.json",
+    "scripts/decisions/README.md",
+    "scripts/decisions/fixtures.mjs",
+    "scripts/decisions/metrics.mjs",
+    "scripts/decisions/run.mjs",
+    "src/decision-benchmark.test.ts"
+  ],
+  "sessions": [
+    {
+      "metadata": "/0/metadata.json",
+      "transcript": "/0/full.jsonl",
+      "compact_transcript": "/0/transcript.jsonl",
+      "content_hash": "/0/content_hash.txt",
+      "prompt": "/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 397171,
+    "cache_creation_tokens": 0,
+    "cache_read_tokens": 9922432,
+    "output_tokens": 52701,
+    "api_call_count": 41,
+    "subagent_tokens_complete": true
+  }
+}
