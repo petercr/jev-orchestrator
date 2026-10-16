@@ -82,6 +82,15 @@ OpenRouter uses the same bounded transport and assessment contract, with
 deterministic regression coverage and a successful live synthetic check on
 2026-10-15. The table lists implemented transports.
 
+The [v0.3 decision snapshot baseline](docs/benchmarks/v0.3-decisions.md) compares
+Jev, Clef, Clef-flash, and OpenAI Decisions on 14 labeled workflow states with
+three repetitions per model. It retains all 168 scheduled evaluations, including
+two malformed Jev distributions, and reports routing, policy overrides,
+intervention candidates, calibration diagnostics, usage, and latency. This is a
+small synthetic decision study; the direct TypeSafe default remains unchanged.
+The [comparison protocol](scripts/decisions/README.md) documents the bounded,
+explicit opt-in live command and offline tests.
+
 The [matched worker benchmark](docs/benchmarks/issue-31.md) records twelve
 first-attempt observations on a production bug-and-tests task, with three
 repetitions per setup and matched worker contexts/permissions. It retains test
