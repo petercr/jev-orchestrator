@@ -1,5 +1,5 @@
 import { execFile, spawn } from 'node:child_process';
-import { mkdtemp, mkdir, readFile, rm, symlink, writeFile } from 'node:fs/promises';
+import { cp, mkdtemp, mkdir, readFile, rm, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
@@ -274,6 +274,17 @@ describe('benchmark I/O and command boundaries', () => {
     const bin = path.join(directory, 'bin');
     const seed = path.join(directory, 'seed');
     const output = path.join(directory, 'output');
+    // The historical protocol measures v0.2 independently of the current release.
+    const source = path.join(directory, 'v02-source');
+    const frozenScripts = path.join(source, 'scripts/benchmarks');
+    await mkdir(path.dirname(frozenScripts), { recursive: true });
+    await cp(scripts, frozenScripts, { recursive: true });
+    await writeFile(path.join(source, 'package.json'), '{"version":"0.2.0"}');
+    await writeFile(path.join(source, '.gitignore'), 'node_modules/\n');
+    await symlink(path.resolve('node_modules'), path.join(source, 'node_modules'), 'dir');
+    await run('git', ['init', '--quiet', source]);
+    await run('git', ['add', '.'], { cwd: source });
+    await run('git', ['-c', 'user.name=Fixture', '-c', 'user.email=fixture@example.test', 'commit', '--quiet', '-m', 'fixture'], { cwd: source });
     await mkdir(bin);
     await mkdir(path.join(seed, 'apps/web/lib'), { recursive: true });
     await writeFile(path.join(seed, 'package.json'), '{"name":"benchmark-fixture"}');
@@ -299,24 +310,24 @@ else if (process.argv[2] === 'add') {
 `;
     for (const name of ['codex', 'claude', 'pnpm']) await writeFile(path.join(bin, name), executable, { mode: 0o700 });
     const env = { ...process.env, PATH: bin + path.delimiter + process.env.PATH };
-    await run(process.execPath, [path.join(scripts, 'init.mjs'), output], { env });
+    await run(process.execPath, [path.join(frozenScripts, 'init.mjs'), output], { env });
     const manifestPath = path.join(output, 'manifest.json');
     const manifest = JSON.parse(await readFile(manifestPath, 'utf8'));
     manifest.targetHead = (await run('git', ['rev-parse', 'HEAD'], { cwd: seed })).stdout.trim();
     await writeFile(manifestPath, JSON.stringify(manifest));
     await writeFile(path.join(output, 'jev-orchestrator-0.2.0.tgz'), 'fixture archive');
-    await run(process.execPath, [path.join(scripts, 'prepare.mjs'), output, seed], { env });
+    await run(process.execPath, [path.join(frozenScripts, 'prepare.mjs'), output, seed], { env });
     expect(await readFile(path.join(output, 'codex-jev-1/repo/node_modules/prepared.txt'), 'utf8')).toBe('Independent dependencies');
     const prepared = JSON.parse(await readFile(path.join(output, 'manifest.json'), 'utf8'));
     expect(prepared.harnessHashes['prepare.mjs']).toBeTruthy();
     expect(prepared.packageEntry).toBe(path.join(output, 'consumer/node_modules/.pnpm/fixture-package/dist/cli.js'));
     const launched = await run(process.execPath, ['--input-type=module', '-e', 'const entry=process.argv[1]; process.argv=[process.execPath,entry]; await import((await import("node:url")).pathToFileURL(entry));', prepared.packageEntry]);
     expect(launched.stdout).toBe('Fixture entry executed\n');
-    await run(process.execPath, [path.join(scripts, 'baseline.mjs'), output], { env });
+    await run(process.execPath, [path.join(frozenScripts, 'baseline.mjs'), output], { env });
     expect(JSON.parse(await readFile(path.join(output, 'baseline-bug.json'), 'utf8')).shortLengthsFailing).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10]);
     expect(JSON.parse(await readFile(path.join(output, 'baseline-validation.json'), 'utf8'))).toHaveLength(4);
     expect((await run('git', ['status', '--porcelain'], { cwd: seed })).stdout).toBe('');
-    await expect(run(process.execPath, [path.join(scripts, 'prepare.mjs'), output, seed], { env })).rejects.toThrow();
+    await expect(run(process.execPath, [path.join(frozenScripts, 'prepare.mjs'), output, seed], { env })).rejects.toThrow();
   }, 15_000);
 });
 

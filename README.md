@@ -1,10 +1,12 @@
 # Jev Orchestrator
 
-A deliberately small Node/TypeScript experiment for testing whether
-`typesafe-ai/jev` can make useful next-step decisions around a coding agent.
+A deliberately small Node/TypeScript experiment for testing whether typed
+decision models can make useful next-step decisions around a coding agent.
+Jev is the default; Cloudflare Clef/Clef-flash and OpenAI Decisions through
+OpenRouter are explicit alternatives.
 
 The default mode remains **decision-only**: it inspects a repository, sends a
-compact state object to Jev through the selected evaluation provider, applies deterministic
+compact state object to the selected decision model, applies deterministic
 policy thresholds, prints the result, and records a JSONL trace. The explicit
 `--orchestrate` mode adds a bounded, manually approved loop for safe repository
 searches, bounded file reads, fixed read-only Git diagnostics, detected
@@ -17,7 +19,7 @@ approval.
 - Node.js 22+
 - pnpm
 - ripgrep (`rg`) for approved repository search actions
-- A key and Jev model access for the selected live evaluation provider
+- Credentials and model access for the selected live evaluation provider
 - An installed and authenticated Codex CLI for approved `CALL_CODEX` actions
 - An installed and authenticated Claude Code CLI for approved `CALL_CLAUDE`
   actions
@@ -771,7 +773,7 @@ than being merged into the final stdout summary.
 ## Packaged CLI verification
 
 The tarball contains the compiled runtime JavaScript and declarations under
-`dist/`, plus the README and license. Test sources and compiled test files are
+`dist/`, plus package metadata, README, [release notes](CHANGELOG.md), and license. Test sources and compiled test files are
 not published. The `prepack` lifecycle runs the production build before a
 tarball is created.
 
@@ -786,16 +788,15 @@ Then, from the other project, install that exact archive and run the installed
 binary against that project:
 
 ```bash
-pnpm add --save-dev /absolute/path/to/jev-orchestrator-0.2.0.tgz
+pnpm add --save-dev /absolute/path/to/jev-orchestrator-0.3.0.tgz
 pnpm exec jev-agent --version
 pnpm exec jev-agent . "Inspect this repository and choose the safest useful first action" \
   --mock --no-trace --json
 ```
 
 The expected mock result is one JSON object with `status: "unexecuted"`; it
-must not edit the target project or require an API key. On 2026-09-21, the
-`0.2.0` archive was installed into a disposable project, reported version
-`0.2.0`, returned that mock result, and created no trace. Do not pack or publish
+must not edit the target project or require an API key. The installed version
+must report `0.3.0`. Do not pack or publish
 `.env`, traces, build cache, or `node_modules`.
 
 Initial provider milestone verification on 2026-10-03 passed typecheck, all 269 tests,
@@ -882,6 +883,21 @@ through OpenRouter does not establish that this account has those controls.
 does not train on user data and offers enterprise zero data retention. This
 client does not guarantee zero retention for any provider. Review the selected
 service's terms and send only repository data you authorize for that service.
+
+## v0.3 decision-model release
+
+Version 0.3 adds explicit Cloudflare Clef/Clef-flash and OpenAI Decisions
+through OpenRouter, shared assessment enforcement, provider-neutral selection
+with compatibility aliases, model attribution, and opt-in comparison tooling.
+See the [release notes](CHANGELOG.md) for migration, configuration, prerequisites,
+data handling, and limitations. The package remains `jev-orchestrator` with
+the `jev-agent` executable and Node.js 22+ requirement.
+
+The direct TypeSafe/Jev default, manual approvals, worker restrictions,
+validation requirements, and policy thresholds are preserved. Release
+preparation does not create a tag, GitHub release, or registry publication;
+those follow the maintainer's release workflow after the release commit and
+verification evidence are recorded in PLAN.
 
 ## v0.2 orchestration release
 
