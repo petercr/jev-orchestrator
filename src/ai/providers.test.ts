@@ -7,6 +7,7 @@ import { JEV_PROVIDERS } from '../config.js';
 import { buildWorkerContext } from '../agents/context.js';
 import { appendOrchestrationTrace, createOrchestrationTrace, writeTrace } from '../logging/trace.js';
 import { createInitialState, runOrchestration } from '../orchestration/loop.js';
+import { selectCandidate } from '../orchestration/candidate.js';
 import { applyPolicy } from '../policy.js';
 import { ACTIONS, type Action, type EvaluationProvider } from '../types.js';
 import { EVALUATION_QUESTIONS } from './contract.js';
@@ -16,6 +17,10 @@ import { MAX_JEV_RESPONSE_BYTES } from './transport.js';
 
 type JevProvider = Exclude<EvaluationProvider, 'cloudflare'>;
 const providers: JevProvider[] = ['vercel', 'openrouter', 'typesafe'];
+const routes = [
+  ...providers.map((provider) => ({ provider, model: JEV_PROVIDERS[provider].model, served: body(provider).model })),
+  { provider: 'openrouter' as const, model: 'openai/gpt-6-luna-decisions', served: 'openai/gpt-6-luna-decisions' },
+];
 const roots: string[] = [];
 const fetchMock = vi.fn<typeof fetch>();
 const keys = [
@@ -89,14 +94,21 @@ it('uses direct TypeSafe and its credential alias when no provider is selected',
   expect(applyPolicy(state(), result.assessment).selected).toBe('SEARCH_REPO');
 });
 
-describe.each(providers)('%s evaluation transport', (provider) => {
-  beforeEach(() => vi.stubEnv('JEV_PROVIDER', provider));
+describe.each(routes)('$provider $model evaluation transport', ({ provider, model, served }) => {
+  beforeEach(() => {
+    vi.stubEnv('JEV_PROVIDER', provider);
+    vi.stubEnv('ROUTER_MODEL', model);
+  });
+  function routeBody(choice: Action = 'SEARCH_REPO', confidence: number | undefined = 0.8): Record<string, unknown> {
+    return { ...body(provider, choice, confidence), model: served };
+  }
+  function respondRoute() { fetchMock.mockImplementation(async () => Response.json(routeBody())); }
 
   it('preserves the questions, normalizes answers, attributes models, and permits a confident route', async () => {
-    respond(provider);
+    respondRoute();
     const result = await evaluateAgentState(state());
-    expect(result).toMatchObject({ provider, model: JEV_PROVIDERS[provider].model, requestedModel: JEV_PROVIDERS[provider].model });
-    if (provider !== 'vercel') expect(result.servedModel).toBe(body(provider).model);
+    expect(result).toMatchObject({ provider, model, requestedModel: model });
+    if (provider !== 'vercel') expect(result.servedModel).toBe(routeBody().model);
     else expect(result).not.toHaveProperty('servedModel');
     expect(result.assessment).toMatchObject({
       taskComplete: { probability: 0.02 }, needsMoreInformation: { probability: 0.08 },
@@ -120,7 +132,7 @@ describe.each(providers)('%s evaluation transport', (provider) => {
     for (const item of providers) if (item !== provider) vi.stubEnv(JEV_PROVIDERS[item].credential, '');
     const pinned = provider === 'typesafe' ? 'jev-1.13.0' : `${provider === 'vercel' ? 'typesafe-ai' : 'typesafe'}/jev-1.13`;
     vi.stubEnv('ROUTER_MODEL', pinned);
-    respond(provider);
+    respondRoute();
     const result = await evaluateAgentState(state());
     expect(result.requestedModel).toBe(pinned);
     const init = fetchMock.mock.calls[0]?.[1];
@@ -128,7 +140,7 @@ describe.each(providers)('%s evaluation transport', (provider) => {
   });
 
   it('copies configuration and retains it across evaluations and transient retries', async () => {
-    const originalModel = JEV_PROVIDERS[provider].model;
+    const originalModel = model;
     const configuration: { provider: JevProvider; model: string; apiKey: string } = {
       provider, model: originalModel, apiKey: 'synthetic-bound-key',
     };
@@ -138,7 +150,7 @@ describe.each(providers)('%s evaluation transport', (provider) => {
     configuration.apiKey = 'synthetic-altered-key';
     vi.stubEnv('ROUTER_PROVIDER', 'invalid-later-selector');
     fetchMock.mockResolvedValueOnce(new Response('', { status: 503 }))
-      .mockImplementation(async () => Response.json(body(provider)));
+      .mockImplementation(async () => Response.json(routeBody()));
 
     for (let index = 0; index < 2; index += 1) {
       expect(await evaluate(state())).toMatchObject({ provider, requestedModel: originalModel });
@@ -153,11 +165,11 @@ describe.each(providers)('%s evaluation transport', (provider) => {
 
   it('redacts the bound key from snapshots and returned evidence without relying on the ambient key', async () => {
     const key = 'synthetic-bound-secret-value';
-    const evaluate = createEvaluator({ provider, model: JEV_PROVIDERS[provider].model, apiKey: key });
-    const payload = body(provider);
+    const evaluate = createEvaluator({ provider, model, apiKey: key });
+    const payload = routeBody();
     payload.model = `jev-${key}`;
     if (provider === 'vercel') payload.providerMetadata = { typesafe: { confidence: { nextAction: 0.8 }, note: key } };
-    else (payload.answers as Record<string, unknown>).additionalField = key;
+    else (payload.answers as Record<string, Record<string, unknown>>).nextAction!.note = key;
     fetchMock.mockImplementation(async () => Response.json(payload));
     const initial = state();
     initial.task += ` ${key}`;
@@ -170,7 +182,7 @@ describe.each(providers)('%s evaluation transport', (provider) => {
   });
 
   it.each(['ambiguous', 'missing'] as const)('routes %s confidence to ASK_USER', async (mode) => {
-    const payload = body(provider, 'SEARCH_REPO', mode === 'ambiguous' ? 0.1 : undefined);
+    const payload = routeBody('SEARCH_REPO', mode === 'ambiguous' ? 0.1 : undefined);
     if (mode === 'missing') {
       delete payload.providerMetadata;
       const answers = payload.answers as Record<string, Record<string, unknown>>;
@@ -183,13 +195,66 @@ describe.each(providers)('%s evaluation transport', (provider) => {
   });
 
   it('requires independent validation for premature FINISH', async () => {
-    respond(provider, 'FINISH');
+    fetchMock.mockImplementation(async () => Response.json(routeBody('FINISH')));
     const result = await evaluateAgentState(state());
     expect(applyPolicy(state(), result.assessment).selected).toBe('RUN_TESTS');
     const validated = state();
     validated.tests = { ran: true, passed: true };
     validated.evidence!.validations = [{ iteration: 0, generation: 0, script: 'test', exitCode: 0, timedOut: false, passed: true, summary: 'passed' }];
     expect(applyPolicy(validated, result.assessment).selected).toBe('FINISH');
+    validated.evidence!.validationGeneration = 1;
+    expect(applyPolicy(validated, result.assessment).selected).toBe('RUN_TESTS');
+  });
+
+  it('enforces the selected worker and retains its independent call budget', async () => {
+    const initial = state(); initial.workerSelection = 'codex';
+    fetchMock.mockImplementation(async () => Response.json(routeBody('CALL_CLAUDE', 0.99)));
+    const excluded = await evaluateAgentState(initial);
+    expect(applyPolicy(initial, excluded.assessment)).toMatchObject({ selected: 'ASK_USER', override: true });
+    expect(excluded.assessment.nextAction.confidence).toBe(0.99);
+    fetchMock.mockImplementation(async () => Response.json(routeBody('CALL_CODEX', 0.99)));
+    const permitted = await evaluateAgentState(initial);
+    expect(applyPolicy(initial, permitted.assessment)).toMatchObject({ selected: 'CALL_CODEX', override: false });
+    initial.codexCalls = 2;
+    await expect(selectCandidate(applyPolicy(initial, permitted.assessment).selected, initial))
+      .resolves.toMatchObject({ action: 'ASK_USER', reason: expect.stringContaining('call limit') });
+    expect(initial.claudeCalls).toBe(0);
+    const request = JSON.parse(String(fetchMock.mock.calls[0]?.[1]?.body));
+    expect(request.state.progress.workers).toEqual({ selection: 'codex', allowedActions: ['CALL_CODEX'] });
+  });
+
+  it('gathers linked task context before a confident worker route', async () => {
+    const initial = state();
+    initial.task = 'https://github.com/example/project/issues/1';
+    initial.repo.topLevelFiles.push('AGENTS.md');
+    fetchMock.mockImplementation(async () => Response.json(routeBody('CALL_CODEX', 0.99)));
+    const result = await evaluateAgentState(initial);
+    expect(applyPolicy(initial, result.assessment).selected).toBe('READ_ISSUE');
+    expect(JSON.parse(String(fetchMock.mock.calls[0]?.[1]?.body)).state.progress.taskPreparation)
+      .toMatchObject({ issue: 'pending', unreadInstructions: ['AGENTS.md'], nextAction: 'READ_ISSUE' });
+  });
+
+  it('keeps model selection and budgets through explicit evaluation recovery', async () => {
+    const root = await mkdtemp(path.join(os.tmpdir(), 'jev-provider-recovery-')); roots.push(root);
+    const initial = state(); initial.repo.root = root; initial.workerSelection = 'codex'; initial.codexCalls = 1;
+    fetchMock.mockResolvedValueOnce(new Response('not JSON'))
+      .mockImplementation(async () => Response.json(routeBody()));
+    const evaluate = createEvaluator();
+    const recoverEvaluation = vi.fn(async () => {
+      vi.stubEnv('ROUTER_PROVIDER', 'typesafe'); vi.stubEnv('ROUTER_MODEL', 'jev-latest');
+      return 'continue' as const;
+    });
+    const approve = vi.fn(async () => ({ kind: 'stop' as const }));
+    const execute = vi.fn();
+    const result = await runOrchestration(initial, { evaluate, recoverEvaluation, approve, execute, askForInformation: async () => '' });
+    expect(result).toMatchObject({ status: 'stopped', iterations: 2, state: { codexCalls: 1, claudeCalls: 0, workerSelection: 'codex' } });
+    expect(recoverEvaluation).toHaveBeenCalledOnce(); expect(approve).toHaveBeenCalledOnce(); expect(execute).not.toHaveBeenCalled();
+    const trace = (await readFile(result.tracePath, 'utf8')).trim().split('\n').map((line) => JSON.parse(line));
+    expect(trace[0]).toMatchObject({ failure: { code: 'invalid_response' }, approval: null });
+    expect(trace.at(-1)).toMatchObject({ evaluation: { provider, requestedModel: model }, approval: { kind: 'stop' } });
+    for (const [, init] of fetchMock.mock.calls) {
+      expect(provider === 'vercel' ? new Headers(init?.headers).get('ai-model-id') : JSON.parse(String(init?.body)).model).toBe(model);
+    }
   });
 
   it.each([
@@ -200,7 +265,7 @@ describe.each(providers)('%s evaluation transport', (provider) => {
     ['unknown distribution key', (answers: Record<string, Record<string, unknown>>) => { answers.nextAction!.probabilities = { DEPLOY: 1 }; }],
     ['not highest probability', (answers: Record<string, Record<string, unknown>>) => { answers.nextAction!.choice = 'FINISH'; }],
   ] as const)('rejects %s without retrying', async (_label, mutate) => {
-    const payload = body(provider);
+    const payload = routeBody();
     mutate(payload.answers as Record<string, Record<string, unknown>>);
     fetchMock.mockImplementation(async () => Response.json(payload));
     await expect(evaluateAgentState(state())).rejects.toMatchObject({ code: 'invalid_response' });
@@ -208,7 +273,7 @@ describe.each(providers)('%s evaluation transport', (provider) => {
   });
 
   it('rejects malformed confidence and JSON', async () => {
-    const payload = body(provider);
+    const payload = routeBody();
     if (provider === 'vercel') payload.providerMetadata = { typesafe: { confidence: { nextAction: 'secret-value' } } };
     else (payload.answers as Record<string, Record<string, unknown>>).nextAction!.confidence = 'secret-value';
     fetchMock.mockImplementation(async () => Response.json(payload));
@@ -218,7 +283,7 @@ describe.each(providers)('%s evaluation transport', (provider) => {
   });
 
   it.each([0.99, 1.01])('rejects probability sum %s with available diagnostics and no automatic retry', async (total) => {
-    const payload = body(provider);
+    const payload = routeBody();
     const probabilities = Object.fromEntries(ACTIONS.map((action) => [action, action === 'SEARCH_REPO' ? 0.9 : action === 'READ_FILE' ? total - 0.9 : 0]));
     (payload.answers as Record<string, Record<string, unknown>>).nextAction!.probabilities = probabilities;
     fetchMock.mockImplementation(async () => Response.json(payload));
@@ -242,7 +307,7 @@ describe.each(providers)('%s evaluation transport', (provider) => {
 
   it('recovers on its single retry', async () => {
     fetchMock.mockResolvedValueOnce(Response.json({ error: { code: 503 } }, { status: 503 }));
-    fetchMock.mockResolvedValueOnce(Response.json(body(provider)));
+    fetchMock.mockResolvedValueOnce(Response.json(routeBody()));
     await expect(evaluateAgentState(state())).resolves.toMatchObject({ provider });
     expect(fetchMock).toHaveBeenCalledTimes(2);
   });
@@ -324,13 +389,13 @@ describe.each(providers)('%s evaluation transport', (provider) => {
     await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
     controller.abort(keys[2]);
     expect(await running).toMatchObject({ status: 'stopped', iterations: 1 });
-    resolveFetch(Response.json(body(provider)));
+    resolveFetch(Response.json(routeBody()));
     await new Promise((resolve) => setImmediate(resolve));
     expect(approve).not.toHaveBeenCalled(); expect(execute).not.toHaveBeenCalled();
   });
 
   it('redacts all keys in requests, CLI results, traces, and worker evidence and preserves attribution', async () => {
-    respond(provider);
+    respondRoute();
     const initial = state();
     initial.task += ` ${keys.join(' ')}`;
     initial.currentGoal = keys.join(' ');
@@ -354,9 +419,9 @@ describe.each(providers)('%s evaluation transport', (provider) => {
       for (const key of keys) expect(serialized).not.toContain(key);
     }
     for (const attributed of [output, JSON.parse(trace).evaluation, JSON.parse(loop).evaluation]) {
-      expect(attributed).toMatchObject({ provider, requestedModel: JEV_PROVIDERS[provider].model });
+      expect(attributed).toMatchObject({ provider, requestedModel: model });
       if (provider === 'vercel') expect(attributed).not.toHaveProperty('servedModel');
-      else expect(attributed.servedModel).toBe(body(provider).model);
+      else expect(attributed.servedModel).toBe(routeBody().model);
     }
   });
 
@@ -376,20 +441,116 @@ describe.each(providers)('%s evaluation transport', (provider) => {
   });
 });
 
-describe.each(['openrouter', 'typesafe'] as const)('%s native response contract', (provider) => {
-  beforeEach(() => vi.stubEnv('JEV_PROVIDER', provider));
+describe.each(routes.filter(({ provider }) => provider !== 'vercel'))('$provider $model native response contract', ({ provider, model, served }) => {
+  beforeEach(() => {
+    vi.stubEnv('JEV_PROVIDER', provider);
+    vi.stubEnv('ROUTER_MODEL', model);
+  });
+  function nativeBody(): Record<string, unknown> { return { ...body(provider), model: served }; }
+
+  it.each(Object.keys(EVALUATION_QUESTIONS))('rejects a missing or refused required %s answer without retry or raw text', async (name) => {
+    for (const refused of [undefined, { type: 'refusal', refusal: keys.join(' ') }]) {
+      const payload = nativeBody();
+      const answers = payload.answers as Record<string, unknown>;
+      if (refused === undefined) delete answers[name];
+      else answers[name] = refused;
+      fetchMock.mockImplementation(async () => Response.json(payload));
+      const failure = await evaluateAgentState(state()).catch((error: unknown) => error);
+      expect(failure).toMatchObject({ code: 'invalid_response' });
+      for (const key of keys) expect(JSON.stringify(failure)).not.toContain(key);
+    }
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it.each(['extra', 'renamed', 'array', 'direct predicate', 'top refusal', 'mixed refusal', 'mixed error'] as const)
+    ('rejects %s answers instead of translating an incompatible wire format', async (kind) => {
+      const payload = nativeBody();
+      const answers = payload.answers as Record<string, Record<string, unknown>>;
+      if (kind === 'extra') answers.unexpected = { type: 'noul', noul: 0 };
+      if (kind === 'renamed') { answers.renamed = answers.stuck!; delete answers.stuck; }
+      if (kind === 'array') payload.answers = Object.entries(answers).map(([name, answer]) => ({ name, ...answer }));
+      if (kind === 'direct predicate') answers.stuck = { type: 'predicate', probability: 0 };
+      if (kind === 'top refusal') payload.refusal = keys.join(' ');
+      if (kind === 'mixed refusal') answers.stuck!.refusal = keys.join(' ');
+      if (kind === 'mixed error') answers.nextAction!.error = { message: keys.join(' ') };
+      fetchMock.mockImplementation(async () => Response.json(payload));
+      await expect(evaluateAgentState(state())).rejects.toMatchObject({ code: 'invalid_response' });
+      expect(fetchMock).toHaveBeenCalledOnce();
+    });
+
+  it.each([
+    ['envelope', (json: string) => json.replace('"answers":', '"answers":{},"answers":')],
+    ['question', (json: string) => json.replace('"stuck":', '"stuck":{"type":"refusal"},"stuck":')],
+    ['escaped question', (json: string) => json.replace('"stuck":', '"st\\u0075ck":{"type":"refusal"},"stuck":')],
+    ['option', (json: string) => json.replace('"SEARCH_REPO":1', '"SEARCH_REPO":0,"SEARCH_REPO":1')],
+    ['escaped option', (json: string) => json.replace('"SEARCH_REPO":1', '"SEARCH\\u005fREPO":0,"SEARCH_REPO":1')],
+  ] as const)('rejects duplicate %s keys before JSON parsing can overwrite them', async (_label, duplicate) => {
+    fetchMock.mockImplementation(async () => new Response(duplicate(JSON.stringify(nativeBody()))));
+    await expect(evaluateAgentState(state())).rejects.toMatchObject({ code: 'invalid_response', diagnostic: { stage: 'json', category: 'shape' } });
+    expect(fetchMock).toHaveBeenCalledOnce();
+  });
+
+  it('accepts quoted/bracketed metadata strings without confusing them with duplicate keys', async () => {
+    const payload = nativeBody();
+    payload.usage = { note: '"stuck": {} [ ] \\ "SEARCH_REPO":0', values: [{ repeated: 0 }, { repeated: 1 }] };
+    fetchMock.mockImplementation(async () => Response.json(payload));
+    await expect(evaluateAgentState(state())).resolves.toMatchObject({ provider, requestedModel: model, servedModel: served });
+  });
+
+  it.each(['missing', 'array', 'extra', 'null', 'negative', 'string', 'nonfinite'] as const)
+    ('rejects %s option distributions without repairing them', async (kind) => {
+      const payload = nativeBody();
+      const nextAction = (payload.answers as Record<string, Record<string, unknown>>).nextAction!;
+      const probabilities = nextAction.probabilities as Record<string, unknown>;
+      if (kind === 'missing') delete probabilities.FINISH;
+      if (kind === 'array') nextAction.probabilities = Object.entries(probabilities).map(([value, probability]) => ({ value, probability }));
+      if (kind === 'extra') probabilities.DEPLOY = 0;
+      if (kind === 'null') probabilities.FINISH = null;
+      if (kind === 'negative') probabilities.FINISH = -0.1;
+      if (kind === 'string') probabilities.FINISH = '0';
+      // JSON's numeric overflow reaches the decoder as Infinity.
+      const json = JSON.stringify(payload);
+      fetchMock.mockImplementation(async () => new Response(kind === 'nonfinite' ? json.replace('"FINISH":0', '"FINISH":1e999') : json));
+      await expect(evaluateAgentState(state())).rejects.toMatchObject({ code: 'invalid_response' });
+      expect(fetchMock).toHaveBeenCalledOnce();
+    });
+
+  it.each([0.9995, 1.0005])('retains the existing sum tolerance without renormalizing %s', async (total) => {
+    const payload = nativeBody();
+    const nextAction = (payload.answers as Record<string, Record<string, unknown>>).nextAction!;
+    nextAction.probabilities = Object.fromEntries(ACTIONS.map((action) => [action, action === 'SEARCH_REPO' ? total - 0.1 : action === 'READ_FILE' ? 0.1 : 0]));
+    fetchMock.mockImplementation(async () => Response.json(payload));
+    const result = await evaluateAgentState(state());
+    expect(result.assessment.nextAction.probabilities.SEARCH_REPO).toBe(total - 0.1);
+  });
+
+  it.each([[401, 'authentication'], [403, 'authorization'], [402, 'billing'], [404, 'model_unavailable']] as const)
+    ('keeps HTTP %s authoritative over conflicting provider codes', async (status, code) => {
+      fetchMock.mockImplementation(async () => Response.json({ error: { code: 503, message: keys.join(' ') } }, { status }));
+      await expect(evaluateAgentState(state())).rejects.toMatchObject({ code });
+      expect(fetchMock).toHaveBeenCalledOnce();
+    });
+
+  it.each(['refusal', 'unrecognized', 123] as const)('safely rejects unknown HTTP 200 error type %s without retry', async (code) => {
+    fetchMock.mockImplementation(async () => Response.json({ error: { code, message: keys.join(' ') } }));
+    await expect(evaluateAgentState(state())).rejects.toMatchObject({ code: 'request_failed' });
+    expect(fetchMock).toHaveBeenCalledOnce();
+  });
 
   it('uses the credential alias when the canonical key is absent', async () => {
     vi.stubEnv(JEV_PROVIDERS[provider].credential, '');
     const aliasKey = provider === 'openrouter' ? keys[3] : keys[4];
-    if (provider === 'openrouter') vi.stubEnv('OPENROUTE_MODEL', 'typesafe/jev-1.13');
-    respond(provider);
+    if (provider === 'openrouter') {
+      vi.stubEnv('ROUTER_MODEL', '');
+      vi.stubEnv('OPENROUTE_MODEL', model);
+    }
+    fetchMock.mockImplementation(async () => Response.json(nativeBody()));
     await expect(evaluateAgentState(state())).resolves.toMatchObject({ provider });
     expect(new Headers(fetchMock.mock.calls[0]?.[1]?.headers).get('authorization')).toBe(`Bearer ${aliasKey}`);
   });
 
   it('requires the reported served model', async () => {
-    const payload = body(provider);
+    const payload = nativeBody();
     delete payload.model;
     fetchMock.mockImplementation(async () => Response.json(payload));
     await expect(evaluateAgentState(state())).rejects.toMatchObject({ code: 'invalid_response' });
@@ -404,9 +565,9 @@ describe.each(['openrouter', 'typesafe'] as const)('%s native response contract'
   });
 
   it('redacts the served model and additional answer fields', async () => {
-    const payload = body(provider);
+    const payload = nativeBody();
     payload.model = keys[1];
-    (payload.answers as Record<string, unknown>)[keys[2]!] = keys[0];
+    (payload.answers as Record<string, Record<string, unknown>>).nextAction![keys[2]!] = keys[0];
     fetchMock.mockImplementation(async () => Response.json(payload));
     const result = await evaluateAgentState(state());
     expect(result.servedModel).toBe('[REDACTED]');

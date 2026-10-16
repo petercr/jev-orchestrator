@@ -4,34 +4,10 @@ import { redactSensitiveText, sanitizeTraceValue } from '../logging/trace.js';
 import type { AgentState } from '../types.js';
 import { isRecord, NATIVE_EVALUATION_QUESTIONS, normalizeAssessment, servedModel, type ProviderEvaluation } from './contract.js';
 import { EvaluationError, EvaluationHttpError, retryAfterMs } from './errors.js';
-import { boundedResponse } from './transport.js';
+import { boundedResponse, parseEvaluationJson } from './transport.js';
 
 function invalidResponse(stage: 'json' | 'answers' = 'answers'): never {
   throw new EvaluationError('invalid_response', 'Cloudflare returned invalid evaluation data.', { stage, category: 'shape' });
-}
-
-/** JSON.parse alone silently replaces duplicate question names and probabilities. */
-function parseUniqueJson(text: string): unknown {
-  let parsed: unknown;
-  try { parsed = JSON.parse(text); } catch { invalidResponse('json'); }
-  const objects: Array<Set<string> | null> = [];
-  // Consume complete strings so brackets inside values cannot affect nesting.
-  for (const match of text.matchAll(/"(?:[^"\\]|\\.)*"|[{}[\]]/g)) {
-    const token = match[0];
-    if (token === '{') objects.push(new Set());
-    else if (token === '[') objects.push(null);
-    else if (token === '}' || token === ']') objects.pop();
-    else {
-      let next = match.index + token.length;
-      while (/\s/.test(text[next] ?? '')) next += 1;
-      if (text[next] !== ':') continue;
-      const keys = objects.at(-1);
-      const key: string = JSON.parse(token);
-      if (!keys || keys.has(key)) invalidResponse('json');
-      keys.add(key);
-    }
-  }
-  return parsed;
 }
 
 /** Cloudflare internal codes are not HTTP status codes. Never classify text. */
@@ -64,7 +40,7 @@ export async function evaluateCloudflare(
     },
   ), signal);
   let body: unknown;
-  try { body = parseUniqueJson(await response.text()); } catch (error) {
+  try { body = parseEvaluationJson(await response.text()); } catch (error) {
     if (!response.ok) throw new EvaluationHttpError(response.status, retryAfterMs(response.headers.get('retry-after')));
     throw error;
   }
