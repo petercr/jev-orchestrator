@@ -680,10 +680,20 @@ pnpm test
 pnpm build
 ```
 
-The test suite is offline: it uses temporary repositories and mocked AI SDK
-boundaries, so it does not require a provider key, a coding agent, or a
-live Jev evaluation. Pull-request CI runs the same typecheck, test, and build
-commands for maintainers.
+The test suite is offline: it uses temporary repositories and mocks HTTP, SDK,
+and process boundaries, so it requires no provider key or coding-agent invocation.
+Pull-request CI runs the same typecheck, test, and build commands for maintainers.
+
+The common matrix in [providers.test.ts](src/ai/providers.test.ts) runs the same
+assessment fixtures through six provider/model routes: direct TypeSafe Jev,
+OpenRouter Jev, Vercel Jev, Cloudflare Clef and Clef-flash, and OpenAI Decisions
+through OpenRouter. It exercises the actual evaluator, policy, candidate, and
+orchestration code. Coverage includes confidence and refusal handling, linked-task
+preparation, both worker selections and budgets, failed/stale independent
+validation, completion review, recovery, iteration limits, credential redaction,
+deadlines, retries, and cancellation during evaluation, approval, and execution.
+Provider-specific envelope and error-code tests remain alongside this matrix.
+Run it alone with `pnpm exec vitest run src/ai/providers.test.ts`.
 
 ## Live coding-agent verification
 

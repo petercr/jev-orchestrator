@@ -28,6 +28,7 @@ Run metrics are reporting data outside AgentState and approved candidates. Measu
 - `src/types.ts`: shared action, state, assessment, and policy types.
 - `src/ai/evaluate.ts`: bounded provider-neutral evaluation, with shared normalization in `src/ai/contract.ts` and Vercel/OpenRouter/TypeSafe/Cloudflare transport boundaries. Bind `createEvaluator` once per run; keep transport configuration outside serializable state.
 - `src/ai/cloudflare.ts`: bounded Clef/Clef-flash REST adapter, strict Workers AI envelope and duplicate-key validation, and allowlisted Cloudflare error classifications.
+- `src/ai/providers.test.ts`: common contract, policy, and orchestration matrix across all six provider/model routes; mock HTTP and process boundaries while exercising the actual enforcement layers.
 - `src/policy.ts`: deterministic safety and confidence rules. This is the final authority over model recommendations.
 - `src/policy.test.ts`: policy behavior tests.
 - `src/repo/inspect.ts`: read-only repository metadata collection.
