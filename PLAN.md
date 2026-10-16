@@ -4,8 +4,8 @@
 
 `jev-orchestrator` is a small Node/TypeScript CLI that tests whether typed
 decision models can steer a coding-agent workflow under deterministic local
-policy. The planned decision models include TypeSafe AI's Jev, Cloudflare
-Clef/Clef-flash, and OpenAI Decisions. The repository is
+policy. The supported decision models include TypeSafe AI's Jev, Cloudflare
+Clef/Clef-flash, and OpenAI Decisions through OpenRouter. The repository is
 [`petercr/jev-orchestrator`](https://github.com/petercr/jev-orchestrator).
 
 Build on the packaged v0.2 CLI, preserving the decision-only default and
@@ -31,12 +31,12 @@ queries, or tool arguments.
 
 ## v0.3.0 release: multiple decision models
 
-Release target (2026-10-11): v0.3.0, implementation in progress. Extend the existing
-evaluation boundary to support Jev, Cloudflare Clef/Clef-flash, and OpenAI
-Decisions as explicit alternatives. The existing integrations have been verified
-with Jev; OpenRouter also exposes OpenAI Decisions, so reuse that transport for
-the new model and verify its contract. Historical milestones below
-describe the implementation at the time they were completed.
+Release candidate prepared and verified on 2026-10-16: v0.3.0. The shared
+evaluation boundary supports Jev, Cloudflare Clef/Clef-flash, and OpenAI
+Decisions through OpenRouter as explicit alternatives. Package verification
+and release notes are complete; recording the final release commit, tagging,
+and publication remain pending. Historical milestones below describe the
+implementation at the time they were completed.
 
 The release delivers explicit selection among Jev, Cloudflare Clef/Clef-flash,
 and OpenAI Decisions through OpenRouter, with one shared policy contract.
@@ -288,32 +288,63 @@ new model routes remain the later slices below.
    exclusion audits passed. Verification passed: 11 focused benchmark tests,
    all 1,084 tests, typecheck, build, and a 56-observation mocked full-protocol
    rehearsal. The report records measured source/harness attribution and limits.
-7. [ ] Prepare the v0.3.0 package and release notes after implementation and
+7. [x] Prepare the v0.3.0 package and release notes after implementation and
    verification. Bump package metadata and version assertions together, update
    the package description to reflect multiple decision models, and verify the
    exact packed archive against the release gate below. Keep the package name
    `jev-orchestrator` and executable `jev-agent`.
+   Prepared and verified locally on 2026-10-16: package metadata and the CLI
+   version assertion now report `0.3.0`, with a description covering selectable
+   decision models. The packaged [release notes](CHANGELOG.md) cover model
+   routes/namespaces, migration and aliases, prerequisites/data paths, measured
+   results, and limitations. README uses the current archive name and describes
+   release preparation separately from publication. The historical issue #31
+   protocol stays pinned to v0.2; its preparation regression now uses an isolated
+   v0.2 source fixture instead of assuming the current package is v0.2.
+   Verification passed: 32 focused CLI/benchmark tests, typecheck, all 1,084
+   tests, production build, and schema-only validation. The exact v0.3.0 archive
+   installed offline into a disposable consumer and passed 46 installed checks:
+   version/help, offline keyless mocks, all six mocked model routes with JSON
+   attribution, legacy selectors and credential/model aliases, defaults and
+   precedence, and invalid/conflicting configuration or missing selected
+   credentials before requests. The consumer stayed unchanged and produced no
+   traces. All 18 transport requests were mocked; no live provider or worker was
+   called for release preparation. Existing authorized synthetic checks and the
+   168-observation live comparison remain the live evidence for this candidate.
+
+   Archive: `jev-orchestrator-0.3.0.tgz`, SHA-256
+   `d1f074eba45647f0b4473d66816e67771d2be7419089e55e9d0d87c1e6a5aad5`.
+   Inspection found 68 allowlisted files: 64 compiled runtime/declaration files
+   plus package metadata, README, CHANGELOG, and license; no tests, source,
+   traces, credentials, dependencies, or local artifacts. Runtime/documentation
+   bytes match the checkout, and packed metadata differs only by pnpm's expected
+   removal of `packageManager` and the `prepack` lifecycle. Persistent archive,
+   install log, verification script/results, and package audit are under
+   `/home/peterc/.cache/jev-package-checks/v030-release-0o9aejkm`.
+   Source baseline is merged PR #43, `a733daf1ec1d0265cbed0a548dffdc8dfe705fce`,
+   plus the pending release-preparation changes. The final release commit must
+   still be recorded after commit/merge; no tag, release, or publication was made.
 
 ### v0.3.0 release gate
 
-- [ ] All implementation slices above are complete, with each new model route
+- [x] All implementation slices above are complete, with each new model route
   covered by deterministic transport, policy, and orchestration regressions.
-- [ ] Focused tests, `pnpm check`, `pnpm test`, and `pnpm build` pass on the
+- [x] Focused tests, `pnpm check`, `pnpm test`, and `pnpm build` pass on the
   release candidate. Offline CI requires no provider keys or live workers.
-- [ ] Authorized synthetic live checks pass for Clef, Clef-flash, and OpenAI
+- [x] Authorized synthetic live checks pass for Clef, Clef-flash, and OpenAI
   Decisions through OpenRouter; record dates, requested/served models, and
   sanitized outcomes. Missing access or malformed responses leave this gate open.
 - [x] A common labeled snapshot comparison records observed routing quality,
   policy overrides, failures, and latency with sample counts and limitations.
   Evidence supports usable routes under the existing policy; no speed win over
   Jev is required, and small samples cannot establish calibrated confidence.
-- [ ] The packed `jev-orchestrator-0.3.0.tgz` installs in a disposable consumer.
+- [x] The packed `jev-orchestrator-0.3.0.tgz` installs in a disposable consumer.
   Its `jev-agent --version` reports `0.3.0`; help and JSON attribution match
   the documented selectors/models. Mock decisions stay offline and keyless
   across selections; invalid/conflicting selectors and missing selected
   credentials fail before live requests. Legacy `JEV_PROVIDER` configuration
   and existing credential/model aliases retain their documented behavior.
-- [ ] Package inspection excludes tests, traces, credentials, dependencies,
+- [x] Package inspection excludes tests, traces, credentials, dependencies,
   and local artifacts. Release notes describe new model routes, migration,
   model namespaces, prerequisites/data handling, and known limitations.
 - [ ] Record the final release commit and verification evidence before creating

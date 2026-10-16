@@ -5,6 +5,12 @@ installed worker adapters on TrusTrove #949. It launches live, authenticated
 workers and a live TypeSafe evaluator. It is never part of automated tests.
 Run it only for repositories and services you are authorized to use.
 
+This worker protocol is pinned to `jev-orchestrator@0.2.0`; initialize and pack
+from a v0.2 source checkout. Its version guard deliberately rejects v0.3.
+The [recorded comparison](../../docs/benchmarks/issue-31.md) identifies the
+measured runtime revision. The separate [v0.3 decision comparison](../decisions/README.md)
+uses labeled snapshots and does not launch coding workers.
+
 The task input is the exact public issue URL. Both setups receive the same
 bounded, fetched issue and contributor-instruction evidence. Direct preparation
 uses the installed bounded readers and context builder, outside the worker;
