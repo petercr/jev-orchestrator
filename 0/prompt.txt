@@ -1,5 +1,1 @@
-ok commit pr
-
----
-
-ok pr merged lets go
+ok commit and pr
