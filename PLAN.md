@@ -222,12 +222,28 @@ new model routes remain the later slices below.
    OpenAI route, compatibility aliases, model attribution, retained Jev default,
    selected-credential preflight, and keyless mocks. Mocked verifier checks also
    covered explicit OpenRouter model overrides and invalid opt-in arguments.
-4. [ ] Run a common deterministic contract and policy suite through mocked
+4. [x] Run a common deterministic contract and policy suite through mocked
    provider boundaries: confident/ambiguous routes, missing confidence,
    premature completion, preparation, worker restrictions, validation generations,
    recovery, limits, secret redaction, cancellation, and no post-abort execution.
    Run focused tests, `pnpm check`, `pnpm test`, `pnpm build`, and installed
    keyless mock checks. Automated tests must not call a live provider or worker.
+   Completed locally on 2026-10-16: `src/ai/providers.test.ts` runs common
+   assessment fixtures through all six routes (three Jev transports, both
+   Cloudflare models, and OpenAI Decisions through OpenRouter), using each
+   transport's wire envelope. The actual evaluator, policy, candidate selection,
+   and loop enforce preparation, confidence, both worker selections/budgets,
+   fresh validation, the 95% completion threshold, explicit acceptance review,
+   recovery, and the eight-iteration limit. Mocked process results cover Codex
+   and Claude failures/timeouts/malformed reports, preserved edits, validation
+   invalidation, and cancellation without late approval or execution. Fixed
+   endpoints, immutable configuration, safe failures, redaction, retry/deadline
+   bounds, and response-stream cleanup also pass for every route. Provider-specific
+   envelope/error regressions remain intact. Validation passed: 442 provider-suite
+   tests, all 1,073 tests, typecheck, and build. The packed v0.2 archive installed
+   offline and passed 12 keyless mock checks across canonical/legacy selectors
+   plus three invalid-configuration mock checks, with fetch denied. This slice
+   changes tests/documentation only and makes no new live provider or worker call.
 5. [x] Extend explicit opt-in synthetic live verification to Cloudflare's two
    Clef models and OpenAI Decisions through OpenRouter. Record sanitized outcomes
    and actual account access; public API documentation alone does not complete
