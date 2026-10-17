@@ -2,7 +2,9 @@
 
 ## Project purpose
 
-This repository is a deliberately small TypeScript orchestrator. Jev evaluates a compact snapshot of a coding task and recommends the next action; deterministic local policy decides whether that recommendation is safe enough to execute. The intended destination is a bounded loop that can route implementation work to either Claude Code or the Codex CLI.
+This repository is a deliberately small TypeScript orchestrator. The selected decision model evaluates a compact snapshot of a coding task and recommends the next action; deterministic local policy decides whether that recommendation is safe enough to execute. Jev remains the default decision model. The intended destination is a bounded loop that can route implementation work to either Claude Code or the Codex CLI.
+
+The npm package is `dev-orchestrator`; keep the compatible `jev-agent` executable and the existing GitHub repository name. The original v0.3.0 GitHub archive remains `jev-orchestrator@0.3.0` with its recorded checksum. Treat that artifact and its historical benchmarks separately from the renamed npm package; do not rewrite historical package names or alter the published archive.
 
 The packaged v0.3 CLI retains decision-only as the default. Explicit `--orchestrate` mode can search, read a bounded file, run fixed read-only Git diagnostics, run a detected validation script, or delegate bounded implementation work to Codex or Claude after manual approval. It cannot run arbitrary commands. Bounded worker context and controlled repair are complete. The active-process-cancellation milestone stops pending evaluation/prompts and approved execution on Ctrl+C/SIGINT or SIGTERM, drains process cleanup, preserves partial edits, refreshes repository state, and records bounded interruption evidence. Preserve manual approval, the eight-iteration and two-calls-per-adapter limits, independent validation, and traceability. Keep AbortSignal separate from serializable approved candidates and worker context.
 

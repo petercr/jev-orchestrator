@@ -1,8 +1,12 @@
 {
-  "name": "jev-orchestrator",
+  "name": "dev-orchestrator",
   "version": "0.3.0",
   "description": "A small coding-agent orchestrator with selectable decision models.",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/petercr/jev-orchestrator.git"
+  },
   "type": "module",
   "bin": {
     "jev-agent": "./dist/cli.js"

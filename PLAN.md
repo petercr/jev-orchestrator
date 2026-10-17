@@ -1,8 +1,8 @@
-# Jev Orchestrator plan
+# Dev Orchestrator plan
 
 ## Goal
 
-`jev-orchestrator` is a small Node/TypeScript CLI that tests whether typed
+`dev-orchestrator` is a small Node/TypeScript CLI that tests whether typed
 decision models can steer a coding-agent workflow under deterministic local
 policy. The supported decision models include TypeSafe AI's Jev, Cloudflare
 Clef/Clef-flash, and OpenAI Decisions through OpenRouter. The repository is
@@ -35,7 +35,9 @@ Release candidate prepared and verified on 2026-10-16: v0.3.0. The shared
 evaluation boundary supports Jev, Cloudflare Clef/Clef-flash, and OpenAI
 Decisions through OpenRouter as explicit alternatives. Package verification
 and release notes are complete. The final release commit and archive were
-recorded and checked on 2026-10-17; tagging and publication remain pending.
+recorded and checked on 2026-10-17. The `v0.3.0` tag and
+[GitHub release](https://github.com/petercr/jev-orchestrator/releases/tag/v0.3.0)
+were published that day; registry publication remains pending.
 Historical milestones below describe the implementation at the time they were
 completed.
 
@@ -47,8 +49,9 @@ direct TypeSafe/Jev as the default for v0.3.0; any later default change requires
 a separate decision based on the comparison results.
 
 Direct OpenAI transport, automatic model/provider selection or failover,
-ensembles, policy-threshold changes, package renaming, and expanded worker
-permissions are outside v0.3.0. The matched coding-worker baseline from
+ensembles, policy-threshold changes, and expanded worker permissions are outside
+v0.3.0. The original GitHub release retained its package name; the separately
+authorized npm-package rename is tracked below. The matched coding-worker baseline from
 issue #31 is separate from this release's comparison, which uses bounded decision
 snapshots and does not require new paid coding-worker pilots.
 
@@ -364,8 +367,25 @@ new model routes remain the later slices below.
   the v0.3.0 tag/release or publishing the package through the maintainer's
   release workflow. A planning update or version bump alone is not a release.
 
-All preparation gates are complete. Creating the `v0.3.0` tag/GitHub release
-and publishing the verified archive remain pending.
+All preparation gates are complete. On 2026-10-17, annotated tag `v0.3.0`
+(`589c82cdc9dfd04e56be7f1a7671e21c1802a8fa`) was pushed, resolving to the
+verified release commit `6bbb666cb42f10afb843adf11cc49d0104434164`.
+The [GitHub release](https://github.com/petercr/jev-orchestrator/releases/tag/v0.3.0)
+was published at 16:44:42 UTC with the exact verified archive attached.
+GitHub's asset digest and credential-free public download both matched the
+recorded SHA-256; the public archive is 82,556 bytes. Publication evidence is
+retained under `/home/peterc/.cache/jev-release-checks/v030-mb0tqeg9`.
+
+Registry publication remains pending. A 2026-10-17 npm preflight found no
+authenticated account on this machine; the unscoped `jev-orchestrator` listing
+identified `KaiyoDev/jev-orchestrator`, maintainer `kaiyodev06`, and latest
+version `0.3.1`. No registry publication was attempted. Use the verified
+[GitHub archive](https://github.com/petercr/jev-orchestrator/releases/download/v0.3.0/jev-orchestrator-0.3.0.tgz)
+for this release. Registry ownership/access or a separately approved package
+scope must be resolved before publishing there; the original package name and
+verified GitHub archive were preserved. The operator subsequently confirmed
+that the existing npm package is not theirs and selected `dev-orchestrator`
+for the separate npm package.
 
 Use this comparison to extend the matched worker benchmarks already tracked in
 issue #31: fix the worker/model/effort, permissions, task baseline, and approval
@@ -374,6 +394,40 @@ active time separately from operator waits. The earlier pilots often needed
 manual worker/finish alternatives; reducing those interventions without unsafe
 routes is a concrete outcome to measure. Vendor latency claims alone do not
 establish a faster or better coding workflow.
+
+## npm package identity: dev-orchestrator
+
+On 2026-10-17, the operator confirmed that the existing `jev-orchestrator` npm
+package is not theirs and explicitly selected `dev-orchestrator` (Decisions +
+Jev). This follow-up overrides the original release's package-name constraint
+for the new npm package. Its initial version remains `0.3.0`; the executable
+remains `jev-agent`, and the GitHub repository keeps its current name.
+
+Package metadata, README, release notes, repository guidance, and the human CLI
+banners now use Dev Orchestrator. Provider defaults, environment aliases, trace
+labels, policy, validation requirements, and worker permissions remain intact.
+Historical benchmark fixtures and the published `jev-orchestrator@0.3.0`
+GitHub archive retain their original identity and checksum.
+
+The public npm registry returned `E404` for `dev-orchestrator` on 2026-10-17;
+this is an availability observation, not a reservation or permission grant.
+Registry publication still requires an authenticated account and a final
+release-source record for the renamed package.
+
+Prepared and verified on 2026-10-17: [npm candidate record](docs/releases/dev-orchestrator-0.3.0.md).
+The exact `dev-orchestrator-0.3.0.tgz` archive installed offline and passed 47
+installed checks, including the compatible executable, Dev Orchestrator banner,
+all six mocked model routes, aliases/defaults, keyless mocks, and configuration
+preflight. Its 68 allowlisted files match the installed consumer; compiled
+runtime bytes match the original release except the two human CLI banners.
+Verification passed: 39 focused CLI tests, typecheck, all 1,084 tests, production
+build, schema validation, and npm's publish dry run. The dry run made no registry
+publication and still reported the missing login. Archive SHA-256:
+`1a50bc543657832df9fa8c0ba73dbc97ee7575f7838eba87aa650d1d2ce97a45`.
+Archive, source hashes, install logs, and inspection results are retained under
+`/home/peterc/.cache/jev-package-checks/dev030-dxotlxn0`. The candidate was packed
+from baseline `5b2782faddd8fff507cda8f73fa2949be142c0e3` with these pending
+rename changes; record the final merged source before registry publication.
 
 ## Current baseline
 
