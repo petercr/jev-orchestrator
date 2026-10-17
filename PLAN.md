@@ -413,7 +413,8 @@ tree `33b725d5bbd8d0952c21d977ae97e0ee3b652a9a`. The preparation and merge
 trees are identical, and all 72 recorded source hashes match the final merged
 release source. After the operator's npm browser authorization, account
 `petercr` published [dev-orchestrator@0.3.0](https://www.npmjs.com/package/dev-orchestrator/v/0.3.0)
-at 18:39:29 UTC on 2026-10-17. Public metadata reports `latest: 0.3.0`.
+at 18:39:29 UTC on 2026-10-17. At publication, public metadata reported
+`latest: 0.3.0`.
 
 Published and verified on 2026-10-17: [npm publication record](docs/releases/dev-orchestrator-0.3.0.md).
 The exact `dev-orchestrator-0.3.0.tgz` archive installed offline and passed 47
@@ -448,7 +449,10 @@ executable-compatibility constraint for the next release.
 
 Published v0.3.0 archives and historical benchmark/release records retain their
 original executable names. Provider configuration, policy, approval, and worker
-permissions are unchanged. Version 0.3.1 publication remains pending.
+permissions are unchanged. Account `petercr` published
+[dev-orchestrator@0.3.1](https://www.npmjs.com/package/dev-orchestrator/v/0.3.1)
+on 2026-10-17 at 19:12:40 UTC after npm browser authorization. Public registry
+metadata reports `latest: 0.3.1` and the `dev-agent` executable.
 
 Verification on 2026-10-17 passed 39 focused CLI tests, typecheck, all 1,084
 tests, and the production build through `pnpm pack`. A separate offline
@@ -458,8 +462,21 @@ match the archive and retain the executable mode. The 83,471-byte archive's
 SHA-256 is `0887ace54f08dce131b450ea22025fffe94e47c7f9e58a3373f1503d58edc3d7`.
 Archive, source hashes, install log, and reports are retained under
 `/home/peterc/.cache/jev-package-checks/dev031-1x1cbspe`. The archive was packed
-from baseline `53ad58621d46172e2ad5e64f81011e0c761fe70c` with these uncommitted
-changes; record its final merged source before publication.
+from baseline `53ad58621d46172e2ad5e64f81011e0c761fe70c` with the changes later
+committed as `09abdca884116eb728e4ba5b1a8095a4a8653d6d`. PR #48 merged on
+2026-10-17 as `82676b9f2cb31f9c394155cd6fac345186e01dba`, tree
+`f9ada91cad7e71aa568ad5fa15f819a6e3f8a448`. The preparation and merge trees
+are identical, all 73 recorded source hashes match the merged source, and the
+publish preflight records the final source, archive digests, npm account, and
+registry before publication. See the [0.3.1 release record](docs/releases/dev-orchestrator-0.3.1.md).
+
+After publication, the standard credential-free registry download matched the
+saved archive and all recorded digests. A separate registry installation passed
+47 CLI checks; all 68 installed files, executable mode, and lockfile integrity
+matched the public archive, and only `dev-agent` was installed. The disposable
+consumer's release-age exception covers only `dev-orchestrator@0.3.1`. Public
+download and registry installation evidence are retained in
+`registry-verification/` under the same local evidence directory.
 
 ## Current baseline
 
