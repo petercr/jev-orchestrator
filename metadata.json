@@ -1,0 +1,33 @@
+{
+  "cli_version": "0.11.6-nightly.202610170622.9254299eb",
+  "checkpoint_id": "01M55KZFBPMBBW8RG1YE71R2AF",
+  "strategy": "manual-commit",
+  "branch": "feat/dev-agent-cli",
+  "checkpoints_count": 2,
+  "files_touched": [
+    "AGENTS.md",
+    "CHANGELOG.md",
+    "PLAN.md",
+    "README.md",
+    "package.json",
+    "src/cli.integration.test.ts",
+    "src/cli.ts"
+  ],
+  "sessions": [
+    {
+      "metadata": "/0/metadata.json",
+      "transcript": "/0/full.jsonl",
+      "compact_transcript": "/0/transcript.jsonl",
+      "content_hash": "/0/content_hash.txt",
+      "prompt": "/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 125285,
+    "cache_creation_tokens": 0,
+    "cache_read_tokens": 3061504,
+    "output_tokens": 15320,
+    "api_call_count": 30,
+    "subagent_tokens_complete": true
+  }
+}

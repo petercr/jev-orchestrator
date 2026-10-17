@@ -1,0 +1,5 @@
+47 merged, next lets work on switching the cli name from jev-agent to dev-agent to match the npm package
+
+---
+
+ok commit and pr
