@@ -1,9 +1,29 @@
 # Release notes
 
-## 0.3.0 — multiple decision models
+## dev-orchestrator 0.3.0 — npm package identity
 
-Release candidate prepared on 2026-10-16. Tagging and publication are pending.
-The package remains `jev-orchestrator`, the executable remains `jev-agent`,
+First npm publication is being prepared. The operator selected
+`dev-orchestrator` on 2026-10-17 because the decision models include Decisions
+and Jev. The existing `jev-orchestrator` npm listing belongs to another project.
+
+- Rename the npm package to `dev-orchestrator`, retaining version `0.3.0` for
+  this package's first publication.
+- Preserve the `jev-agent` command, decision-model configuration and aliases,
+  policy, worker permissions, and Node.js 22+ requirement.
+- Use Dev Orchestrator in the human-readable CLI banners and README.
+- Include the source repository URL in package metadata.
+- Install the newly verified `dev-orchestrator-0.3.0.tgz` archive while npm
+  publication is pending. The original GitHub release archive stays unchanged
+  under its historical name and checksum.
+
+The model routes, prerequisites, data handling, and limitations below also
+apply to the renamed package.
+
+## jev-orchestrator 0.3.0 — multiple decision models
+
+Release candidate prepared on 2026-10-16 and published as a GitHub archive on
+2026-10-17. It was not published to npm. The archive's package name is
+`jev-orchestrator`, the executable remains `jev-agent`,
 and Node.js 22+ is required.
 
 ### Added
