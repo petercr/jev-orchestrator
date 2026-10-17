@@ -1,0 +1,15 @@
+ok cool move on to next step
+
+---
+
+ok cool move on to next step
+
+---
+
+<send_user_message_question_reply>
+[{"answer":"that is not mine, make a diff npm package","question":"For npm publication after the GitHub release, how should we handle the existing `jev-orchestrator` package, which lists `KaiyoDev/jev-orchestrator` and maintainer `kaiyodev06`?","questionItemId":"[\"request_user_input_async\",\"call_af8e5ce9c79042fdac7eb54c896e23b9\",0]"}]
+</send_user_message_question_reply>
+
+---
+
+call it dev-orchestrator becuase it uses more than just jev. so decisoins + jev = dev
