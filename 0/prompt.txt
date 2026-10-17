@@ -1,0 +1,21 @@
+pr merged
+
+---
+
+ok so we need to work on putting together the next pase of this cli v0
+
+---
+
+0.4
+
+---
+
+Let's also look into maybe using a node lib or something to make our cli look nicer. Or possibly for v0.5 but it needs to be on the list
+
+---
+
+Ok let's also plan out v0.6 now too
+
+---
+
+ok commit and pr
