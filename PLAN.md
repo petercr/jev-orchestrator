@@ -8,7 +8,7 @@ policy. The supported decision models include TypeSafe AI's Jev, Cloudflare
 Clef/Clef-flash, and OpenAI Decisions through OpenRouter. The repository is
 [`petercr/jev-orchestrator`](https://github.com/petercr/jev-orchestrator).
 
-Build on the packaged v0.2 CLI, preserving the decision-only default and
+Build on the published v0.3.1 CLI, preserving the decision-only default and
 explicit approval-gated orchestration mode. Decision-only collects a bounded
 repository snapshot, asks the selected decision model for a typed recommendation,
 applies local policy, prints the unexecuted decision, and can write a safe JSONL
@@ -28,6 +28,367 @@ approved tool or coding worker executes
 Decision models supply probabilistic, high-level judgment only. They must never
 authorize destructive work, invent shell commands, or supply arbitrary paths,
 queries, or tool arguments.
+
+## Proposed release sequence
+
+These are planning targets, not implemented features or release commitments.
+
+| Version | Primary outcome | First deliverable |
+| --- | --- | --- |
+| [v0.4](#v04-draft-reliable-task-workflows) | More reliable completion of bounded coding tasks | Reproducible complete-workflow baseline |
+| [v0.5](#v05-candidate-terminal-presentation-and-interaction) | Clearer, more polished terminal interaction | Offline terminal UI prototype and library decision |
+| [v0.6](#v06-draft-saved-runs-and-safe-resume) | Stop a run and continue it later with its context and remaining limits | Versioned saved-run contract and offline recovery fixtures |
+
+## v0.4 draft: reliable task workflows
+
+Drafted on 2026-10-17 after completion of v0.3 and publication of
+`dev-orchestrator@0.3.1`. The operator confirmed v0.4 as the next version;
+the focus below is a working proposal. Implementation has not started.
+
+The proposed outcome is a CLI that gets a bounded coding task through
+preparation, implementation, independent validation, and acceptance review
+with fewer avoidable routing detours. When progress is blocked, the operator
+should see the specific missing evidence or exhausted limit and the permitted
+next choices. Normal action approvals and task-acceptance review remain part
+of a successful workflow.
+
+### Evidence and starting point
+
+- The [v0.3 decision comparison](docs/benchmarks/v0.3-decisions.md) exercised
+  14 synthetic states and retained 168 evaluations. It established explicit
+  provider routes under the existing policy, but did not execute coding tasks.
+- In the [issue #31 worker comparison](docs/benchmarks/issue-31.md), all six
+  Jev loops needed a manual worker alternative; the four completed Jev loops
+  also needed a manual completion alternative. One loop retained an accepted
+  patch but exhausted its iteration budget before completion approval. That
+  study used v0.2, one task, and first attempts only; it is evidence for what
+  to investigate, not a measured v0.3.1 failure rate.
+- The current evaluator already receives preparation progress, permitted
+  workers, prior evidence, pending validation, and remaining iterations.
+  Start by reproducing failures against this implementation; additional
+  prompt text or a new state-machine abstraction needs a demonstrated gap.
+- Existing summaries already separate active time from prompt waits and
+  report worker, evaluation, recovery, and validation outcomes. Extend that
+  reporting only where it cannot explain an observed interruption or detour.
+
+Success measures are accepted patches, completed approval loops within the
+existing limits, manual routing alternatives, redundant recommendations,
+evaluation failures/recoveries, and active time. Report ordinary approvals
+separately from manual alternatives. A necessary request for missing context
+is a valid outcome; reducing the total number of `ASK_USER` results is not an
+independent objective. An accepted patch and a completed run are separate
+results.
+
+### Implementation order
+
+1. [ ] Define and reproduce complete workflows on the current release.
+   Freeze a small task suite covering a bug fix with regression tests, a
+   bounded feature, and failed validation followed by controlled repair.
+   Each fixture needs explicit task acceptance criteria and independent checks.
+   Reserve an additional task from routing changes for later verification.
+   Extend the existing provider/orchestration coverage with complete sequences
+   through the real policy, candidate selection, approval, and loop layers;
+   mock only provider and process boundaries. Cover both worker selections,
+   all six provider/model routes, and a legitimate missing-context stop.
+   Include failed evaluation and explicit recovery, cancellation, stale
+   validation, exhausted worker/iteration budgets, and omitted checks.
+   The first deliverable is an offline baseline and a list of reproduced
+   failures with their owning layer. It must run without credentials or live
+   workers and must not rewrite historical benchmark fixtures or results.
+   Scripted provider responses establish enforcement behavior, not live model
+   routing quality. Preserve sanitized recorded assessments where available,
+   and label hypotheses that need fresh live observations.
+
+2. [ ] Make routing blockers and operator choices understandable.
+   Use the reproduced cases to distinguish a provider recommendation, a
+   policy override, and a candidate that cannot be offered. Show bounded
+   reasons such as unread instructions, missing task context, pending or
+   failed validation, insufficient confidence, and exhausted call limits.
+   Reuse existing progress and summary data; count normal approvals, manual
+   alternatives, and evaluation recovery separately. Keep reporting outside
+   authorization state and preserve JSON/trace compatibility, with an explicit
+   schema decision if an incompatible change is needed. Complete when an
+   operator can understand each fixture's stop and permitted next choice
+   without inspecting raw provider output or a full trace.
+   Keep wording and readable grouping in this slice; the dedicated visual
+   refresh and terminal-library evaluation are tracked in the v0.5 candidate
+   below.
+
+3. [ ] Fix reproduced routing detours with focused changes.
+   Investigate repeated preparation reads, missed first-worker routes,
+   redundant testing, diagnosis/repair after failed checks, and completion
+   review against current state. For each deterministic fix, retain a
+   failing-before, passing-after workflow regression and explain which evidence
+   was missing or misrepresented. Update shared snapshot construction or
+   question criteria only where the reproduction supports it, then exercise
+   every provider route. Prompt changes need bounded-input/contract regressions
+   plus live comparison evidence; a mocked recommendation cannot establish
+   that the model's routing improved.
+   Preserve the existing action vocabulary and enforce all final approval
+   checks. If a model still abstains or returns invalid data, retain the
+   bounded failure and explain the manual alternative. Provider confidence
+   and malformed distributions must never be repaired to force progress.
+   Complete local verification under the same enforcement rules. Freeze the
+   candidate before evaluating the reserved task in step 4.
+
+4. [ ] Verify actual workflows with a bounded live comparison.
+   Add a separately versioned protocol for the current package; the issue #31
+   harness remains pinned to its historical v0.2 source. Freeze tasks,
+   repository revisions, package hashes, model routes, worker/model/effort,
+   permissions, validation, run order, and observation/call limits before
+   collection. Live collection is opt-in and uses operator-authorized
+   repositories and services within that recorded budget. Begin with a small
+   pilot comparing direct TypeSafe/Jev and explicitly selected OpenRouter
+   Decisions while holding
+   the worker fixed; cover both adapters in the overall walkthroughs.
+   Compare the v0.3.1 baseline with the candidate under the same protocol,
+   including the reserved task and a separately labeled repair scenario.
+   Every action, recovery, and completion receives its real approval; the
+   harness must not generate approvals. Retain failed/interrupted observations
+   and disclose missing model access. Record acceptance, loop completion,
+   detours, validation, and timing separately; retain usage/cost only when
+   actually reported. Further repetitions or provider cohorts need a recorded
+   budget before execution. Complete with a reproducible report that states
+   where improvement occurred and where manual routing is still required.
+
+5. [ ] Prepare and verify the v0.4.0 release.
+   Update README, release notes, package metadata, and CLI version assertions
+   after the accepted implementation is complete. Run focused tests, typecheck,
+   the full test suite, production build, and schema-only validation. Install
+   the exact packed archive in a disposable consumer and verify `dev-agent`,
+   help/version, mock mode, provider selection/aliases, and the new reporting.
+   Record the final source revision, archive checksum, and known limitations.
+   Give the operator advance notice before npm publication starts any timed
+   browser authorization, then verify the published archive and installation.
+
+### Release gate and scope
+
+- [ ] Complete offline workflows cover successful implementation, controlled
+  repair, valid requests for context, recovery, interruption, and budget stops.
+- [ ] Every claimed routing improvement has a reproduced baseline and
+  appropriate deterministic or live evidence; approved execution never
+  bypasses policy or candidate checks.
+- [ ] The live report separates required approvals from routing alternatives,
+  accepted patches from completed runs, and active time from operator waits.
+  It includes the reserved task and retains failures. Reduced detours are
+  assessed alongside acceptance and completion; a faster failed run is not an
+  improvement. If the pilot does not support a reliability improvement,
+  revisit this release claim before packaging.
+- [ ] Existing independent-validation, worker-selection, network-selection,
+  cancellation, and credential-handling guarantees pass their regressions.
+- [ ] The exact installed package and publication pass the recorded release
+  checks, with documentation describing the behavior actually delivered.
+
+Keep the eight-iteration and two-calls-per-adapter limits, 95% automatic
+completion threshold, fresh independent validation after every worker attempt,
+and explicit acceptance review. Provider selection stays fixed for a run;
+direct TypeSafe/Jev remains the default. A benchmark result alone cannot change
+that default, thresholds, permissions, or approvals.
+
+Durable resume is proposed for [v0.6](#v06-draft-saved-runs-and-safe-resume).
+Unattended approval, automatic provider/worker failover, expanded command
+permissions, new provider transports, and a general setup wizard remain
+separate candidate milestones. This draft focuses v0.4 on the existing bounded
+workflow. Traces remain diagnostic records.
+
+## v0.5 candidate: terminal presentation and interaction
+
+Requested on 2026-10-17: make `dev-agent` look and feel better, potentially
+using a Node terminal UI library. Recommended placement is v0.5, alongside
+v0.4's clearer blocker messages and output grouping. The visual work is on the
+roadmap; its release assignment and library selection remain provisional.
+
+The current CLI uses `console.log` and `node:readline/promises` in
+`src/cli.ts`. Presentation can move behind a small CLI-owned adapter while
+policy, candidate selection, approval decisions, and execution retain their
+existing boundaries. The intended experience includes a concise run header,
+readable action/parameter review, consistent status labels, phase progress,
+keyboard-friendly alternatives, and a clear validation/result summary.
+
+### Initial library shortlist
+
+Official documentation and public npm metadata checked on 2026-10-17. These
+versions are research observations, not dependency selections; recheck stable
+APIs, transitive dependencies, and supported Node versions during the prototype.
+
+| Option | Fit for this CLI | Integration consideration |
+| --- | --- | --- |
+| [Clack](https://bomb.sh/docs/clack/packages/prompts/) (`@clack/prompts` 1.8.1) | First prototype candidate: styled prompts, logs, notes, and progress indicators in one toolkit. | Documents custom streams and AbortSignal support. Published Node requirement is `>=20.12.0`, compatible with this package's Node 22 floor. Verify cancellation semantics and plain rendering in our loop. |
+| [Inquirer](https://github.com/SBoudrias/Inquirer.js) (`@inquirer/prompts` 8.7.3) | Alternative for composable interactive prompts; output layout would still be our responsibility. | Documents abortable prompts and explicit handoff from readline. Its Node 22 range starts at 22.13.0, so adopting this version would require resolving the current `>=22` compatibility promise. |
+| [Ink](https://github.com/vadimdemedes/ink/blob/v8.0.0/readme.md) (`ink` 8.0.0) | Candidate if we want a persistent dashboard with React components and terminal layouts. | Published Node requirement is `>=22`; React `>=19.3.0` is a peer dependency. It adds a renderer and input lifecycle, so assess that scope against the smaller prompt-based design. |
+
+Version/engine observations come from the public registry records for
+[Clack](https://registry.npmjs.org/@clack%2fprompts/1.8.1),
+[Inquirer](https://registry.npmjs.org/@inquirer%2fprompts/8.7.3), and
+[Ink](https://registry.npmjs.org/ink/8.0.0). The recommendation to prototype
+Clack first is a project-fit judgment, not a measured performance comparison.
+No library has been installed or integrated by this planning work.
+
+### Proposed delivery and acceptance
+
+1. [ ] Build a small offline presentation prototype using synthetic run data:
+   one action review, a worker/validation progress sequence, a blocked run,
+   and a final summary. Compare Clack with the existing plain interface;
+   investigate Ink further if a persistent dashboard is a desired outcome.
+   Record the chosen library, runtime/dependency impact, and terminal behavior
+   before expanding the integration.
+2. [ ] Integrate the chosen presentation through a narrow CLI adapter.
+   Display the resolved candidate's action, parameters, worker/network
+   permissions, and reason before explicit approval. A selected alternative
+   still receives its own resolved-candidate review; completion still requires
+   acceptance review. Empty input, prompt defaults, timeout, EOF, and library
+   cancellation must never become approval or recovery. Preserve typed
+   stop/quit and signal-driven cleanup through the existing run controller.
+3. [ ] Verify interactive terminals, narrow widths, long paths, Windows/WSL,
+   and plain non-TTY/CI output. Honor `NO_COLOR`, provide readable static
+   output for accessibility, and keep JSON output and trace data free of
+   styling and spinner frames. Keep untrusted terminal control sequences from
+   obscuring the candidate review. Exercise interrupted prompts and active
+   execution, process cleanup, terminal restoration, and final exit statuses.
+   Verify the packed CLI with both styled and plain output. The presentation
+   layer must preserve budgets, validation evidence, and approval enforcement.
+
+## v0.6 draft: saved runs and safe resume
+
+Drafted on 2026-10-17 at the operator's request to plan v0.6. Saved runs and
+safe resume are the proposed focus, building on v0.4's workflow behavior and
+v0.5's presentation work. This is a design proposal; implementation has not
+started and the published CLI has no resume command.
+
+The intended outcome is to stop an opted-in orchestration run, close the
+terminal, and later continue the same task without reconstructing its context
+or losing track of consumed limits. A local history view should explain what
+happened, what remains, and whether continuation is possible. An existing
+task's partial edits stay in its working tree.
+
+### User workflow and first-release boundary
+
+Provisional command shape, to be finalized with CLI compatibility tests:
+
+```text
+dev-agent . "Fix the bug and add regression tests" --orchestrate --save-run
+dev-agent --list-runs
+dev-agent --show-run <run-id>
+dev-agent --resume <run-id>
+```
+
+Saving is opt-in for orchestration. Listing and showing runs are read-only
+local operations with bounded output. `--resume` explicitly reopens a saved
+orchestration run; every resolved action still requires approval. Keep these
+options distinct from existing repository/task positional arguments, and keep
+decision-only behavior unchanged. Run IDs resolve only inside the application's
+run store; they are not arbitrary file paths or shell arguments.
+
+The first release supports continuation on the same machine and canonical
+repository/worktree after a typed stop, an evaluation-failure stop, or a signal
+interruption whose process cleanup completed. Finished runs and runs at the
+iteration limit remain inspectable. Resume cannot grant extra iterations or
+worker calls. A new task with a new budget is a separate explicit run.
+
+An unclean termination with an unresolved execution is inspectable but cannot
+resume execution in this first slice. Never replay an uncertain action, assume
+an orphaned worker has exited, or roll back partial edits. Cross-machine
+transfer, background workers, worker-native conversation restoration, and
+automatic retry after a crash are later scope.
+
+### Saved-run and continuation contract
+
+- Store a bounded, versioned checkpoint separately from JSONL traces. Current
+  traces truncate values and arrays and cannot reconstruct complete state;
+  neither old nor new traces become executable resume inputs. Freeze the
+  checkpoint's schema, size limits, status transitions, and compatibility rules
+  before integrating execution. Unsupported versions must fail explicitly.
+- Preserve the original task, bounded approved context and its provenance,
+  repository identity, instruction/validation metadata, frozen provider/model,
+  worker selection and network permission, consumed budgets, and failure
+  history. Keep transport objects, credentials, raw environment values,
+  AbortSignal, and executable approval objects out of the format. Record only
+  non-secret configuration identity; reload credentials from the operator's
+  environment and reject provider/account or permission changes during resume.
+- Use an operator-owned application state directory outside worker-writable
+  repositories, with restricted access, bounded reads, and atomic checkpoint
+  replacement. Define integrity and sequence checks against an authoritative
+  local attempt ledger. Validate persisted content as untrusted input; a
+  checksum by itself is not authorization. Reject malformed, truncated,
+  altered, or stale checkpoints instead of repairing counters or flags.
+- Record iteration consumption before evaluation and reserve worker allowance
+  durably before dispatch. Record outcomes without charging the same attempt
+  twice. An uncertain reserved attempt stays charged and is reported as
+  uncertain, without inventing a successful execution or an approval. If a
+  required durable write fails, start no further evaluation or execution;
+  drain any active cleanup and explain the last trustworthy checkpoint.
+- Acquire exclusive ownership of the saved run and prevent another app-managed
+  run from using the same worktree concurrently. An unresolved active owner or
+  stale lock blocks execution; never kill a process based only on a saved PID.
+  The design must account for process cleanup before a run becomes resumable.
+- Refresh repository state before continuation. A different worktree, changed
+  HEAD, unavailable repository, or unbounded/ambiguous identity check blocks
+  resume. Show any working-tree drift, retain historical evidence as historical,
+  and use the existing clarification/preparation gates when task context needs
+  review. Changed instruction files require new bounded reads and approval.
+  Do not restore Git state, replace files, or revert operator edits.
+- Start a fresh validation generation on resume; prior passing checks remain
+  history and cannot authorize completion. Rebuild candidates from current
+  state and require new approvals, including acceptance review for `FINISH`.
+  Resume of an evaluation failure retains its explicit recovery requirement.
+  A saved proposal, old approval, or worker test claim grants no authority.
+- Retain the eight-iteration and two-calls-per-adapter ceilings across every
+  process segment. Selection and permission flags remain immutable; fresh
+  validation also consumes the remaining budget. Insufficient budget must
+  produce the existing bounded stop rather than silently extend the run.
+  Link segment traces and summaries by run identity while keeping metrics
+  outside authorization state. Measure active time with each process's local
+  monotonic clock; time between sessions is not active work or prompt wait.
+
+### Implementation order
+
+1. [ ] Define the checkpoint schema, attempt ledger, storage bounds, and
+   lifecycle. Document exactly which fields are restored, revalidated, or
+   historical, and how integrity, write ordering, locks, and compatibility are
+   enforced. Add offline fixtures for clean stops, exhausted limits, incomplete
+   writes, altered counters/permissions, stale checkpoints, and unresolved
+   executions. No execution path may accept a saved record until this contract
+   is validated.
+2. [ ] Add opt-in persistence to the existing orchestration lifecycle. Persist
+   budget reservations before dispatch and completed transitions afterward;
+   preserve existing signal cleanup and trace behavior. Test failures before
+   and after each durable boundary so restarting cannot duplicate execution,
+   reset budgets, or lose an in-flight attempt from the record.
+3. [ ] Add local run listing and inspection with the plain and styled CLI
+   presentation. Show task/repository identity, last status, remaining budgets,
+   pending validation, failure/interruption, and a specific resume blocker.
+   These commands must not call a provider, invoke a worker, or change the
+   selected repository. Keep context bounded and credentials redacted.
+4. [ ] Add explicit resume for eligible saved runs. Resolve the same repository
+   and immutable configuration, obtain exclusive ownership, refresh evidence,
+   invalidate validation, and enter the loop at the next unconsumed iteration.
+   Retain approved clarification provenance and failure history; require the
+   existing action, recovery, and completion decisions. Incompatible or
+   incomplete records remain inspectable without being executable.
+5. [ ] Verify and prepare v0.6.0. Exercise stop/restart/resume through mocked
+   provider/process boundaries for both workers and all supported routes, plus
+   an operator-authorized live stop/resume walkthrough for each worker. Cover
+   cancellation, EOF, changed worktrees/instructions, missing credentials,
+   storage failures, concurrent resumes, and exhausted budgets. Run focused
+   tests, typecheck, the full suite, build, schema validation, and installed
+   package checks; document migration, local storage, and known limits. Record
+   release source and archive evidence, give advance npm authentication notice,
+   and verify publication through a separate registry installation.
+
+### Release gate
+
+- [ ] A cleanly stopped saved run resumes in a new CLI process, preserves task
+  context and remaining limits, and finishes only after fresh validation and
+  explicit acceptance approval. Both worker adapters are covered.
+- [ ] Old approvals, changed permissions, wrong repository identity, tampered
+  or incompatible state, unresolved attempts, and concurrent owners cannot
+  cause execution. Exhausted budgets cannot be reset through resume.
+- [ ] Failure-injection tests establish durable write ordering and conservative
+  attempt accounting. Trace compatibility, credential exclusion, cleanup, and
+  preservation of operator edits pass their regressions.
+- [ ] History and both presentation modes clearly distinguish resumable,
+  blocked, finished, and budget-exhausted runs. The exact installed package and
+  recorded live walkthroughs pass before release.
 
 ## v0.3.0 release: multiple decision models
 
@@ -480,24 +841,30 @@ download and registry installation evidence are retained in
 
 ## Current baseline
 
-- The initial local scaffold was `48cf6f0`, but the GitHub remote is now
-  populated and `main` contains subsequent work; do not treat the remote or the
-  original scaffold's file list as current state.
-- Node.js 22+, TypeScript, pnpm, Vitest, JSONL traces, and AI SDK `7.0.106`.
-- Jev defaults to direct TypeSafe with `jev-latest`; `JEV_PROVIDER` can also
-  select OpenRouter or the existing Vercel AI SDK evaluation transport.
-  `.env.example` documents each provider's credential and model namespace.
-- The CLI gathers an `AgentState`, asks independent completion, information,
-  testing, stuck, and next-action questions, normalizes Jev probabilities and
-  confidence metadata, and applies deterministic local policy.
-- Live evaluation is bounded to 10 seconds and one retry; errors are
-  credential-safe. Gateway calls use standard data retention
-  (`zeroDataRetention: false`), so send only repository data authorized for
-  that service.
-- Mock Jev evaluation remains token-free and offline; an explicitly approved
-  coding-agent alternative still invokes the real agent. The last recorded
-  release gate (2026-09-21) passed `pnpm check`, `pnpm test` (111 tests), and
-  `pnpm build`.
+As of 2026-10-17:
+
+- Published package `dev-orchestrator@0.3.1`, executable `dev-agent`;
+  [release source and verification](docs/releases/dev-orchestrator-0.3.1.md).
+  The initial scaffold `48cf6f0` and completed milestones below are historical.
+- Node.js 22+, strict TypeScript, pnpm, Vitest, JSONL traces, AI SDK `7.0.106`,
+  and pinned Varlock `1.22.0` development tooling.
+- `ROUTER_PROVIDER` selects direct TypeSafe, OpenRouter, Vercel, or Cloudflare;
+  `JEV_PROVIDER` and the documented credential/model aliases remain compatible.
+  Jev defaults to direct TypeSafe with `jev-latest`. Clef, Clef-flash, and
+  OpenAI Decisions are explicit alternatives. Account-specific live access
+  and the six tested provider/model routes are recorded in the v0.3 history.
+- Decision-only remains the default. Explicit orchestration includes bounded
+  preparation and diagnostics, manual approval, either coding worker,
+  controlled repair, current-generation validation, acceptance review,
+  in-process evaluation recovery, signal cancellation, and run summaries.
+- The shared evaluator normalizes completion, information, testing, stuck,
+  and next-action answers. Live evaluation retains a 10-second deadline and
+  at most one transient retry; local policy remains authoritative.
+- Mock evaluation is offline and keyless; an explicitly approved coding-agent
+  alternative still invokes the real worker. Published v0.3.1 verification
+  passed typecheck, 1,084 tests, and production build. Its 47 installed CLI
+  checks passed both before publication and through a separate public registry
+  installation.
 
 The current action vocabulary is:
 
@@ -515,6 +882,9 @@ type Action =
 ```
 
 ## Work plan
+
+Completed initial milestones follow; the active planning proposal is
+[v0.4](#v04-draft-reliable-task-workflows).
 
 1. [x] Make setup predictable.
    - Pin the tested AI SDK release.
