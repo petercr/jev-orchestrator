@@ -904,6 +904,26 @@ does not train on user data and offers enterprise zero data retention. This
 client does not guarantee zero retention for any provider. Review the selected
 service's terms and send only repository data you authorize for that service.
 
+## Next milestone: v0.4 draft
+
+The [v0.4 proposal](PLAN.md#v04-draft-reliable-task-workflows) focuses on getting
+bounded coding tasks through implementation, validation, and acceptance review
+with fewer avoidable routing detours. It starts with complete workflow
+reproductions, clearer explanations of blockers, focused routing fixes, and a
+bounded live comparison. Implementation has not started; the published CLI
+remains v0.3.1 with its existing approval and validation requirements.
+
+A [v0.5 presentation candidate](PLAN.md#v05-candidate-terminal-presentation-and-interaction)
+tracks styled prompts, phase progress, and clearer action/result displays.
+The initial shortlist is Clack, Inquirer, and Ink, with Clack proposed for the
+first offline prototype. Library selection and release placement are tentative.
+
+The [v0.6 draft](PLAN.md#v06-draft-saved-runs-and-safe-resume) proposes opt-in
+saved runs, local history, and continuation after a clean stop. It preserves
+remaining budgets and requires fresh validation and action approvals. Its
+saved-run format would be separate from diagnostic traces. This capability is
+planned, not available in the published CLI.
+
 ## v0.3 decision-model release
 
 Version 0.3 adds explicit Cloudflare Clef/Clef-flash and OpenAI Decisions
