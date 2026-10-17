@@ -2,9 +2,9 @@
 
 Published [dev-orchestrator@0.3.0](https://www.npmjs.com/package/dev-orchestrator/v/0.3.0)
 on 2026-10-17 at 18:39:29 UTC through npm account `petercr`, after PR #46 merged
-and the operator completed npm's browser authorization. Public registry metadata
-reports `latest: 0.3.0`; its credential-free archive download matches the exact
-preverified archive byte for byte.
+and the operator completed npm's browser authorization. At publication, public
+registry metadata reported `latest: 0.3.0`; its credential-free archive download
+matches the exact preverified archive byte for byte.
 
 The operator selected `dev-orchestrator` (Decisions + Jev) after confirming that
 the existing `jev-orchestrator` npm package belongs to another project. The

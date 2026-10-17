@@ -138,3 +138,7 @@ Mock at process and provider boundaries, not inside policy logic. Prefer tests t
 Keep changes small and milestone-aligned. Avoid introducing a framework when a typed function or narrow module is sufficient. If behavior, environment variables, CLI flags, action names, or safety boundaries change, update `README.md`, `.env.example`, types, mock data, and tests in the same change as applicable.
 
 Do not modify unrelated user changes in a dirty worktree. Do not commit build output, traces, credentials, or downloaded artifacts.
+
+Give the operator advance notice before starting an npm publication that may
+open a timed browser authorization prompt. Explain that npm authentication will
+be needed before launching the publish command, so they can be ready.

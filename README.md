@@ -6,11 +6,11 @@ Jev is the default; Cloudflare Clef/Clef-flash and OpenAI Decisions through
 OpenRouter are explicit alternatives.
 
 The npm package is `dev-orchestrator`; the CLI command is `dev-agent` from
-v0.3.1 onward. Version 0.3.1 is prepared in this checkout and awaits publication.
+v0.3.1 onward.
 The GitHub repository keeps its existing name. The original v0.3.0 GitHub
 archive is recorded separately under its historical `jev-orchestrator` name;
 that unscoped npm package belongs to another project.
-[dev-orchestrator@0.3.0](https://www.npmjs.com/package/dev-orchestrator/v/0.3.0)
+[dev-orchestrator@0.3.1](https://www.npmjs.com/package/dev-orchestrator/v/0.3.1)
 was published on 2026-10-17.
 
 The default mode remains **decision-only**: it inspects a repository, sends a
@@ -789,12 +789,12 @@ Version 0.3.1 renames the executable from `jev-agent` to `dev-agent`. Update
 shell commands, package scripts, and CI invocations when upgrading; the new
 package exposes only `dev-agent`. Flags and configuration remain compatible.
 
-The published 0.3.0 package still uses its original `jev-agent` command:
+Install the published package and run `dev-agent`:
 
 ```bash
-pnpm add --save-dev dev-orchestrator@0.3.0
-pnpm exec jev-agent --version
-pnpm exec jev-agent . "Inspect this repository and choose the safest useful first action" \
+pnpm add --save-dev dev-orchestrator@0.3.1
+pnpm exec dev-agent --version
+pnpm exec dev-agent . "Inspect this repository and choose the safest useful first action" \
   --mock --no-trace --json
 ```
 
@@ -816,8 +816,7 @@ pnpm exec dev-agent . "Inspect this repository and choose the safest useful firs
 
 The expected mock result is one JSON object with `status: "unexecuted"`; it
 must not edit the target project or require an API key. The installed version
-must report `0.3.1` for the checkout's archive (`0.3.0` for the published package
-above). Do not pack or publish
+must report `0.3.1`. Do not pack or publish
 `.env`, traces, build cache, or `node_modules`.
 
 Initial provider milestone verification on 2026-10-03 passed typecheck, all 269 tests,
@@ -913,8 +912,8 @@ with compatibility aliases, model attribution, and opt-in comparison tooling.
 See the [release notes](CHANGELOG.md) for migration, configuration, prerequisites,
 data handling, and limitations. The npm package is now `dev-orchestrator`,
 with a Node.js 22+ requirement. Published version `0.3.0` uses `jev-agent`;
-the prepared `0.3.1` renames the command to `dev-agent`. The
-[0.3.0 publication record](docs/releases/dev-orchestrator-0.3.0.md)
+published `0.3.1` renames the command to `dev-agent`. The
+[0.3.1 publication record](docs/releases/dev-orchestrator-0.3.1.md)
 includes source attribution, checksums, and registry installation verification.
 The original GitHub release
 archive and its checksum remain recorded under `jev-orchestrator@0.3.0`.
