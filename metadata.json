@@ -1,0 +1,32 @@
+{
+  "cli_version": "0.11.6-nightly.202610170622.9254299eb",
+  "checkpoint_id": "01M55MVY9256TRJW1JV6WQECHC",
+  "strategy": "manual-commit",
+  "branch": "docs/dev-agent-npm-publication",
+  "checkpoints_count": 1,
+  "files_touched": [
+    "AGENTS.md",
+    "CHANGELOG.md",
+    "PLAN.md",
+    "README.md",
+    "docs/releases/dev-orchestrator-0.3.0.md",
+    "docs/releases/dev-orchestrator-0.3.1.md"
+  ],
+  "sessions": [
+    {
+      "metadata": "/0/metadata.json",
+      "transcript": "/0/full.jsonl",
+      "compact_transcript": "/0/transcript.jsonl",
+      "content_hash": "/0/content_hash.txt",
+      "prompt": "/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 45176,
+    "cache_creation_tokens": 0,
+    "cache_read_tokens": 5322112,
+    "output_tokens": 23848,
+    "api_call_count": 36,
+    "subagent_tokens_complete": true
+  }
+}
