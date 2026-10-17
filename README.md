@@ -8,8 +8,9 @@ OpenRouter are explicit alternatives.
 The npm package is `dev-orchestrator`; the CLI command remains `jev-agent`.
 The GitHub repository keeps its existing name. The original v0.3.0 GitHub
 archive is recorded separately under its historical `jev-orchestrator` name;
-that unscoped npm package belongs to another project. The new npm package is
-being prepared for its first publication.
+that unscoped npm package belongs to another project.
+[dev-orchestrator@0.3.0](https://www.npmjs.com/package/dev-orchestrator/v/0.3.0)
+was published on 2026-10-17.
 
 The default mode remains **decision-only**: it inspects a repository, sends a
 compact state object to the selected decision model, applies deterministic
@@ -783,8 +784,16 @@ The tarball contains the compiled runtime JavaScript and declarations under
 not published. The `prepack` lifecycle runs the production build before a
 tarball is created.
 
-To verify the package in your own separate project, first create a tarball from
-this repository:
+Install the published package in your own project and run the compatible CLI:
+
+```bash
+pnpm add --save-dev dev-orchestrator@0.3.0
+pnpm exec jev-agent --version
+pnpm exec jev-agent . "Inspect this repository and choose the safest useful first action" \
+  --mock --no-trace --json
+```
+
+To verify a local checkout's package, first create a tarball from this repository:
 
 ```bash
 pnpm pack --out /absolute/path/to/dev-orchestrator-%v.tgz
@@ -897,15 +906,16 @@ through OpenRouter, shared assessment enforcement, provider-neutral selection
 with compatibility aliases, model attribution, and opt-in comparison tooling.
 See the [release notes](CHANGELOG.md) for migration, configuration, prerequisites,
 data handling, and limitations. The npm package is now `dev-orchestrator`,
-with the compatible `jev-agent` executable and Node.js 22+ requirement. Its
-first registry publication remains pending. The original GitHub release
+with the compatible `jev-agent` executable and Node.js 22+ requirement. Version
+`0.3.0` is published on npm; the [publication record](docs/releases/dev-orchestrator-0.3.0.md)
+includes source attribution, checksums, and registry installation verification.
+The original GitHub release
 archive and its checksum remain recorded under `jev-orchestrator@0.3.0`.
 
 The direct TypeSafe/Jev default, manual approvals, worker restrictions,
-validation requirements, and policy thresholds are preserved. Release
-preparation does not create a tag, GitHub release, or registry publication;
-those follow the maintainer's release workflow after the release commit and
-verification evidence are recorded in PLAN.
+validation requirements, and policy thresholds are preserved. The GitHub and
+npm releases have separate artifacts, with their source and verification
+evidence recorded in PLAN.
 
 ## v0.2 orchestration release
 

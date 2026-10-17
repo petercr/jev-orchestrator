@@ -1,24 +1,29 @@
-# dev-orchestrator 0.3.0 npm candidate
+# dev-orchestrator 0.3.0 npm publication
 
-Prepared and verified on 2026-10-17. npm publication remains pending: this
-machine needs an authenticated npm account, and the final merged release source
-must be recorded before publishing the verified archive.
+Published [dev-orchestrator@0.3.0](https://www.npmjs.com/package/dev-orchestrator/v/0.3.0)
+on 2026-10-17 at 18:39:29 UTC through npm account `petercr`, after PR #46 merged
+and the operator completed npm's browser authorization. Public registry metadata
+reports `latest: 0.3.0`; its credential-free archive download matches the exact
+preverified archive byte for byte.
 
 The operator selected `dev-orchestrator` (Decisions + Jev) after confirming that
 the existing `jev-orchestrator` npm package belongs to another project. The
-registry returned `E404` for the new name on 2026-10-17; this observation does
-not reserve the name or establish publishing permission.
+registry returned `E404` for the new name before publication on 2026-10-17.
 
-| Item | Candidate |
+| Item | Release |
 | --- | --- |
 | Package | `dev-orchestrator@0.3.0` |
 | Compatible executable | `jev-agent` |
 | Source repository | `petercr/jev-orchestrator` |
 | Baseline before rename | `5b2782faddd8fff507cda8f73fa2949be142c0e3` |
-| Candidate source | Baseline plus the package-identity changes; uncommitted at packing |
+| Preparation commit | `337c65c6d1609570be78aae34181091e3b6f4aa7` |
+| Final merged release source | `c6edb841b7a06952a4c1d99cb6ca42e7146b533d` |
+| Release tree | `33b725d5bbd8d0952c21d977ae97e0ee3b652a9a` |
 | Archive | `dev-orchestrator-0.3.0.tgz` |
 | Size | 83,021 bytes |
 | SHA-256 | `1a50bc543657832df9fa8c0ba73dbc97ee7575f7838eba87aa650d1d2ce97a45` |
+| Registry SHA-1 | `f25725f9eba6d3e1da79d5727655e9ec32f18ffb` |
+| Registry integrity | `sha512-hE8RAKTr6hx7SFnPRpKt5R8LVYL7L6fs+b0R+Z1bXLfgN5rCnSMrEHR25MgBS3GHUUHm93UaxPAja1I/x0wmyg==` |
 
 Package metadata now includes the new name and source repository. README,
 release notes, repository guidance, and human CLI banners use Dev Orchestrator.
@@ -42,16 +47,36 @@ Verification passed:
 - Runtime comparison against the original GitHub archive: every compiled file
   matches byte for byte after the two CLI banners change from Jev to Dev.
 - `npm publish <archive> --dry-run --ignore-scripts` accepted the renamed
-  package and reported the expected name, version, and 68-file payload. This
-  made no registry publication and still requires npm authentication.
+  package and reported the expected name, version, and 68-file payload before
+  the separately authorized publication.
+- Public registry metadata confirms the name, version, `latest` tag, maintainer,
+  repository URL, executable, and matching SHA-1/SHA-512 integrity. The public
+  tarball is 83,021 bytes and matches the recorded SHA-256 and saved archive.
+- A separate registry installation with lifecycle scripts disabled passed the
+  same 47 installed CLI checks and 18 mocked transport requests. No live model
+  or worker was called, and the consumer stayed unchanged. pnpm initially
+  rejected the just-published version under its minimum-release-age setting;
+  the disposable consumer then excluded only `dev-orchestrator@0.3.0` from
+  that setting, after the public archive's bytes had been verified.
+  All 68 installed package files match the public archive, its executable mode
+  is preserved, and the consumer lockfile records the registry integrity.
 
 The archive, verifier, offline installation log, 47-check report, package audit,
 and source-file hashes are retained locally under
-`/home/peterc/.cache/jev-package-checks/dev030-dxotlxn0`. Source hashes preserve
-the candidate attribution until its final commit is recorded after merge.
+`/home/peterc/.cache/jev-package-checks/dev030-dxotlxn0`. The archive was packed
+before the preparation commit. Before publication, the merge and preparation
+trees were verified identical and all 72 recorded source-file hashes matched
+the merged release source. The preflight record includes the final commit,
+tree, archive SHA-256/SHA-1/SHA-512, npm account, and registry. No repack or
+source change was needed after merge.
+
+Public download metadata, the registry verifier, installation logs, and the
+second 47-check report are retained in the `registry-verification/` subdirectory.
+The publication record is a documentation follow-up to the release source above;
+it does not change or repack the published archive.
 
 The [published GitHub v0.3.0 archive](v0.3.0.md) retains its original
 `jev-orchestrator@0.3.0` identity, filename, and SHA-256. Its public release and
 tag were not replaced. Historical worker benchmarks also retain their measured
-package names. This separately named npm candidate has its own archive and
-checksum; neither artifact establishes that the other was published to npm.
+package names. The separately named npm package has its own archive and
+checksum.

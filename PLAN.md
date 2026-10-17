@@ -37,7 +37,8 @@ Decisions through OpenRouter as explicit alternatives. Package verification
 and release notes are complete. The final release commit and archive were
 recorded and checked on 2026-10-17. The `v0.3.0` tag and
 [GitHub release](https://github.com/petercr/jev-orchestrator/releases/tag/v0.3.0)
-were published that day; registry publication remains pending.
+were published that day, followed by the separately named
+[dev-orchestrator@0.3.0 npm release](docs/releases/dev-orchestrator-0.3.0.md).
 Historical milestones below describe the implementation at the time they were
 completed.
 
@@ -376,16 +377,14 @@ GitHub's asset digest and credential-free public download both matched the
 recorded SHA-256; the public archive is 82,556 bytes. Publication evidence is
 retained under `/home/peterc/.cache/jev-release-checks/v030-mb0tqeg9`.
 
-Registry publication remains pending. A 2026-10-17 npm preflight found no
-authenticated account on this machine; the unscoped `jev-orchestrator` listing
+An initial 2026-10-17 npm preflight found no authenticated account on this
+machine; the unscoped `jev-orchestrator` listing
 identified `KaiyoDev/jev-orchestrator`, maintainer `kaiyodev06`, and latest
-version `0.3.1`. No registry publication was attempted. Use the verified
+version `0.3.1`. The operator confirmed that this npm package is not theirs
+and selected `dev-orchestrator` for the separate npm package, subsequently
+published as recorded below. The verified
 [GitHub archive](https://github.com/petercr/jev-orchestrator/releases/download/v0.3.0/jev-orchestrator-0.3.0.tgz)
-for this release. Registry ownership/access or a separately approved package
-scope must be resolved before publishing there; the original package name and
-verified GitHub archive were preserved. The operator subsequently confirmed
-that the existing npm package is not theirs and selected `dev-orchestrator`
-for the separate npm package.
+retains its original package name and checksum.
 
 Use this comparison to extend the matched worker benchmarks already tracked in
 issue #31: fix the worker/model/effort, permissions, task baseline, and approval
@@ -409,25 +408,34 @@ labels, policy, validation requirements, and worker permissions remain intact.
 Historical benchmark fixtures and the published `jev-orchestrator@0.3.0`
 GitHub archive retain their original identity and checksum.
 
-The public npm registry returned `E404` for `dev-orchestrator` on 2026-10-17;
-this is an availability observation, not a reservation or permission grant.
-Registry publication still requires an authenticated account and a final
-release-source record for the renamed package.
+PR #46 merged on 2026-10-17 as `c6edb841b7a06952a4c1d99cb6ca42e7146b533d`,
+tree `33b725d5bbd8d0952c21d977ae97e0ee3b652a9a`. The preparation and merge
+trees are identical, and all 72 recorded source hashes match the final merged
+release source. After the operator's npm browser authorization, account
+`petercr` published [dev-orchestrator@0.3.0](https://www.npmjs.com/package/dev-orchestrator/v/0.3.0)
+at 18:39:29 UTC on 2026-10-17. Public metadata reports `latest: 0.3.0`.
 
-Prepared and verified on 2026-10-17: [npm candidate record](docs/releases/dev-orchestrator-0.3.0.md).
+Published and verified on 2026-10-17: [npm publication record](docs/releases/dev-orchestrator-0.3.0.md).
 The exact `dev-orchestrator-0.3.0.tgz` archive installed offline and passed 47
 installed checks, including the compatible executable, Dev Orchestrator banner,
 all six mocked model routes, aliases/defaults, keyless mocks, and configuration
 preflight. Its 68 allowlisted files match the installed consumer; compiled
 runtime bytes match the original release except the two human CLI banners.
 Verification passed: 39 focused CLI tests, typecheck, all 1,084 tests, production
-build, schema validation, and npm's publish dry run. The dry run made no registry
-publication and still reported the missing login. Archive SHA-256:
+build, schema validation, and npm's publish dry run. After publication, the
+credential-free registry download matched the saved archive byte for byte,
+including npm's SHA-1/SHA-512 metadata. A separate registry installation passed
+the same 47 checks with lifecycle scripts disabled and only this exact package
+version excluded from pnpm's minimum-release-age setting in the disposable
+consumer. Archive SHA-256:
 `1a50bc543657832df9fa8c0ba73dbc97ee7575f7838eba87aa650d1d2ce97a45`.
 Archive, source hashes, install logs, and inspection results are retained under
 `/home/peterc/.cache/jev-package-checks/dev030-dxotlxn0`. The candidate was packed
-from baseline `5b2782faddd8fff507cda8f73fa2949be142c0e3` with these pending
-rename changes; record the final merged source before registry publication.
+from baseline `5b2782faddd8fff507cda8f73fa2949be142c0e3` with the rename
+changes later merged in PR #46. Its final merged source and publish preflight
+are recorded above and in the npm package's release record. Public download
+and registry installation evidence are retained in `registry-verification/`
+under the same local evidence directory.
 
 ## Current baseline
 
