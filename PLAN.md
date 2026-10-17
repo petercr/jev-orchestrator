@@ -34,9 +34,10 @@ queries, or tool arguments.
 Release candidate prepared and verified on 2026-10-16: v0.3.0. The shared
 evaluation boundary supports Jev, Cloudflare Clef/Clef-flash, and OpenAI
 Decisions through OpenRouter as explicit alternatives. Package verification
-and release notes are complete; recording the final release commit, tagging,
-and publication remain pending. Historical milestones below describe the
-implementation at the time they were completed.
+and release notes are complete. The final release commit and archive were
+recorded and checked on 2026-10-17; tagging and publication remain pending.
+Historical milestones below describe the implementation at the time they were
+completed.
 
 The release delivers explicit selection among Jev, Cloudflare Clef/Clef-flash,
 and OpenAI Decisions through OpenRouter, with one shared policy contract.
@@ -322,8 +323,20 @@ new model routes remain the later slices below.
    install log, verification script/results, and package audit are under
    `/home/peterc/.cache/jev-package-checks/v030-release-0o9aejkm`.
    Source baseline is merged PR #43, `a733daf1ec1d0265cbed0a548dffdc8dfe705fce`,
-   plus the pending release-preparation changes. The final release commit must
-   still be recorded after commit/merge; no tag, release, or publication was made.
+   plus the release-preparation changes committed as
+   `cbde15963e6e3d37c131879ae822a2e1a6af792d` and merged by PR #44.
+   Final release source: `6bbb666cb42f10afb843adf11cc49d0104434164`, tree
+   `cfee3962d647a0305e6be4650fc75eacb7d2183e`. On 2026-10-17, the GitHub
+   connector confirmed the merge, and a local audit verified that the prepared
+   and merged source trees are identical, all 40 recorded source hashes match
+   the release commit, and the saved archive retains the checksum above. All
+   68 archive files match the installed consumer; runtime files match the
+   current source-module set and compiled checkout, and packaged documents
+   match the release commit. The installed CLI still reports `0.3.0`.
+   The [final release record](docs/releases/v0.3.0.md) pins this source and
+   artifact without claiming a tag or publication. This follow-up changes
+   documentation only; the successful 1,084 tests and 46 installed checks above
+   apply to the identical release source. No live provider or worker was called.
 
 ### v0.3.0 release gate
 
@@ -347,9 +360,12 @@ new model routes remain the later slices below.
 - [x] Package inspection excludes tests, traces, credentials, dependencies,
   and local artifacts. Release notes describe new model routes, migration,
   model namespaces, prerequisites/data handling, and known limitations.
-- [ ] Record the final release commit and verification evidence before creating
+- [x] Record the final release commit and verification evidence before creating
   the v0.3.0 tag/release or publishing the package through the maintainer's
   release workflow. A planning update or version bump alone is not a release.
+
+All preparation gates are complete. Creating the `v0.3.0` tag/GitHub release
+and publishing the verified archive remain pending.
 
 Use this comparison to extend the matched worker benchmarks already tracked in
 issue #31: fix the worker/model/effort, permissions, task baseline, and approval
