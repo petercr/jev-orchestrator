@@ -448,7 +448,7 @@ export async function runCliOrchestration(options: CliOptions): Promise<Orchestr
     terminal.on('SIGINT', sigint);
     const prompts = terminal;
 
-    console.log('\nJev Orchestrator — approval-gated orchestration');
+    console.log('\nDev Orchestrator — approval-gated orchestration');
     console.log(`Repo: ${redactSensitiveText(repo.root)}`);
     console.log(`Task: ${redactSensitiveText(options.task)}`);
     console.log(`Mode: ${options.mock ? 'mock' : `live (${configuration?.provider ?? 'interrupted'})`}`);
@@ -478,7 +478,7 @@ export async function runCliOrchestration(options: CliOptions): Promise<Orchestr
 
 function printHumanDecision(decision: DecisionOutput): void {
   const { assessment, policy } = decision;
-  console.log('\nJev Orchestrator — decision-only milestone');
+  console.log('\nDev Orchestrator — decision-only milestone');
   console.log('Status: unexecuted decision (no tools or coding agents ran)\n');
   console.log(`Repo: ${decision.repo.root}`);
   console.log(`Task: ${decision.task}`);

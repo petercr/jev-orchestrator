@@ -1,9 +1,15 @@
-# Jev Orchestrator
+# Dev Orchestrator
 
 A deliberately small Node/TypeScript experiment for testing whether typed
 decision models can make useful next-step decisions around a coding agent.
 Jev is the default; Cloudflare Clef/Clef-flash and OpenAI Decisions through
 OpenRouter are explicit alternatives.
+
+The npm package is `dev-orchestrator`; the CLI command remains `jev-agent`.
+The GitHub repository keeps its existing name. The original v0.3.0 GitHub
+archive is recorded separately under its historical `jev-orchestrator` name;
+that unscoped npm package belongs to another project. The new npm package is
+being prepared for its first publication.
 
 The default mode remains **decision-only**: it inspects a repository, sends a
 compact state object to the selected decision model, applies deterministic
@@ -781,14 +787,14 @@ To verify the package in your own separate project, first create a tarball from
 this repository:
 
 ```bash
-pnpm pack --out /absolute/path/to/jev-orchestrator-%v.tgz
+pnpm pack --out /absolute/path/to/dev-orchestrator-%v.tgz
 ```
 
 Then, from the other project, install that exact archive and run the installed
 binary against that project:
 
 ```bash
-pnpm add --save-dev /absolute/path/to/jev-orchestrator-0.3.0.tgz
+pnpm add --save-dev /absolute/path/to/dev-orchestrator-0.3.0.tgz
 pnpm exec jev-agent --version
 pnpm exec jev-agent . "Inspect this repository and choose the safest useful first action" \
   --mock --no-trace --json
@@ -890,8 +896,10 @@ Version 0.3 adds explicit Cloudflare Clef/Clef-flash and OpenAI Decisions
 through OpenRouter, shared assessment enforcement, provider-neutral selection
 with compatibility aliases, model attribution, and opt-in comparison tooling.
 See the [release notes](CHANGELOG.md) for migration, configuration, prerequisites,
-data handling, and limitations. The package remains `jev-orchestrator` with
-the `jev-agent` executable and Node.js 22+ requirement.
+data handling, and limitations. The npm package is now `dev-orchestrator`,
+with the compatible `jev-agent` executable and Node.js 22+ requirement. Its
+first registry publication remains pending. The original GitHub release
+archive and its checksum remain recorded under `jev-orchestrator@0.3.0`.
 
 The direct TypeSafe/Jev default, manual approvals, worker restrictions,
 validation requirements, and policy thresholds are preserved. Release
