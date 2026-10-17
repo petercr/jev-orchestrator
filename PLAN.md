@@ -437,6 +437,30 @@ are recorded above and in the npm package's release record. Public download
 and registry installation evidence are retained in `registry-verification/`
 under the same local evidence directory.
 
+## CLI command: dev-agent (v0.3.1)
+
+After PR #47 merged on 2026-10-17, the operator requested that the CLI command
+match the npm package's Dev branding. Version `0.3.1` changes the package's
+executable from `jev-agent` to `dev-agent`, updates help and current usage
+examples, and documents migration for shell commands, package scripts, and CI.
+The package exposes only `dev-agent`. This request supersedes the earlier
+executable-compatibility constraint for the next release.
+
+Published v0.3.0 archives and historical benchmark/release records retain their
+original executable names. Provider configuration, policy, approval, and worker
+permissions are unchanged. Version 0.3.1 publication remains pending.
+
+Verification on 2026-10-17 passed 39 focused CLI tests, typecheck, all 1,084
+tests, and the production build through `pnpm pack`. A separate offline
+installation passed 47 CLI checks with 18 mocked transport requests and no
+live model or worker calls. It exposes only `dev-agent`; all 68 installed files
+match the archive and retain the executable mode. The 83,471-byte archive's
+SHA-256 is `0887ace54f08dce131b450ea22025fffe94e47c7f9e58a3373f1503d58edc3d7`.
+Archive, source hashes, install log, and reports are retained under
+`/home/peterc/.cache/jev-package-checks/dev031-1x1cbspe`. The archive was packed
+from baseline `53ad58621d46172e2ad5e64f81011e0c761fe70c` with these uncommitted
+changes; record its final merged source before publication.
+
 ## Current baseline
 
 - The initial local scaffold was `48cf6f0`, but the GitHub remote is now

@@ -35,7 +35,7 @@ describe('offline CLI integration', () => {
 
     await main(['--version']);
 
-    expect(log).toHaveBeenCalledExactlyOnceWith('0.3.0');
+    expect(log).toHaveBeenCalledExactlyOnceWith('0.3.1');
   });
 
   it('inspects a temporary repository and emits one JSON decision in mock mode', async () => {

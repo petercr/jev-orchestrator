@@ -1,6 +1,6 @@
 {
   "name": "dev-orchestrator",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "description": "A small coding-agent orchestrator with selectable decision models.",
   "license": "MIT",
   "repository": {
@@ -9,7 +9,7 @@
   },
   "type": "module",
   "bin": {
-    "jev-agent": "./dist/cli.js"
+    "dev-agent": "./dist/cli.js"
   },
   "files": [
     "dist/**/*.js",
