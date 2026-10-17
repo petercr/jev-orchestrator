@@ -2,7 +2,9 @@
 
 ## dev-orchestrator 0.3.0 — npm package identity
 
-First npm publication is being prepared. The operator selected
+First published on npm on 2026-10-17 as
+[dev-orchestrator@0.3.0](https://www.npmjs.com/package/dev-orchestrator/v/0.3.0).
+The operator selected
 `dev-orchestrator` on 2026-10-17 because the decision models include Decisions
 and Jev. The existing `jev-orchestrator` npm listing belongs to another project.
 
@@ -12,9 +14,10 @@ and Jev. The existing `jev-orchestrator` npm listing belongs to another project.
   policy, worker permissions, and Node.js 22+ requirement.
 - Use Dev Orchestrator in the human-readable CLI banners and README.
 - Include the source repository URL in package metadata.
-- Install the newly verified `dev-orchestrator-0.3.0.tgz` archive while npm
-  publication is pending. The original GitHub release archive stays unchanged
-  under its historical name and checksum.
+- Install from npm with `pnpm add --save-dev dev-orchestrator@0.3.0`. The
+  public archive matches the preverified tarball, and a separate registry
+  installation passed all 47 installed CLI checks. The original GitHub release
+  archive retains its historical name and checksum.
 
 The model routes, prerequisites, data handling, and limitations below also
 apply to the renamed package.
