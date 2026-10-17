@@ -5,7 +5,8 @@ decision models can make useful next-step decisions around a coding agent.
 Jev is the default; Cloudflare Clef/Clef-flash and OpenAI Decisions through
 OpenRouter are explicit alternatives.
 
-The npm package is `dev-orchestrator`; the CLI command remains `jev-agent`.
+The npm package is `dev-orchestrator`; the CLI command is `dev-agent` from
+v0.3.1 onward. Version 0.3.1 is prepared in this checkout and awaits publication.
 The GitHub repository keeps its existing name. The original v0.3.0 GitHub
 archive is recorded separately under its historical `jev-orchestrator` name;
 that unscoped npm package belongs to another project.
@@ -77,7 +78,7 @@ them. Setup does not rewrite your existing local values. See
 [Varlock's local encryption guide](https://varlock.dev/guides/local-encryption/).
 
 Varlock is checkout tooling, rather than a runtime dependency of the published
-`jev-agent`. Installed consumers can keep exporting credentials or use Node's
+`dev-agent`. Installed consumers can keep exporting credentials or use Node's
 `--env-file` with plaintext dotenv files; they can also supply environment values
 through their own Varlock setup.
 
@@ -412,7 +413,7 @@ Approving `READ_ISSUE` also performs its real bounded GitHub read in mock mode.
 Choose a coding worker for a run with `--worker codex` or `--worker claude`:
 
 ```bash
-jev-agent ../my-app "Fix the linked issue" --orchestrate --worker codex
+dev-agent ../my-app "Fix the linked issue" --orchestrate --worker codex
 ```
 
 Omitting the flag leaves both workers available to Jev. An explicit selection
@@ -435,7 +436,7 @@ tasks that need local sockets or outbound connections while retaining the
 repository-rooted `workspace-write` filesystem sandbox:
 
 ```bash
-jev-agent ../my-app "Fix the linked issue" --orchestrate --worker codex --codex-network
+dev-agent ../my-app "Fix the linked issue" --orchestrate --worker codex --codex-network
 ```
 
 This passes `--config sandbox_workspace_write.network_access=true` to Codex;
@@ -489,7 +490,7 @@ With it, the CLI enters the manually approved loop described below. Only an
 approved `CALL_CODEX` or `CALL_CLAUDE` candidate invokes a coding agent.
 
 ```bash
-jev-agent <repo-path> <task> [--mock] [--no-trace] [--json] [--orchestrate] [--worker codex|claude] [--codex-network]
+dev-agent <repo-path> <task> [--mock] [--no-trace] [--json] [--orchestrate] [--worker codex|claude] [--codex-network]
 ```
 
 - `--mock` uses the offline deterministic evaluation.
@@ -784,7 +785,11 @@ The tarball contains the compiled runtime JavaScript and declarations under
 not published. The `prepack` lifecycle runs the production build before a
 tarball is created.
 
-Install the published package in your own project and run the compatible CLI:
+Version 0.3.1 renames the executable from `jev-agent` to `dev-agent`. Update
+shell commands, package scripts, and CI invocations when upgrading; the new
+package exposes only `dev-agent`. Flags and configuration remain compatible.
+
+The published 0.3.0 package still uses its original `jev-agent` command:
 
 ```bash
 pnpm add --save-dev dev-orchestrator@0.3.0
@@ -803,15 +808,16 @@ Then, from the other project, install that exact archive and run the installed
 binary against that project:
 
 ```bash
-pnpm add --save-dev /absolute/path/to/dev-orchestrator-0.3.0.tgz
-pnpm exec jev-agent --version
-pnpm exec jev-agent . "Inspect this repository and choose the safest useful first action" \
+pnpm add --save-dev /absolute/path/to/dev-orchestrator-0.3.1.tgz
+pnpm exec dev-agent --version
+pnpm exec dev-agent . "Inspect this repository and choose the safest useful first action" \
   --mock --no-trace --json
 ```
 
 The expected mock result is one JSON object with `status: "unexecuted"`; it
 must not edit the target project or require an API key. The installed version
-must report `0.3.0`. Do not pack or publish
+must report `0.3.1` for the checkout's archive (`0.3.0` for the published package
+above). Do not pack or publish
 `.env`, traces, build cache, or `node_modules`.
 
 Initial provider milestone verification on 2026-10-03 passed typecheck, all 269 tests,
@@ -906,8 +912,9 @@ through OpenRouter, shared assessment enforcement, provider-neutral selection
 with compatibility aliases, model attribution, and opt-in comparison tooling.
 See the [release notes](CHANGELOG.md) for migration, configuration, prerequisites,
 data handling, and limitations. The npm package is now `dev-orchestrator`,
-with the compatible `jev-agent` executable and Node.js 22+ requirement. Version
-`0.3.0` is published on npm; the [publication record](docs/releases/dev-orchestrator-0.3.0.md)
+with a Node.js 22+ requirement. Published version `0.3.0` uses `jev-agent`;
+the prepared `0.3.1` renames the command to `dev-agent`. The
+[0.3.0 publication record](docs/releases/dev-orchestrator-0.3.0.md)
 includes source attribution, checksums, and registry installation verification.
 The original GitHub release
 archive and its checksum remain recorded under `jev-orchestrator@0.3.0`.

@@ -91,7 +91,7 @@ export class CliUsageError extends Error {
 }
 
 export function usage(): string {
-  return `jev-agent <repo-path> <task> [--mock] [--no-trace] [--json] [--orchestrate] [--worker codex|claude] [--codex-network]
+  return `dev-agent <repo-path> <task> [--mock] [--no-trace] [--json] [--orchestrate] [--worker codex|claude] [--codex-network]
 
 Options:
   --mock       Use the offline deterministic evaluation.
@@ -104,9 +104,9 @@ Options:
   --help, -h   Print this help text.
 
 Examples:
-  pnpm dev -- . "Decide what to inspect first"
-  pnpm dev -- ../my-app "Fix preview auth" --mock --json --no-trace
-  pnpm dev -- ../my-app "Investigate preview auth" --mock --orchestrate
+  dev-agent . "Decide what to inspect first"
+  dev-agent ../my-app "Fix preview auth" --mock --json --no-trace
+  dev-agent ../my-app "Investigate preview auth" --mock --orchestrate
 
 Environment:
   ROUTER_PROVIDER     typesafe (default), vercel, openrouter, or cloudflare

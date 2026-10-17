@@ -1,5 +1,15 @@
 # Release notes
 
+## dev-orchestrator 0.3.1 — CLI command rename
+
+Prepared for the next npm release; not yet published.
+
+- Rename the executable from `jev-agent` to `dev-agent`, including CLI help
+  and current usage examples. Update shell commands, package scripts, and CI
+  invocations when upgrading; the package exposes only `dev-agent`.
+- Retain the existing CLI flags, provider configuration and aliases, policy,
+  worker permissions, and Node.js 22+ requirement.
+
 ## dev-orchestrator 0.3.0 — npm package identity
 
 First published on npm on 2026-10-17 as
