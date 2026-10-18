@@ -1,0 +1,28 @@
+{
+  "cli_version": "0.11.6-nightly.202610170622.9254299eb",
+  "checkpoint_id": "01M56R0Z2K925ESXJQNPQF4XXS",
+  "strategy": "manual-commit",
+  "branch": "test/v0.4-workflow-baseline",
+  "checkpoints_count": 1,
+  "files_touched": [
+    "docs/workflows/v0.4-baseline.md",
+    "src/orchestration/workflows.test.ts"
+  ],
+  "sessions": [
+    {
+      "metadata": "/0/metadata.json",
+      "transcript": "/0/full.jsonl",
+      "compact_transcript": "/0/transcript.jsonl",
+      "content_hash": "/0/content_hash.txt",
+      "prompt": "/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 96051,
+    "cache_creation_tokens": 0,
+    "cache_read_tokens": 10288768,
+    "output_tokens": 32469,
+    "api_call_count": 53,
+    "subagent_tokens_complete": true
+  }
+}

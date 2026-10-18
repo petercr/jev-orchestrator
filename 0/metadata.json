@@ -1,0 +1,30 @@
+{
+  "cli_version": "0.11.6-nightly.202610170622.9254299eb",
+  "checkpoint_id": "01M56R0Z2K925ESXJQNPQF4XXS",
+  "session_id": "01a13b17-ab4c-7142-b1c8-c7b4b1caee61",
+  "strategy": "manual-commit",
+  "created_at": "2026-10-18T05:33:52.100579616Z",
+  "branch": "test/v0.4-workflow-baseline",
+  "checkpoints_count": 1,
+  "files_touched": [
+    "docs/workflows/v0.4-baseline.md",
+    "src/orchestration/workflows.test.ts"
+  ],
+  "agent": "Codex",
+  "model": "gpt-6.1-sol",
+  "turn_id": "c743b941dce9",
+  "checkpoint_transcript_start": 5868,
+  "transcript_lines_at_start": 5868,
+  "compact_transcript_start": 709,
+  "token_usage": {
+    "input_tokens": 96051,
+    "cache_creation_tokens": 0,
+    "cache_read_tokens": 10288768,
+    "output_tokens": 32469,
+    "api_call_count": 53,
+    "subagent_tokens_complete": true
+  },
+  "session_metrics": {
+    "turn_count": 43
+  }
+}
