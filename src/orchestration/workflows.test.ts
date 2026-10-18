@@ -323,6 +323,48 @@ describe.each(routes)('v0.4 complete workflows: $provider/$model', { timeout: 15
       await preserved(f);
     });
 
+    it('routes a confident repair after independent failure despite a high testing score', async () => {
+      // Routing variant: leave the frozen task, patches, and original response
+      // sequences unchanged; only this repair assessment has a high test score.
+      const f = await fixture(repair, worker);
+      const steps = workflow(worker, repair);
+      steps[4] = { action: workerAction(worker), needsTesting: 0.99 };
+      const t = transport(route, repair, steps);
+      const seen: Action[] = [];
+      const askForInformation = vi.fn();
+      const result = await runOrchestration(f.initial, {
+        evaluate: t.evaluate, askForInformation,
+        approve: approver(worker, seen, ({ proposal }) => ({ kind: proposal.action === 'ASK_USER' ? 'stop' : 'approve' })),
+        execute: (proposal, _runner, options) => executeCandidate(proposal, f.runner, options),
+      });
+      expect(result).toMatchObject({ status: 'finished', iterations: 8,
+        state: { workerSelection: worker, codexCalls: worker === 'codex' ? 2 : 0,
+          claudeCalls: worker === 'claude' ? 2 : 0, evidence: { validationGeneration: 2 } },
+        summary: { counts: { approvals: 8, alternatives: 0, approvalRequests: 8,
+          workerRetries: 1, validationRuns: 3, validationFailures: 1 }, validation: { passed: true } } });
+      expect(seen).toEqual(['READ_ISSUE', 'READ_FILE', workerAction(worker), 'RUN_TESTS',
+        workerAction(worker), 'RUN_TESTS', 'RUN_TESTS', 'FINISH']);
+      expect(askForInformation).not.toHaveBeenCalled();
+      expect(f.validationResults.map((item) => item.exitCode)).toEqual([1, 0, 0]);
+      const trace = await records(result);
+      expect(trace[4]).toMatchObject({
+        evaluation: { provider: route.provider, requestedModel: route.model, assessment: {
+          needsTesting: { probability: 0.99 }, nextAction: { choice: workerAction(worker), confidence: 0.99 },
+        } },
+        policy: { requested: workerAction(worker), selected: workerAction(worker), override: false },
+        approval: { kind: 'approve', history: [{ kind: 'approve' }] },
+        workerRequest: { retryReason: 'Repair after failed independent validation.' },
+        stateAfter: { tests: { ran: false }, evidence: { validationGeneration: 2 } },
+      });
+      const request = f.commands.filter((command) => command.command === worker)[1]!;
+      const context: unknown = JSON.parse(request.args.at(-1)!.split('\n').at(-1)!);
+      expect(context).toMatchObject({ validationGeneration: 1,
+        validation: { generation: 1, iteration: 4, script: 'test', exitCode: 1, passed: false,
+          summary: expect.stringContaining('ERR_ASSERTION') },
+        remainingCalls: { codex: worker === 'codex' ? 1 : 2, claude: worker === 'claude' ? 1 : 2 } });
+      await preserved(f);
+    });
+
     it('separates manual worker routing and acceptance review from normal approvals', async () => {
       const f = await fixture(bugFix, worker);
       const steps = workflow(worker, bugFix);

@@ -640,7 +640,7 @@ describe('approval-gated orchestration loop', () => {
     expect(result.state.failedApproaches).toHaveLength(1);
   });
 
-  it('carries failed validation into an approved repair and requires fresh validation', async () => {
+  it('carries approved clarification and failed validation into a manual repair and requires fresh validation', async () => {
     const repo = await repository();
     let workerCalls = 0;
     let testCalls = 0;
@@ -664,7 +664,8 @@ describe('approval-gated orchestration loop', () => {
       evaluate: async (state) => {
         if (state.iteration === 1) return clearAssessment('CALL_CODEX');
         if (state.iteration === 3) {
-          const request = clearAssessment('CALL_CODEX');
+          const request = clearAssessment('ASK_USER');
+          request.assessment.needsMoreInformation.probability = 0.95;
           request.assessment.needsTesting.probability = 0.9;
           return request;
         }
@@ -710,6 +711,53 @@ describe('approval-gated orchestration loop', () => {
       approval: { history: [{ kind: 'alternative', action: 'CALL_CODEX' }, { kind: 'approve' }] },
     });
   });
+
+  it.each(['stop', 'reject', 'interrupt', 'call_limit', 'worker_selection', 'network'] as const)(
+    'preserves %s enforcement when a clear repair reaches approval', async (control) => {
+      const repo = await repository();
+      const controller = new AbortController();
+      const initial = createInitialState(repo, 'Fix authentication', 'codex');
+      const execute = vi.fn().mockImplementation(async (proposal): Promise<ToolResult> => {
+        if (proposal.action === 'CALL_CODEX') await writeFile(path.join(repo.root, 'fix.ts'), 'partial edit\n');
+        return { action: proposal.action, ok: proposal.action === 'CALL_CODEX',
+          exitCode: proposal.action === 'CALL_CODEX' ? 0 : 1, timedOut: false,
+          durationMs: 1, output: 'Independent check still needs a repair.', files: [] };
+      });
+      const askForInformation = vi.fn();
+      const result = await runOrchestration(initial, {
+        evaluate: async (state) => {
+          const request = clearAssessment(state.iteration === 2 ? 'RUN_TESTS' : 'CALL_CODEX');
+          if (state.iteration === 3) request.assessment.needsTesting.probability = 0.99;
+          return request;
+        },
+        approve: async ({ state, proposal }) => {
+          if (state.iteration < 3) return { kind: 'approve' };
+          expect(proposal.action).toBe('CALL_CODEX');
+          if (control === 'stop' || control === 'reject') return { kind: control };
+          if (control === 'interrupt') controller.abort();
+          if (control === 'call_limit') state.codexCalls = MAX_CODEX_CALLS;
+          if (control === 'worker_selection') state.workerSelection = 'claude';
+          if (control === 'network') state.codexNetworkAccess = true;
+          return { kind: 'approve' };
+        },
+        askForInformation, execute,
+        inspect: async () => ({ ...repo, gitStatus: [' M fix.ts'] }),
+      }, { maxIterations: 3, signal: controller.signal });
+      expect(execute.mock.calls.map(([proposal]) => proposal.action)).toEqual(['CALL_CODEX', 'RUN_TESTS']);
+      expect(askForInformation).not.toHaveBeenCalled();
+      expect(result.summary.counts.codexCalls).toBe(1);
+      expect(result.state.tests).toMatchObject({ ran: true, passed: false });
+      expect(await readFile(path.join(repo.root, 'fix.ts'), 'utf8')).toBe('partial edit\n');
+      const trace = (await readFile(result.tracePath, 'utf8')).trim().split('\n').map((line) => JSON.parse(line));
+      expect(trace.at(-1)).toMatchObject({ proposal: { selected: { action: 'CALL_CODEX' } }, toolResult: null });
+      if (control === 'interrupt') {
+        expect(result.status).toBe('stopped');
+        expect(trace.at(-1)).toMatchObject({ approval: null, interruption: { phase: 'approval', reason: 'signal' } });
+      }
+      else if (control === 'stop') expect(result.status).toBe('stopped');
+      else expect(result).toMatchObject({ status: 'iteration_limit', exitCode: 1 });
+    },
+  );
 
   it('blocks an unchanged failed worker even when chosen as an alternative', async () => {
     const repo = await repository();
