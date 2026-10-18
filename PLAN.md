@@ -105,7 +105,7 @@ results.
    reserved `stable-tags` task. The 183 offline tests reproduce enforcement and
    manual alternatives without making live routing-quality claims.
 
-2. [ ] Make routing blockers and operator choices understandable.
+2. [x] Make routing blockers and operator choices understandable.
    Use the reproduced cases to distinguish a provider recommendation, a
    policy override, and a candidate that cannot be offered. Show bounded
    reasons such as unread instructions, missing task context, pending or
@@ -119,6 +119,11 @@ results.
    Keep wording and readable grouping in this slice; the dedicated visual
    refresh and terminal-library evaluation are tracked in the v0.5 candidate
    below.
+   Delivered in the [routing explanation guide](docs/workflows/v0.4-routing-explanations.md):
+   grouped model/policy/candidate reviews, bounded current-generation evidence,
+   explicit manual-alternative provenance, actual remaining limits, separate
+   interaction counters, and recovery/terminal guidance. Display-only snapshots
+   do not enter authorization state or change the existing JSON/trace schemas.
 
 3. [ ] Fix reproduced routing detours with focused changes.
    Investigate repeated preparation reads, missed first-worker routes,

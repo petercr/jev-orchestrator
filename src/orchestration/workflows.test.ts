@@ -3,6 +3,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createEvaluator } from '../ai/evaluate.js';
+import { formatApprovalLines, formatOutcomeLines } from '../cli/presentation.js';
 import { JEV_PROVIDERS } from '../config.js';
 import { runProcess, type ProcessRequest, type ProcessResult } from '../process.js';
 import { inspectRepo } from '../repo/inspect.js';
@@ -221,6 +222,9 @@ function transport(route: typeof routes[number], task: TaskFixture, steps: Recom
 }
 
 async function records(result: OrchestrationResult) {
+  const original = structuredClone(result);
+  formatOutcomeLines(result);
+  expect(result).toEqual(original);
   const trace = await readFile(result.tracePath, 'utf8');
   expect(trace).not.toContain(syntheticKey);
   return trace.trim().split('\n').map((line) => JSON.parse(line));
@@ -228,6 +232,9 @@ async function records(result: OrchestrationResult) {
 
 function approver(worker: WorkerSelection, seen: Action[], choose?: (context: ApprovalContext) => ApprovalDecision) {
   return async (context: ApprovalContext): Promise<ApprovalDecision> => {
+    const original = structuredClone(context);
+    formatApprovalLines(context);
+    expect(context).toEqual(original);
     seen.push(context.proposal.action);
     expect(context.allowedAlternatives).not.toContain(worker === 'codex' ? 'CALL_CLAUDE' : 'CALL_CODEX');
     if (context.proposal.action === 'CALL_CODEX') expect(context.proposal.input).not.toHaveProperty('networkAccess');
