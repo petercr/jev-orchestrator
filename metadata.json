@@ -1,0 +1,35 @@
+{
+  "cli_version": "0.11.6-nightly.202610170622.9254299eb",
+  "checkpoint_id": "01M58QA59X8BHH6TSATD144YAR",
+  "strategy": "manual-commit",
+  "branch": "fix/v0.4-repair-routing",
+  "checkpoints_count": 6,
+  "files_touched": [
+    "AGENTS.md",
+    "PLAN.md",
+    "README.md",
+    "docs/workflows/v0.4-issue-80-pilot.md",
+    "docs/workflows/v0.4-repair-routing.md",
+    "src/orchestration/loop.test.ts",
+    "src/orchestration/workflows.test.ts",
+    "src/policy.test.ts",
+    "src/policy.ts"
+  ],
+  "sessions": [
+    {
+      "metadata": "/0/metadata.json",
+      "transcript": "/0/full.jsonl",
+      "compact_transcript": "/0/transcript.jsonl",
+      "content_hash": "/0/content_hash.txt",
+      "prompt": "/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 248347,
+    "cache_creation_tokens": 0,
+    "cache_read_tokens": 15008384,
+    "output_tokens": 73614,
+    "api_call_count": 96,
+    "subagent_tokens_complete": true
+  }
+}

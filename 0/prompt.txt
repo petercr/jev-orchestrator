@@ -1,0 +1,25 @@
+Ok pr merged
+
+---
+
+Ok next step then
+
+---
+
+Let's do a actual run on an issue with this one to test
+
+---
+
+you go 1 dir up then its in this dir jspdf-md-renderer and i think its issue 80 maybe
+
+---
+
+well i approve run thru it
+
+---
+
+continue
+
+---
+
+commit and pr

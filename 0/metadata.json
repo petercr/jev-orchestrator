@@ -1,0 +1,38 @@
+{
+  "cli_version": "0.11.6-nightly.202610170622.9254299eb",
+  "checkpoint_id": "01M58QA59X8BHH6TSATD144YAR",
+  "session_id": "01a13b17-ab4c-7142-b1c8-c7b4b1caee61",
+  "strategy": "manual-commit",
+  "created_at": "2026-10-18T23:59:54.615708185Z",
+  "branch": "fix/v0.4-repair-routing",
+  "checkpoints_count": 6,
+  "save_step_count": 4,
+  "files_touched": [
+    "AGENTS.md",
+    "PLAN.md",
+    "README.md",
+    "docs/workflows/v0.4-issue-80-pilot.md",
+    "docs/workflows/v0.4-repair-routing.md",
+    "src/orchestration/loop.test.ts",
+    "src/orchestration/workflows.test.ts",
+    "src/policy.test.ts",
+    "src/policy.ts"
+  ],
+  "agent": "Codex",
+  "model": "gpt-6.1-sol",
+  "turn_id": "9b37c347564e",
+  "checkpoint_transcript_start": 6963,
+  "transcript_lines_at_start": 6963,
+  "compact_transcript_start": 834,
+  "token_usage": {
+    "input_tokens": 248347,
+    "cache_creation_tokens": 0,
+    "cache_read_tokens": 15008384,
+    "output_tokens": 73614,
+    "api_call_count": 96,
+    "subagent_tokens_complete": true
+  },
+  "session_metrics": {
+    "turn_count": 52
+  }
+}
