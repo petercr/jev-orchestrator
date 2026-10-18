@@ -267,7 +267,8 @@ describe('frozen v0.4 workflow tasks', () => {
   });
 });
 
-describe.each(routes)('v0.4 complete workflows: $provider/$model', (route) => {
+// Leave headroom for the real Git and npm subprocesses on busy test runners.
+describe.each(routes)('v0.4 complete workflows: $provider/$model', { timeout: 15_000 }, (route) => {
   describe.each(workers)('%s worker', (worker) => {
     it.each(tasks)('completes $id with real independent checks and explicit acceptance', async (task) => {
       const f = await fixture(task, worker);
@@ -301,7 +302,15 @@ describe.each(routes)('v0.4 complete workflows: $provider/$model', (route) => {
       if (isRepair) {
         expect(workerRecords[1]).toMatchObject({ workerRequest: { retryReason: 'Repair after failed independent validation.' } });
         const repairRequest = f.commands.filter((request) => request.command === worker)[1]!;
-        expect(repairRequest.args.at(-1)).toContain('failed');
+        const repairContext: unknown = JSON.parse(repairRequest.args.at(-1)!.split('\n').at(-1)!);
+        expect(repairContext).toMatchObject({
+          validationGeneration: 1,
+          validation: {
+            iteration: 4, generation: 1, script: 'test', exitCode: 1,
+            timedOut: false, passed: false, summary: expect.stringContaining('ERR_ASSERTION'),
+          },
+          remainingCalls: { codex: worker === 'codex' ? 1 : 2, claude: worker === 'claude' ? 1 : 2 },
+        });
       }
       expect(trace.at(-1)).toMatchObject({ approval: { kind: 'approve' }, proposal: { selected: { action: 'FINISH' } }, toolResult: null });
       await preserved(f);
