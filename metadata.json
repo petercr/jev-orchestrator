@@ -1,0 +1,35 @@
+{
+  "cli_version": "0.11.6-nightly.202610170622.9254299eb",
+  "checkpoint_id": "01M57V693KDEWYZ1ZWEWKXE9B0",
+  "strategy": "manual-commit",
+  "branch": "feat/v0.4-routing-explanations",
+  "checkpoints_count": 3,
+  "files_touched": [
+    "AGENTS.md",
+    "PLAN.md",
+    "README.md",
+    "docs/workflows/v0.4-routing-explanations.md",
+    "src/cli.ts",
+    "src/cli/presentation.test.ts",
+    "src/cli/presentation.ts",
+    "src/orchestration/loop.ts",
+    "src/orchestration/workflows.test.ts"
+  ],
+  "sessions": [
+    {
+      "metadata": "/0/metadata.json",
+      "transcript": "/0/full.jsonl",
+      "compact_transcript": "/0/transcript.jsonl",
+      "content_hash": "/0/content_hash.txt",
+      "prompt": "/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 423559,
+    "cache_creation_tokens": 0,
+    "cache_read_tokens": 9860352,
+    "output_tokens": 65261,
+    "api_call_count": 73,
+    "subagent_tokens_complete": true
+  }
+}
