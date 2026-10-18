@@ -43,7 +43,8 @@ These are planning targets, not implemented features or release commitments.
 
 Drafted on 2026-10-17 after completion of v0.3 and publication of
 `dev-orchestrator@0.3.1`. The operator confirmed v0.4 as the next version;
-the focus below is a working proposal. Implementation has not started.
+the focus below is a working proposal. Implementation started with the
+[offline complete-workflow baseline](docs/workflows/v0.4-baseline.md).
 
 The proposed outcome is a CLI that gets a bounded coding task through
 preparation, implementation, independent validation, and acceptance review
@@ -81,7 +82,7 @@ results.
 
 ### Implementation order
 
-1. [ ] Define and reproduce complete workflows on the current release.
+1. [x] Define and reproduce complete workflows on the current release.
    Freeze a small task suite covering a bug fix with regression tests, a
    bounded feature, and failed validation followed by controlled repair.
    Each fixture needs explicit task acceptance criteria and independent checks.
@@ -98,6 +99,11 @@ results.
    Scripted provider responses establish enforcement behavior, not live model
    routing quality. Preserve sanitized recorded assessments where available,
    and label hypotheses that need fresh live observations.
+   Delivered in [protocol v1](docs/workflows/v0.4-baseline.md): three frozen
+   tasks across six model routes and both workers, real independent Node checks,
+   recovery/interruption and budget cases, a stop/ownership inventory, and the
+   reserved `stable-tags` task. The 183 offline tests reproduce enforcement and
+   manual alternatives without making live routing-quality claims.
 
 2. [ ] Make routing blockers and operator choices understandable.
    Use the reproduced cases to distinguish a provider recommendation, a
