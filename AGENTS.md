@@ -24,9 +24,15 @@ Codex command networking is disabled unless the operator supplies `--codex-netwo
 
 Run metrics are reporting data outside AgentState and approved candidates. Measure phase durations with the local monotonic clock, keep prompt waits separate from active time, and retain interrupted/failed-attempt evidence without fabricated approvals. Summaries must use current-generation independent validation and declared workflow coverage. Metrics cannot authorize completion, modify call/iteration budgets, or infer unavailable token usage or cost.
 
+`ApprovalContext.review` is a copied display-only snapshot of review provenance,
+the actual iteration limit, and existing interaction counts. Never use it to
+authorize execution, change budgets, or populate AgentState, candidates, worker
+context, or traces. Keep CLI explanation formatting read-only.
+
 ## Repository map
 
 - `src/cli.ts`: command-line entry point and initial `AgentState` construction.
+- `src/cli/presentation.ts`: bounded plain-text review, progress, recovery, and terminal explanations; no authorization or console side effects.
 - `src/types.ts`: shared action, state, assessment, and policy types.
 - `src/ai/evaluate.ts`: bounded provider-neutral evaluation, with shared normalization in `src/ai/contract.ts` and Vercel/OpenRouter/TypeSafe/Cloudflare transport boundaries. Bind `createEvaluator` once per run; keep transport configuration outside serializable state.
 - `src/ai/cloudflare.ts`: bounded Clef/Clef-flash REST adapter, strict Workers AI envelope and duplicate-key validation, and allowlisted Cloudflare error classifications.

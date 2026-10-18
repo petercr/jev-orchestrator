@@ -13,6 +13,7 @@ import { requireBoundedTask } from './limits.js';
 import { writeTrace } from './logging/trace.js';
 import { evaluationAttribution, redactSensitiveText } from './logging/trace.js';
 import { mockEvaluation } from './mock.js';
+import { formatApprovalLines, formatOutcomeLines, formatRecoveryLines } from './cli/presentation.js';
 import {
   createInitialState,
   runOrchestration,
@@ -354,33 +355,7 @@ export function parseApprovalChoice(
 }
 
 export function printApprovalProposal(context: ApprovalContext): void {
-  const { evaluation, policy, proposal } = context;
-  const { assessment } = evaluation;
-  console.log(`\nIteration ${context.state.iteration}`);
-  console.log(`Evaluator requested: ${policy.requested}`);
-  printEvaluationAttribution(evaluation);
-  console.log('Next-action distribution');
-  printDistribution(assessment.nextAction.probabilities);
-  console.log(`Policy selected: ${policy.selected}${policy.override ? ' (override)' : ''}`);
-  console.log(`Reason: ${redactSensitiveText(policy.reason)}`);
-  console.log(`Safe candidate: ${proposal.action}`);
-  console.log(`Tool: ${proposal.tool ?? 'none'}`);
-  const parameters = JSON.stringify(proposal.input, (_key, value: unknown) =>
-    typeof value === 'string' ? redactSensitiveText(value) : value);
-  console.log(`Parameters: ${parameters}`);
-  if ('reason' in proposal) console.log(`Candidate reason: ${redactSensitiveText(proposal.reason)}`);
-  console.log(`Allowed alternatives: ${context.allowedAlternatives.join(', ')}`);
-  console.log('Enter stop to end the run without marking the task complete; the trace is kept.');
-  if (proposal.action === 'ASK_USER' && context.allowedAlternatives.includes('FINISH')) {
-    if (context.policy.completionReview === 'validation_complete') {
-      console.log('All required independent checks passed. Review the original task acceptance criteria before confirming completion.');
-    }
-    console.log('Validated finish override: enter FINISH, review it, then enter approve.');
-  }
-  if (proposal.action === 'ASK_USER') {
-    console.log('To provide context, enter approve and then a plain-language answer.');
-    console.log('To choose an action, enter its name now and review its resolved candidate.');
-  }
+  for (const line of formatApprovalLines(context)) console.log(line);
 }
 
 async function promptForApproval(
@@ -397,7 +372,7 @@ async function promptForApproval(
     throwIfInterrupted(options.signal);
     const decision = parseApprovalChoice(answer, context);
     if (decision) return decision;
-    console.log('Invalid choice. No repository action has run.');
+    console.log('Invalid choice. This input approved no action.');
   }
 }
 
@@ -407,10 +382,7 @@ async function promptForEvaluationRecovery(
   options: ExecutionOptions,
 ): Promise<'continue' | 'stop'> {
   console.log(`\nEvaluation failed: ${formatEvaluationFailure(context.failure)}.`);
-  if (context.failure.code === 'invalid_response') {
-    console.log('Continue requests a fresh evaluation within the remaining budget. It does not approve a repository action.');
-  }
-  console.log(`Edits and evidence are preserved. ${context.remainingIterations} iterations remain; worker calls used: Codex ${context.state.codexCalls}/2, Claude ${context.state.claudeCalls}/2.`);
+  for (const line of formatRecoveryLines(context)) console.log(line);
   console.log(`Trace: ${redactSensitiveText(context.tracePath)}`);
   while (true) {
     const answer = (await terminal.question('Enter continue to reevaluate this state, or stop: ', options)).trim().toLowerCase();
@@ -519,7 +491,7 @@ export function formatRunSummary(summary: RunSummary): string {
     `Approval wait: ${seconds(timings.approvalWaitMs)}; information wait: ${seconds(timings.informationWaitMs)}; recovery wait: ${seconds(timings.recoveryWaitMs)}`,
     `Inspection: ${seconds(timings.inspectionMs)}; diagnostics: ${seconds(timings.diagnosticsMs)}; other: ${seconds(timings.otherMs)}`,
     `Evaluations: ${counts.evaluations}; failures: ${counts.evaluationFailures}; explicit recoveries: ${counts.evaluationRecoveries}`,
-    `Approval requests: ${counts.approvalRequests}; approvals: ${counts.approvals}; rejections: ${counts.rejections}; alternatives: ${counts.alternatives}`,
+    `Approval requests: ${counts.approvalRequests}; approvals: ${counts.approvals}; rejections: ${counts.rejections}; manual alternatives: ${counts.alternatives}`,
     `Worker calls: Codex ${counts.codexCalls}, Claude ${counts.claudeCalls}; retries: ${counts.workerRetries}`,
     `Validation runs: ${counts.validationRuns}; failed: ${counts.validationFailures}`,
     `Failed executions: ${counts.failedExecutions}; timed out: ${counts.timedOutExecutions}; cancelled: ${counts.cancelledExecutions}`,
@@ -604,6 +576,7 @@ export async function main(argv: string[] = process.argv.slice(2)): Promise<void
     if (result.status === 'iteration_limit') {
       console.log('Task completion was not approved before the iteration limit; edits and evidence are preserved. Exit code: 1.');
     }
+    for (const line of formatOutcomeLines(result)) console.log(line);
     console.log(formatRunSummary(result.summary));
     return;
   }

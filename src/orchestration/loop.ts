@@ -31,7 +31,7 @@ import {
   type ExecutableAction,
 } from './candidate.js';
 import { executeCandidate, type ToolResult } from './execute.js';
-import { createRunMetrics, executionTimingPhase, type RunMetricsCollector, type RunSummary } from './summary.js';
+import { createRunMetrics, executionTimingPhase, type RunCounts, type RunMetricsCollector, type RunSummary } from './summary.js';
 
 export const MAX_ORCHESTRATION_ITERATIONS = 8;
 export const MAX_APPROVAL_ALTERNATIVES = 2;
@@ -49,6 +49,13 @@ export type ApprovalContext = {
   policy: PolicyDecision;
   proposal: CandidateProposal;
   allowedAlternatives: ExecutableAction[];
+  /** Copied reporting data only; never used to authorize an action. */
+  review?: Readonly<{
+    source: 'policy' | 'alternative';
+    requested: ExecutableAction;
+    iterationLimit: number;
+    counts: Readonly<Pick<RunCounts, 'approvals' | 'alternatives' | 'evaluationRecoveries'>>;
+  }>;
 };
 
 export type OrchestrationStatus = 'finished' | 'stopped' | 'iteration_limit' | 'evaluation_failed';
@@ -489,6 +496,7 @@ async function resolveApproval(
   approve: OrchestrationDependencies['approve'],
   searchResults: string[],
   metrics: RunMetricsCollector,
+  iterationLimit: number,
   signal?: AbortSignal,
   onProgress?: (proposals: CandidateProposal[], decisions: ApprovalDecision[]) => void,
 ): Promise<{
@@ -506,12 +514,23 @@ async function resolveApproval(
     const alternatives = allowedAlternatives(state, policy);
     const decision = await metrics.measure('approvalWaitMs', () => interruptible(() => {
       metrics.counts.approvalRequests += 1;
+      const previous = decisions.at(-1);
       return approve({
         state,
         evaluation,
         policy,
         proposal: structuredClone(proposal),
         allowedAlternatives: [...alternatives],
+        review: {
+          source: previous?.kind === 'alternative' ? 'alternative' : 'policy',
+          requested: previous?.kind === 'alternative' ? previous.action : policy.selected,
+          iterationLimit,
+          counts: {
+            approvals: metrics.counts.approvals,
+            alternatives: metrics.counts.alternatives,
+            evaluationRecoveries: metrics.counts.evaluationRecoveries,
+          },
+        },
       });
     }, signal));
     metrics.recordApproval(decision);
@@ -734,6 +753,7 @@ export async function runOrchestration(
         dependencies.approve,
         searchResults,
         metrics,
+        maxIterations,
         options.signal,
         (proposals, decisions) => {
           interruptedProposal = { considered: structuredClone(proposals), selected: structuredClone(proposals.at(-1)) };

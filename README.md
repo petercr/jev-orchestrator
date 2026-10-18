@@ -722,6 +722,15 @@ It also reproduces missing context, manual alternatives, recovery, interruption,
 stale/omitted validation, and budget stops. Run it alone with
 `pnpm exec vitest run src/orchestration/workflows.test.ts`.
 
+Orchestration reviews now group the model recommendation, policy decision,
+resolved candidate, current evidence/limits, and operator choices. They explain
+unread instructions, missing context, failed/stale checks, unavailable validation
+coverage, exhausted worker calls, and explicit acceptance review. Manual action
+alternatives and evaluation recovery remain separate from action approval in
+the review counters and final summary. See the
+[routing explanation guide](docs/workflows/v0.4-routing-explanations.md) for
+examples and the reporting/JSON compatibility boundary.
+
 ## Live coding-agent verification
 
 The active process cancellation milestone completed implementation, offline
@@ -921,7 +930,8 @@ reproductions, clearer explanations of blockers, focused routing fixes, and a
 bounded live comparison. The first deliverable is the
 [offline workflow baseline](docs/workflows/v0.4-baseline.md), with frozen tasks,
 183 enforcement tests, a stop/ownership inventory, and a reserved verification
-task. Operator-facing blocker explanations are next. The published CLI remains
+task. [Operator-facing blocker explanations](docs/workflows/v0.4-routing-explanations.md)
+are implemented; focused routing fixes are next. The published CLI remains
 v0.3.1 with its existing approval and validation requirements.
 
 A [v0.5 presentation candidate](PLAN.md#v05-candidate-terminal-presentation-and-interaction)
