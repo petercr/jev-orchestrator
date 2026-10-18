@@ -714,6 +714,14 @@ deadlines, retries, and cancellation during evaluation, approval, and execution.
 Provider-specific envelope and error-code tests remain alongside this matrix.
 Run it alone with `pnpm exec vitest run src/ai/providers.test.ts`.
 
+The [v0.4 workflow baseline](docs/workflows/v0.4-baseline.md) adds complete
+bug-fix, feature, and controlled-repair sequences across the same six routes
+and both workers. It runs real local Node checks on scripted patches in
+temporary Git repositories, with synthetic HTTP and worker boundaries.
+It also reproduces missing context, manual alternatives, recovery, interruption,
+stale/omitted validation, and budget stops. Run it alone with
+`pnpm exec vitest run src/orchestration/workflows.test.ts`.
+
 ## Live coding-agent verification
 
 The active process cancellation milestone completed implementation, offline
@@ -910,8 +918,11 @@ The [v0.4 proposal](PLAN.md#v04-draft-reliable-task-workflows) focuses on gettin
 bounded coding tasks through implementation, validation, and acceptance review
 with fewer avoidable routing detours. It starts with complete workflow
 reproductions, clearer explanations of blockers, focused routing fixes, and a
-bounded live comparison. Implementation has not started; the published CLI
-remains v0.3.1 with its existing approval and validation requirements.
+bounded live comparison. The first deliverable is the
+[offline workflow baseline](docs/workflows/v0.4-baseline.md), with frozen tasks,
+183 enforcement tests, a stop/ownership inventory, and a reserved verification
+task. Operator-facing blocker explanations are next. The published CLI remains
+v0.3.1 with its existing approval and validation requirements.
 
 A [v0.5 presentation candidate](PLAN.md#v05-candidate-terminal-presentation-and-interaction)
 tracks styled prompts, phase progress, and clearer action/result displays.
