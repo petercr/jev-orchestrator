@@ -731,6 +731,19 @@ the review counters and final summary. See the
 [routing explanation guide](docs/workflows/v0.4-routing-explanations.md) for
 examples and the reporting/JSON compatibility boundary.
 
+The [v0.4 repair routing candidate](docs/workflows/v0.4-repair-routing.md) adds
+12 labeled workflow variants to the original 183-case baseline. A clear
+recommendation to repair a failed independent check can return to the same
+available worker even with a high testing assessment. It still requires
+separate approval, retains call limits, and invalidates validation after the
+repair. Stale checks and worker test claims do not qualify as repair evidence.
+
+A [live issue #80 replay](docs/workflows/v0.4-issue-80-pilot.md) completed with
+TypeSafe/Jev and one real Codex call: seven iterations, passing verification
+(296 tests) and build, and two explicit manual alternatives. The first patch
+passed, so this run did not exercise the new repair exception. The report
+records the isolated setup, frozen candidate, approvals, and comparison limits.
+
 ## Live coding-agent verification
 
 The active process cancellation milestone completed implementation, offline
@@ -931,7 +944,8 @@ bounded live comparison. The first deliverable is the
 [offline workflow baseline](docs/workflows/v0.4-baseline.md), with frozen tasks,
 183 enforcement tests, a stop/ownership inventory, and a reserved verification
 task. [Operator-facing blocker explanations](docs/workflows/v0.4-routing-explanations.md)
-are implemented; focused routing fixes are next. The published CLI remains
+and the [focused repair routing fix](docs/workflows/v0.4-repair-routing.md)
+are implemented; the bounded live comparison is next. The published CLI remains
 v0.3.1 with its existing approval and validation requirements.
 
 A [v0.5 presentation candidate](PLAN.md#v05-candidate-terminal-presentation-and-interaction)

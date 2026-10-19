@@ -1,7 +1,7 @@
 import type { AgentAssessment, AgentState, PolicyDecision } from './types.js';
 import { hasFailedValidation, hasOmittedValidationRequirements, hasPassedValidation, pendingValidationScripts } from './repo/validation.js';
 import { taskPreparation } from './repo/preparation.js';
-import { isWorkerActionAllowed } from './agents/selection.js';
+import { availableWorkerActions, isWorkerActionAllowed } from './agents/selection.js';
 
 export type PolicyThresholds = {
   finish: number;
@@ -18,6 +18,21 @@ export const DEFAULT_THRESHOLDS: PolicyThresholds = {
   minChoiceProbability: 0.55,
   minChoiceConfidence: 0.35,
 };
+
+function hasWorkerRepairEvidence(state: AgentState, requested: PolicyDecision['requested']): boolean {
+  const evidence = state.evidence;
+  if (!evidence?.worker) return false;
+  const worker = evidence.worker;
+  if (requested !== (worker.agent === 'codex' ? 'CALL_CODEX' : 'CALL_CLAUDE') ||
+    !availableWorkerActions(state).some((action) => action === requested) ||
+    hasOmittedValidationRequirements(state) || !hasFailedValidation(state)) return false;
+  // A worker claim or an old failure cannot justify another attempt. The
+  // independent check must follow this worker and belong to its generation.
+  const checks = evidence.validations ?? (evidence.validation ? [evidence.validation] : []);
+  return checks.some((check) => check.generation === evidence.validationGeneration &&
+    check.iteration > worker.iteration && check.iteration < state.iteration &&
+    (!check.passed || check.exitCode !== 0 || check.timedOut));
+}
 
 function requireValidation(
   state: AgentState,
@@ -140,6 +155,12 @@ export function applyPolicy(
     !hasPassedValidation(state) &&
     !firstIssueWorker
   ) {
+    if (clearRouting && hasWorkerRepairEvidence(state, requested)) {
+      return {
+        requested, selected: requested, override: false,
+        reason: 'A current-generation independent check failed; the clear recommendation can return to the same worker for repair before fresh validation.',
+      };
+    }
     return requireValidation(state, requested);
   }
 

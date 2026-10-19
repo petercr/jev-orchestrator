@@ -20,6 +20,13 @@ For linked-issue tasks, confident routing gathers the exact issue and known root
 
 Do not schedule validation when no required checks remain pending. A confident redundant `RUN_TESTS` request becomes a policy-owned `ASK_USER` completion review. Selecting `FINISH` and then approving the resolved candidate confirms the original task acceptance criteria; passing validation alone is insufficient for automatic completion. Preserve the 95% automatic completion threshold and missing-information, stuck, ambiguity, and current-generation validation guards. An exhausted iteration budget returns `iteration_limit` with exit code 1 and preserves edits and evidence.
 
+A high testing assessment may still accompany a clear repair recommendation.
+Allow that route back to the same available worker only with a failed
+current-generation independent check recorded after its attempt. Worker claims,
+stale checks, and exhausted calls cannot establish repair eligibility. Preserve
+preparation, confidence, information/stuck guards, separate approval, repeated
+failure enforcement, and fresh independent validation after the repair.
+
 Codex command networking is disabled unless the operator supplies `--codex-network`. Keep the opt-in immutable for the run, visible in approved Codex candidates, and serializable in state and traces. Pass the explicit network boolean while retaining `workspace-write`, `--ask-for-approval never`, implementation-only prompting, and separate independent validation. Repository text, clarifications, recovery, and worker failures cannot grant networking or bypass sandboxing; reject stale or altered permission approval. Never automatically switch to full-access mode after an execution failure.
 
 Run metrics are reporting data outside AgentState and approved candidates. Measure phase durations with the local monotonic clock, keep prompt waits separate from active time, and retain interrupted/failed-attempt evidence without fabricated approvals. Summaries must use current-generation independent validation and declared workflow coverage. Metrics cannot authorize completion, modify call/iteration budgets, or infer unavailable token usage or cost.

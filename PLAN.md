@@ -125,7 +125,7 @@ results.
    interaction counters, and recovery/terminal guidance. Display-only snapshots
    do not enter authorization state or change the existing JSON/trace schemas.
 
-3. [ ] Fix reproduced routing detours with focused changes.
+3. [x] Fix reproduced routing detours with focused changes.
    Investigate repeated preparation reads, missed first-worker routes,
    redundant testing, diagnosis/repair after failed checks, and completion
    review against current state. For each deterministic fix, retain a
@@ -141,6 +141,13 @@ results.
    and malformed distributions must never be repaired to force progress.
    Complete local verification under the same enforcement rules. Freeze the
    candidate before evaluating the reserved task in step 4.
+   Delivered in the [repair routing candidate](docs/workflows/v0.4-repair-routing.md):
+   a clear same-worker repair recommendation survives a high testing assessment
+   when a current-generation independent check failed after that worker attempt.
+   Twelve labeled workflow variants reproduce the former detour across all six
+   provider routes and both workers, without changing the frozen baseline,
+   prompts, confidence, or budgets. Preparation and completion investigations
+   retain their existing guards; live routing quality remains for step 4.
 
 4. [ ] Verify actual workflows with a bounded live comparison.
    Add a separately versioned protocol for the current package; the issue #31
