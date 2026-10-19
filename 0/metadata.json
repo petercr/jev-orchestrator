@@ -1,0 +1,35 @@
+{
+  "cli_version": "0.11.6-nightly.202610170622.9254299eb",
+  "checkpoint_id": "01M5AB2JPDJNDRN8G1T69M83FJ",
+  "session_id": "01a13b17-ab4c-7142-b1c8-c7b4b1caee61",
+  "strategy": "manual-commit",
+  "created_at": "2026-10-19T15:04:32.933288692Z",
+  "branch": "chore/v0.4-release",
+  "checkpoints_count": 2,
+  "save_step_count": 1,
+  "files_touched": [
+    "CHANGELOG.md",
+    "PLAN.md",
+    "README.md",
+    "docs/releases/dev-orchestrator-0.4.0.md",
+    "package.json",
+    "src/cli.integration.test.ts"
+  ],
+  "agent": "Codex",
+  "model": "gpt-6.1-sol",
+  "turn_id": "df135e4c36ce",
+  "checkpoint_transcript_start": 8794,
+  "transcript_lines_at_start": 8794,
+  "compact_transcript_start": 1038,
+  "token_usage": {
+    "input_tokens": 401278,
+    "cache_creation_tokens": 0,
+    "cache_read_tokens": 6517888,
+    "output_tokens": 22329,
+    "api_call_count": 39,
+    "subagent_tokens_complete": true
+  },
+  "session_metrics": {
+    "turn_count": 57
+  }
+}

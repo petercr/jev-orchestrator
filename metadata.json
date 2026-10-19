@@ -1,0 +1,32 @@
+{
+  "cli_version": "0.11.6-nightly.202610170622.9254299eb",
+  "checkpoint_id": "01M5AB2JPDJNDRN8G1T69M83FJ",
+  "strategy": "manual-commit",
+  "branch": "chore/v0.4-release",
+  "checkpoints_count": 2,
+  "files_touched": [
+    "CHANGELOG.md",
+    "PLAN.md",
+    "README.md",
+    "docs/releases/dev-orchestrator-0.4.0.md",
+    "package.json",
+    "src/cli.integration.test.ts"
+  ],
+  "sessions": [
+    {
+      "metadata": "/0/metadata.json",
+      "transcript": "/0/full.jsonl",
+      "compact_transcript": "/0/transcript.jsonl",
+      "content_hash": "/0/content_hash.txt",
+      "prompt": "/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 401278,
+    "cache_creation_tokens": 0,
+    "cache_read_tokens": 6517888,
+    "output_tokens": 22329,
+    "api_call_count": 39,
+    "subagent_tokens_complete": true
+  }
+}
