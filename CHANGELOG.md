@@ -1,5 +1,53 @@
 # Release notes
 
+## dev-orchestrator 0.4.0 — task reviews and controlled repair
+
+Release candidate prepared on 2026-10-19 UTC. Publication is pending. The npm
+package remains `dev-orchestrator`, the executable remains `dev-agent`, and
+Node.js 22+ is required.
+
+### Changed
+
+- Group orchestration reviews into model recommendation, policy decision,
+  resolved candidate, current evidence/limits, and operator choices. Show why
+  context, independent checks, confidence, or remaining calls block progress.
+  Distinguish manual alternatives and explicit evaluation recovery from normal
+  action approvals. These explanations are display-only.
+- Permit a clear recommendation to return to the same allowed worker for
+  repair despite a high testing assessment, when a current-generation
+  independent check failed after that worker's attempt. Preserve confidence,
+  preparation, missing-information/stuck guards, call limits, separate approval,
+  and fresh independent validation after repair. Worker claims and stale checks
+  cannot establish eligibility.
+
+### Evidence and limits
+
+- Add 195 complete offline workflow cases across all six model routes and both
+  workers, including twelve labeled regressions for the repair-policy fix.
+  Provider and worker boundaries are synthetic; independent local checks are
+  real. Cover missing context, stale/omitted validation, recovery, interruption,
+  and exhausted budgets without live credentials.
+- Retain eight bounded live launches: seven accepted patches and approved loop
+  completions across Jev, Decisions, Codex, and Claude, plus one entry-point
+  launch that exited before evaluation. Both staged repairs passed; two rejected
+  distributions required explicit recovery. Manual routing remained necessary,
+  and neither live repair needed the new high-testing-score exception. This
+  pilot does not establish improved live reliability, fewer detours, or speed.
+- Record the missing comparison cell, launcher amendment, separate acceptance
+  and completion evidence, active time versus prompt waits, and a supplemental
+  audit for truncated validation labels. See the
+  [live report](https://github.com/petercr/jev-orchestrator/blob/main/docs/workflows/v0.4-live-results-v1.md).
+
+### Compatibility
+
+Decision-only remains the default. CLI flags, provider defaults and aliases,
+decision JSON v1, orchestration trace schema v2, manual approvals, the
+eight-iteration and two-calls-per-worker limits, immutable worker/network
+selection, independent validation, and the 95% automatic completion threshold
+remain compatible. This release does not add unattended execution, saved-run
+resume, a terminal UI library, or new provider permissions. Existing v0.3
+provider setup and data-handling guidance below continues to apply.
+
 ## dev-orchestrator 0.3.1 — CLI command rename
 
 Published on npm on 2026-10-17 as
