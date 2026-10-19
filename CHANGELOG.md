@@ -2,9 +2,10 @@
 
 ## dev-orchestrator 0.4.0 — task reviews and controlled repair
 
-Release candidate prepared on 2026-10-19 UTC. Publication is pending. The npm
-package remains `dev-orchestrator`, the executable remains `dev-agent`, and
-Node.js 22+ is required.
+Published on npm on 2026-10-19 as
+[dev-orchestrator@0.4.0](https://www.npmjs.com/package/dev-orchestrator/v/0.4.0).
+The npm package remains `dev-orchestrator`, the executable remains `dev-agent`,
+and Node.js 22+ is required.
 
 ### Changed
 

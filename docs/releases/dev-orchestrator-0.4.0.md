@@ -1,28 +1,32 @@
-# dev-orchestrator 0.4.0 release preparation
+# dev-orchestrator 0.4.0 npm publication
 
-Prepared on 2026-10-19 UTC after PR #54 merged. This is an unpublished candidate;
-no tag, GitHub release, or npm publication has been created. npm authentication
-must be announced before starting any timed publication authorization.
+Published [dev-orchestrator@0.4.0](https://www.npmjs.com/package/dev-orchestrator/v/0.4.0)
+on 2026-10-19 at 20:45:14 UTC through npm account `petercr`, after PR #55 merged
+and the operator completed npm browser authorization. Public registry metadata
+reports `latest: 0.4.0`; the public archive matches the preverified archive byte
+for byte.
 
-| Item | Candidate |
+| Item | Release |
 | --- | --- |
 | Package / executable | `dev-orchestrator@0.4.0` / `dev-agent` |
 | Merged source baseline | `59aa718b785e78fd57cd1133cfbd777ffd575852` (PR #54) |
 | Preparation branch | `chore/v0.4-release` |
-| Final preparation commit / merged release source | Pending |
+| Preparation commit | `b0607082c53d663948856bcce103c736549e91f0` |
+| Final merged release source | `4dc76ae66e0bf1c2b57bf36ae50dab27a9908014` (PR #55) |
+| Release tree | `68ad10ed36026d01e103f0a2dbfe7ee694226e73` |
 | Archive | `dev-orchestrator-0.4.0.tgz` |
 | Size | 88,758 bytes |
 | SHA-256 | `95d2e8d8c155ead4fbe1dbdfb82e3272fa2ac6c6247bec23d4b959462cf00fa7` |
 | SHA-1 | `54e80eca55b1b5e2d3545b50f9bd799ae1437a0f` |
 | Integrity | `sha512-h6Ko07PeQ5+wOgWUXLSQ4Po/0Cj44mTaib7RzJdpw2O0nwqmuW0M+8XS1gcI67XeUhypxGvxQXrp3tj/ORR93A==` |
-| Node / pnpm | 22.23.3 / 11.19.0 |
+| Preparation Node / pnpm | 22.23.3 / 11.19.0 |
+| Merged-source verification Node / pnpm | 24.22.0 / 11.19.0 |
+| Fresh offline / registry consumer Node / pnpm | 24.22.0 / 10.30.3 |
 
-The source baseline above plus the pending release-preparation changes produced
-this archive. Do not attribute it solely to the baseline commit. The local
-package audit records 80 source/input hashes for later comparison with the
-preparation and final merged commits. Before publication, establish that those
-inputs and all packed runtime/documentation bytes match the accepted release
-source. Retain this archive instead of silently repacking a different artifact.
+The source baseline plus the preparation commit produced this archive. PR #55
+merged that preparation with an identical Git tree. All 80 recorded source/input
+hashes match the final merged source, and all 70 packed files match its rebuilt
+runtime, documents, and normalized metadata. The retained archive is unchanged.
 
 ## Scope and compatibility
 
@@ -43,7 +47,7 @@ The pilot's missing cell, two rejected distributions and explicit recoveries,
 and supplemental receipt audit remain limitations. A terminal UI library and
 saved-run resume belong to later planned milestones.
 
-## Verification
+## Preparation verification
 
 - The 72 focused CLI integration, argument, and presentation tests passed.
 - Typecheck and schema-only environment validation passed. `pnpm pack` ran the
@@ -73,7 +77,8 @@ saved-run resume belong to later planned milestones.
   `packageManager` and `scripts.prepack`. Runtime dependencies are unchanged.
 - At `2026-10-19T03:24:43Z`, a credential-free public-registry check found
   version `0.4.0` absent (HTTP 404), with `latest` still `0.3.1`. The `v0.4.0`
-  Git tag was absent. Recheck these mutable facts before publication.
+  Git tag was absent. The merged-source preflight below repeated these checks
+  before publication.
 
 The archive, pack/install logs, verifier, installed check results, mock review
 trace, package/source audit, and installed-file comparison are retained under
@@ -82,11 +87,64 @@ The verifier mocks fetch and blocks real HTTP requests in CLI processes, using
 only fixture provider credentials. The CLI did not load `.env` or `.env.local`
 value files for these checks.
 
-## Remaining release steps
+## Merged-source verification
 
-Commit/review this preparation and record the accepted source attribution after
-merge. Recheck the exact archive and registry/tag availability, announce npm
-authentication before publication, then verify the published metadata, archive
-digests, and a fresh registry installation. Publication evidence will be added
-to this record afterward; a version bump and local package checks are not a
-published release.
+Rechecked after PR #55 merged on 2026-10-19 UTC, using Node.js 24.22.0 and
+pnpm 11.19.0. All 72 focused CLI tests, typecheck, all 1,350 tests across 38
+files with `--maxWorkers=2`, the production build, and schema-only validation
+passed. PR #55's check/test/build and Socket checks also passed.
+
+A fresh offline installation of the retained archive passed all 48 CLI checks
+with 18 mocked transport requests and no live provider or worker calls. Its
+70 package files match the archive; pnpm's additional generated executable
+wrapper is accounted for separately. Only `dev-agent` is exposed, and its
+shebang and executable mode are preserved. The grouped mock review stopped
+with zero approvals or worker calls.
+
+The credential-free registry preflight at `2026-10-19T20:26:24Z` found `0.4.0`
+absent, `latest` at `0.3.1`, and no remote `v0.4.0` tag. The merged-source
+attribution and checks are in `merged-preflight.json`, the full suite log is
+`merged-tests.log`, and fresh installed verification is in
+`merged-verification/` under the evidence directory above.
+
+## Publication verification
+
+The final preflight rechecked all 80 source hashes against the merged commit,
+the retained archive checksum, and registry availability. npm confirmed the
+publishing account as `petercr`. The operator received advance notice of timed
+authorization, completed browser login and the separate publication approval,
+and `npm publish` succeeded with public access and the `latest` tag.
+
+- Public metadata confirms package/version, `latest: 0.4.0`, publishing account,
+  repository URL, and the sole executable `dev-agent`.
+- The standard credential-free registry download is 88,758 bytes and matches
+  the retained archive byte for byte, with the same SHA-256, SHA-1, and SHA-512
+  integrity recorded above.
+- A fresh registry consumer installed `dev-orchestrator@0.4.0` with lifecycle
+  scripts disabled, a new package store, and no user npm configuration. All 12
+  packages were downloaded. The consumer's pnpm 10.30.3 differs from the source
+  checkout's pinned pnpm 11.19.0; both used Node.js 24.22.0.
+- The registry installation passed all 48 CLI checks with 18 mocked transport
+  requests and no live provider or worker calls. Help/version, mock mode,
+  provider selection/defaults/aliases, configuration failures, and grouped
+  action review all passed. The consumer stayed unchanged; the separate mock
+  review recorded its expected diagnostic trace and zero approvals or workers.
+- All 70 installed package files match the public archive, the shebang and
+  executable mode are preserved, and the lockfile records the expected registry
+  integrity. pnpm's generated executable wrapper is accounted for separately;
+  only `dev-agent` is exposed.
+- The release-age exception covers only `dev-orchestrator@0.4.0` in the
+  disposable consumer. Initial public metadata reads did not yet include the
+  new version while npm processed the publication; these observations are
+  retained alongside the successful verification.
+
+The final preflight and publication transcript are `publication-preflight.json`
+and `publish.log` under the evidence directory. Public metadata, downloaded
+archive, registry observations, fresh install log, verifier, 48-check report,
+and installed-file comparison are in `registry-verification/`. These artifacts
+remain outside Git.
+
+This publication documentation follows the frozen release source. The published
+archive retains its preparation-era README and release notes; it was not
+repacked to update publication wording. No new Git tag or GitHub release was
+created. Historical v0.3.0 archives and npm versions remain unchanged.
