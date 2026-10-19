@@ -149,7 +149,7 @@ results.
    prompts, confidence, or budgets. Preparation and completion investigations
    retain their existing guards; live routing quality remains for step 4.
 
-4. [ ] Verify actual workflows with a bounded live comparison.
+4. [x] Verify actual workflows with a bounded live comparison.
    Add a separately versioned protocol for the current package; the issue #31
    harness remains pinned to its historical v0.2 source. Freeze tasks,
    repository revisions, package hashes, model routes, worker/model/effort,
@@ -168,6 +168,16 @@ results.
    actually reported. Further repetitions or provider cohorts need a recorded
    budget before execution. Complete with a reproducible report that states
    where improvement occurred and where manual routing is still required.
+   Delivered in the [versioned live pilot report](docs/workflows/v0.4-live-results-v1.md):
+   eight retained launches, seven accepted/completed workflows across Jev,
+   Decisions, Codex, and Claude, both real staged repairs, and two explicit
+   evaluation recoveries. One entry-point launch failed before evaluation;
+   its missing comparison cell was not replaced. The report discloses a bounded
+   trace-label limitation and a separate receipt audit. Live manual detours
+   did not decrease, and the new repair exception was not needed in these
+   live assessments. Release claims therefore remain clearer explanations
+   and a deterministic repair-policy correction, without a claimed live
+   reliability or speed improvement.
 
 5. [ ] Prepare and verify the v0.4.0 release.
    Update README, release notes, package metadata, and CLI version assertions

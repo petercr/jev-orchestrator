@@ -744,6 +744,16 @@ TypeSafe/Jev and one real Codex call: seven iterations, passing verification
 passed, so this run did not exercise the new repair exception. The report
 records the isolated setup, frozen candidate, approvals, and comparison limits.
 
+The [bounded v0.4 live comparison](docs/workflows/v0.4-live-results-v1.md)
+retains eight launches: seven accepted/completed workflows across Jev,
+Decisions, Codex, and Claude, plus one launch failure before evaluation. Both
+staged repairs succeeded; two malformed evaluations required explicit recovery.
+Manual routing remained necessary. This pilot does not establish a live
+reliability or speed improvement, and it did not need the new repair exception.
+The report includes the missing comparison cell, timing/wait separation, and
+the supplemental audit for truncated validation labels. See the
+[opt-in instrument guide](scripts/workflows/README.md) for reproduction.
+
 ## Live coding-agent verification
 
 The active process cancellation milestone completed implementation, offline
@@ -945,8 +955,10 @@ bounded live comparison. The first deliverable is the
 183 enforcement tests, a stop/ownership inventory, and a reserved verification
 task. [Operator-facing blocker explanations](docs/workflows/v0.4-routing-explanations.md)
 and the [focused repair routing fix](docs/workflows/v0.4-repair-routing.md)
-are implemented; the bounded live comparison is next. The published CLI remains
-v0.3.1 with its existing approval and validation requirements.
+are implemented, and the [bounded live pilot](docs/workflows/v0.4-live-results-v1.md)
+is complete with its limitations recorded. Next is v0.4.0 release preparation
+and packed-package verification. The published CLI remains v0.3.1 with its
+existing approval and validation requirements.
 
 A [v0.5 presentation candidate](PLAN.md#v05-candidate-terminal-presentation-and-interaction)
 tracks styled prompts, phase progress, and clearer action/result displays.
