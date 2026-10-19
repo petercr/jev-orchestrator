@@ -10,11 +10,10 @@ v0.3.1 onward.
 The GitHub repository keeps its existing name. The original v0.3.0 GitHub
 archive is recorded separately under its historical `jev-orchestrator` name;
 that unscoped npm package belongs to another project.
-[dev-orchestrator@0.3.1](https://www.npmjs.com/package/dev-orchestrator/v/0.3.1)
-was published on 2026-10-17.
-This checkout prepares **v0.4.0**, with clearer action reviews and a focused
-controlled-repair policy fix. Publication is pending; see the
-[release notes](CHANGELOG.md) and [preparation record](docs/releases/dev-orchestrator-0.4.0.md).
+[dev-orchestrator@0.4.0](https://www.npmjs.com/package/dev-orchestrator/v/0.4.0)
+was published on 2026-10-19, with clearer action reviews and a focused
+controlled-repair policy fix. See the [release notes](CHANGELOG.md) and
+[publication record](docs/releases/dev-orchestrator-0.4.0.md).
 
 The default mode remains **decision-only**: it inspects a repository, sends a
 compact state object to the selected decision model, applies deterministic
@@ -947,7 +946,7 @@ does not train on user data and offers enterprise zero data retention. This
 client does not guarantee zero retention for any provider. Review the selected
 service's terms and send only repository data you authorize for that service.
 
-## v0.4 release preparation
+## v0.4 task workflow release
 
 The [v0.4 proposal](PLAN.md#v04-draft-reliable-task-workflows) focuses on getting
 bounded coding tasks through implementation, validation, and acceptance review
@@ -959,10 +958,11 @@ bounded live comparison. The first deliverable is the
 task. [Operator-facing blocker explanations](docs/workflows/v0.4-routing-explanations.md)
 and the [focused repair routing fix](docs/workflows/v0.4-repair-routing.md)
 are implemented, and the [bounded live pilot](docs/workflows/v0.4-live-results-v1.md)
-is complete with its limitations recorded. This checkout prepares v0.4.0;
-the [release preparation record](docs/releases/dev-orchestrator-0.4.0.md) tracks
-the exact archive and installed-package checks. Publication is pending. The
-published CLI remains v0.3.1 with its existing approval and validation requirements.
+is complete with its limitations recorded. Version 0.4.0 was published on npm
+on 2026-10-19. The [publication record](docs/releases/dev-orchestrator-0.4.0.md)
+tracks the merged release source, exact archive, and installed-package checks.
+Existing approval and validation requirements remain in force. The pilot does
+not establish improved live reliability, fewer detours, or speed.
 
 A [v0.5 presentation candidate](PLAN.md#v05-candidate-terminal-presentation-and-interaction)
 tracks styled prompts, phase progress, and clearer action/result displays.

@@ -31,7 +31,8 @@ queries, or tool arguments.
 
 ## Proposed release sequence
 
-These are planning targets, not implemented features or release commitments.
+Version 0.4 is delivered. Versions 0.5 and 0.6 remain planning targets, not
+implemented features or release commitments.
 
 | Version | Primary outcome | First deliverable |
 | --- | --- | --- |
@@ -43,7 +44,10 @@ These are planning targets, not implemented features or release commitments.
 
 Drafted on 2026-10-17 after completion of v0.3 and publication of
 `dev-orchestrator@0.3.1`. The operator confirmed v0.4 as the next version;
-the focus below is a working proposal. Implementation started with the
+the original proposal and delivery evidence are retained below. Published as
+[`dev-orchestrator@0.4.0`](https://www.npmjs.com/package/dev-orchestrator/v/0.4.0)
+on 2026-10-19; the [publication record](docs/releases/dev-orchestrator-0.4.0.md)
+pins the verified source and archive. Implementation started with the
 [offline complete-workflow baseline](docs/workflows/v0.4-baseline.md).
 
 The proposed outcome is a CLI that gets a bounded coding task through
@@ -179,7 +183,7 @@ results.
    and a deterministic repair-policy correction, without a claimed live
    reliability or speed improvement.
 
-5. [ ] Prepare and verify the v0.4.0 release.
+5. [x] Prepare and verify the v0.4.0 release.
    Update README, release notes, package metadata, and CLI version assertions
    after the accepted implementation is complete. Run focused tests, typecheck,
    the full test suite, production build, and schema-only validation. Install
@@ -189,7 +193,7 @@ results.
    Give the operator advance notice before npm publication starts any timed
    browser authorization, then verify the published archive and installation.
    Preparation verified on 2026-10-19 UTC; see the
-   [v0.4.0 candidate record](docs/releases/dev-orchestrator-0.4.0.md).
+   [v0.4.0 publication record](docs/releases/dev-orchestrator-0.4.0.md).
    Metadata/version assertions and release notes now target `0.4.0`. The 72
    focused CLI tests, typecheck, all 1,350 tests, production build, and schema
    validation passed. The exact archive passed 48 offline installed CLI checks,
@@ -197,8 +201,16 @@ results.
    before any approval or worker call. All 70 installed files match the archive;
    its 66 compiled files match the frozen live candidate. SHA-256:
    `95d2e8d8c155ead4fbe1dbdfb82e3272fa2ac6c6247bec23d4b959462cf00fa7`.
-   Preparation commit/merge attribution and publication/registry installation
-   verification remain pending. No tag, release, or npm publication was created.
+   PR #55 merged the preparation as `4dc76ae`; all 80 source hashes and 70
+   packed files match that accepted source. The merged-source checks and a
+   fresh 48-check offline installation also passed. Published on npm on
+   2026-10-19 at 20:45:14 UTC after operator browser authorization, with
+   `latest: 0.4.0`. The public archive matches the retained archive byte for
+   byte and all three recorded digests. A fresh registry installation passed
+   the same 48 CLI checks and 18 mocked requests; all 70 installed package
+   files and lockfile integrity match. Initial registry propagation misses
+   remain recorded. Publication documentation follows the frozen source and
+   does not repack the archive.
 
 ### Release gate and scope
 
@@ -215,7 +227,7 @@ results.
   revisit this release claim before packaging.
 - [x] Existing independent-validation, worker-selection, network-selection,
   cancellation, and credential-handling guarantees pass their regressions.
-- [ ] The exact installed package and publication pass the recorded release
+- [x] The exact installed package and publication pass the recorded release
   checks, with documentation describing the behavior actually delivered.
 
 Keep the eight-iteration and two-calls-per-adapter limits, 95% automatic
