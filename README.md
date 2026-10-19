@@ -12,6 +12,9 @@ archive is recorded separately under its historical `jev-orchestrator` name;
 that unscoped npm package belongs to another project.
 [dev-orchestrator@0.3.1](https://www.npmjs.com/package/dev-orchestrator/v/0.3.1)
 was published on 2026-10-17.
+This checkout prepares **v0.4.0**, with clearer action reviews and a focused
+controlled-repair policy fix. Publication is pending; see the
+[release notes](CHANGELOG.md) and [preparation record](docs/releases/dev-orchestrator-0.4.0.md).
 
 The default mode remains **decision-only**: it inspects a repository, sends a
 compact state object to the selected decision model, applies deterministic
@@ -848,7 +851,7 @@ Then, from the other project, install that exact archive and run the installed
 binary against that project:
 
 ```bash
-pnpm add --save-dev /absolute/path/to/dev-orchestrator-0.3.1.tgz
+pnpm add --save-dev /absolute/path/to/dev-orchestrator-0.4.0.tgz
 pnpm exec dev-agent --version
 pnpm exec dev-agent . "Inspect this repository and choose the safest useful first action" \
   --mock --no-trace --json
@@ -856,7 +859,7 @@ pnpm exec dev-agent . "Inspect this repository and choose the safest useful firs
 
 The expected mock result is one JSON object with `status: "unexecuted"`; it
 must not edit the target project or require an API key. The installed version
-must report `0.3.1`. Do not pack or publish
+must report the exact archive's version (`0.4.0` for this checkout). Do not pack or publish
 `.env`, traces, build cache, or `node_modules`.
 
 Initial provider milestone verification on 2026-10-03 passed typecheck, all 269 tests,
@@ -944,7 +947,7 @@ does not train on user data and offers enterprise zero data retention. This
 client does not guarantee zero retention for any provider. Review the selected
 service's terms and send only repository data you authorize for that service.
 
-## Next milestone: v0.4 draft
+## v0.4 release preparation
 
 The [v0.4 proposal](PLAN.md#v04-draft-reliable-task-workflows) focuses on getting
 bounded coding tasks through implementation, validation, and acceptance review
@@ -956,9 +959,10 @@ bounded live comparison. The first deliverable is the
 task. [Operator-facing blocker explanations](docs/workflows/v0.4-routing-explanations.md)
 and the [focused repair routing fix](docs/workflows/v0.4-repair-routing.md)
 are implemented, and the [bounded live pilot](docs/workflows/v0.4-live-results-v1.md)
-is complete with its limitations recorded. Next is v0.4.0 release preparation
-and packed-package verification. The published CLI remains v0.3.1 with its
-existing approval and validation requirements.
+is complete with its limitations recorded. This checkout prepares v0.4.0;
+the [release preparation record](docs/releases/dev-orchestrator-0.4.0.md) tracks
+the exact archive and installed-package checks. Publication is pending. The
+published CLI remains v0.3.1 with its existing approval and validation requirements.
 
 A [v0.5 presentation candidate](PLAN.md#v05-candidate-terminal-presentation-and-interaction)
 tracks styled prompts, phase progress, and clearer action/result displays.

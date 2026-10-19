@@ -188,21 +188,32 @@ results.
    Record the final source revision, archive checksum, and known limitations.
    Give the operator advance notice before npm publication starts any timed
    browser authorization, then verify the published archive and installation.
+   Preparation verified on 2026-10-19 UTC; see the
+   [v0.4.0 candidate record](docs/releases/dev-orchestrator-0.4.0.md).
+   Metadata/version assertions and release notes now target `0.4.0`. The 72
+   focused CLI tests, typecheck, all 1,350 tests, production build, and schema
+   validation passed. The exact archive passed 48 offline installed CLI checks,
+   including 18 mocked transport requests and the new grouped review stopped
+   before any approval or worker call. All 70 installed files match the archive;
+   its 66 compiled files match the frozen live candidate. SHA-256:
+   `95d2e8d8c155ead4fbe1dbdfb82e3272fa2ac6c6247bec23d4b959462cf00fa7`.
+   Preparation commit/merge attribution and publication/registry installation
+   verification remain pending. No tag, release, or npm publication was created.
 
 ### Release gate and scope
 
-- [ ] Complete offline workflows cover successful implementation, controlled
+- [x] Complete offline workflows cover successful implementation, controlled
   repair, valid requests for context, recovery, interruption, and budget stops.
-- [ ] Every claimed routing improvement has a reproduced baseline and
+- [x] Every claimed routing improvement has a reproduced baseline and
   appropriate deterministic or live evidence; approved execution never
   bypasses policy or candidate checks.
-- [ ] The live report separates required approvals from routing alternatives,
+- [x] The live report separates required approvals from routing alternatives,
   accepted patches from completed runs, and active time from operator waits.
   It includes the reserved task and retains failures. Reduced detours are
   assessed alongside acceptance and completion; a faster failed run is not an
   improvement. If the pilot does not support a reliability improvement,
   revisit this release claim before packaging.
-- [ ] Existing independent-validation, worker-selection, network-selection,
+- [x] Existing independent-validation, worker-selection, network-selection,
   cancellation, and credential-handling guarantees pass their regressions.
 - [ ] The exact installed package and publication pass the recorded release
   checks, with documentation describing the behavior actually delivered.
