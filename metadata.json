@@ -1,0 +1,34 @@
+{
+  "cli_version": "0.11.6-nightly.202610170622.9254299eb",
+  "checkpoint_id": "01M5FWK36KWFYEMGJKEWVCFNE7",
+  "strategy": "manual-commit",
+  "branch": "feat/v0.5-terminal-prototype",
+  "checkpoints_count": 2,
+  "files_touched": [
+    "PLAN.md",
+    "README.md",
+    "docs/presentation/v0.5-prototype.md",
+    "package.json",
+    "scripts/presentation/fixtures.ts",
+    "scripts/presentation/prototype.test.ts",
+    "scripts/presentation/prototype.ts",
+    "scripts/presentation/tsconfig.json"
+  ],
+  "sessions": [
+    {
+      "metadata": "/0/metadata.json",
+      "transcript": "/0/full.jsonl",
+      "compact_transcript": "/0/transcript.jsonl",
+      "content_hash": "/0/content_hash.txt",
+      "prompt": "/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 223090,
+    "cache_creation_tokens": 0,
+    "cache_read_tokens": 8118528,
+    "output_tokens": 46670,
+    "api_call_count": 50,
+    "subagent_tokens_complete": true
+  }
+}
