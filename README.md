@@ -966,8 +966,12 @@ not establish improved live reliability, fewer detours, or speed.
 
 A [v0.5 presentation candidate](PLAN.md#v05-candidate-terminal-presentation-and-interaction)
 tracks styled prompts, phase progress, and clearer action/result displays.
-The initial shortlist is Clack, Inquirer, and Ink, with Clack proposed for the
-first offline prototype. Library selection and release placement are tentative.
+The [offline prototype and library decision](docs/presentation/v0.5-prototype.md)
+selects Clack for the following integration step. In this checkout, run
+`pnpm prototype:ui` to compare the synthetic scenes with
+`pnpm prototype:ui --renderer plain`. Add `--scenario review --interactive`
+to exercise the demo prompt. The prototype is development tooling; the published
+CLI keeps its current presentation and approval behavior.
 
 The [v0.6 draft](PLAN.md#v06-draft-saved-runs-and-safe-resume) proposes opt-in
 saved runs, local history, and continuation after a clean stop. It preserves

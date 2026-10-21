@@ -246,8 +246,10 @@ workflow. Traces remain diagnostic records.
 
 Requested on 2026-10-17: make `dev-agent` look and feel better, potentially
 using a Node terminal UI library. Recommended placement is v0.5, alongside
-v0.4's clearer blocker messages and output grouping. The visual work is on the
-roadmap; its release assignment and library selection remain provisional.
+v0.4's clearer blocker messages and output grouping. The operator confirmed
+moving on to v0.5 on 2026-10-21. Implementation started with the
+[offline presentation prototype](docs/presentation/v0.5-prototype.md); Clack is
+selected for the following integration step.
 
 The current CLI uses `console.log` and `node:readline/promises` in
 `src/cli.ts`. Presentation can move behind a small CLI-owned adapter while
@@ -273,16 +275,25 @@ Version/engine observations come from the public registry records for
 [Inquirer](https://registry.npmjs.org/@inquirer%2fprompts/8.7.3), and
 [Ink](https://registry.npmjs.org/ink/8.0.0). The recommendation to prototype
 Clack first is a project-fit judgment, not a measured performance comparison.
-No library has been installed or integrated by this planning work.
+These initial observations preceded implementation; the prototype and current
+dependency decision are recorded below.
 
 ### Proposed delivery and acceptance
 
-1. [ ] Build a small offline presentation prototype using synthetic run data:
+1. [x] Build a small offline presentation prototype using synthetic run data:
    one action review, a worker/validation progress sequence, a blocked run,
    and a final summary. Compare Clack with the existing plain interface;
    investigate Ink further if a persistent dashboard is a desired outcome.
    Record the chosen library, runtime/dependency impact, and terminal behavior
    before expanding the integration.
+   Delivered in the [prototype and library decision](docs/presentation/v0.5-prototype.md):
+   `pnpm prototype:ui` compares the existing plain formatters with pinned Clack
+   1.8.1 across four synthetic scenes. The library is a development dependency;
+   the production CLI and authorization paths remain unchanged. Twenty-seven
+   deterministic tests and thirteen WSL PTY walkthroughs cover review content,
+   static fallbacks, bounded input, narrow output, EOF, signals, and terminal
+   restoration. The native spinner's Ctrl+C exit-0 behavior is reproduced and
+   avoided by keeping progress and cancellation under application control.
 2. [ ] Integrate the chosen presentation through a narrow CLI adapter.
    Display the resolved candidate's action, parameters, worker/network
    permissions, and reason before explicit approval. A selected alternative
