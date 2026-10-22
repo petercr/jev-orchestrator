@@ -1,0 +1,43 @@
+{
+  "cli_version": "0.11.6-nightly.202610170622.9254299eb",
+  "checkpoint_id": "01M5GWHKJCE1D0PJ0FH7S0X3NG",
+  "session_id": "01a155d6-cabb-7712-be8d-5efffd522a09",
+  "strategy": "manual-commit",
+  "created_at": "2026-10-22T04:05:13.692860641Z",
+  "branch": "test/v0.5-terminal-verification",
+  "checkpoints_count": 1,
+  "files_touched": [
+    ".github/workflows/terminal.yml",
+    "CHANGELOG.md",
+    "PLAN.md",
+    "README.md",
+    "docs/presentation/v0.5-integration.md",
+    "docs/presentation/v0.5-verification.md",
+    "package.json",
+    "scripts/terminal/README.md",
+    "scripts/terminal/boundaries.mjs",
+    "scripts/terminal/package.json",
+    "scripts/terminal/pnpm-workspace.yaml",
+    "scripts/terminal/verify.mjs",
+    "scripts/terminal/worker.mjs",
+    "src/cli/terminal.test.ts",
+    "src/cli/terminal.ts"
+  ],
+  "agent": "Codex",
+  "model": "gpt-6.1-sol",
+  "turn_id": "93b29a0332d4",
+  "checkpoint_transcript_start": 1678,
+  "transcript_lines_at_start": 1678,
+  "compact_transcript_start": 198,
+  "token_usage": {
+    "input_tokens": 103012,
+    "cache_creation_tokens": 0,
+    "cache_read_tokens": 11697408,
+    "output_tokens": 72808,
+    "api_call_count": 81,
+    "subagent_tokens_complete": true
+  },
+  "session_metrics": {
+    "turn_count": 5
+  }
+}

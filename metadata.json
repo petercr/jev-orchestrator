@@ -1,0 +1,41 @@
+{
+  "cli_version": "0.11.6-nightly.202610170622.9254299eb",
+  "checkpoint_id": "01M5GWHKJCE1D0PJ0FH7S0X3NG",
+  "strategy": "manual-commit",
+  "branch": "test/v0.5-terminal-verification",
+  "checkpoints_count": 1,
+  "files_touched": [
+    ".github/workflows/terminal.yml",
+    "CHANGELOG.md",
+    "PLAN.md",
+    "README.md",
+    "docs/presentation/v0.5-integration.md",
+    "docs/presentation/v0.5-verification.md",
+    "package.json",
+    "scripts/terminal/README.md",
+    "scripts/terminal/boundaries.mjs",
+    "scripts/terminal/package.json",
+    "scripts/terminal/pnpm-workspace.yaml",
+    "scripts/terminal/verify.mjs",
+    "scripts/terminal/worker.mjs",
+    "src/cli/terminal.test.ts",
+    "src/cli/terminal.ts"
+  ],
+  "sessions": [
+    {
+      "metadata": "/0/metadata.json",
+      "transcript": "/0/full.jsonl",
+      "compact_transcript": "/0/transcript.jsonl",
+      "content_hash": "/0/content_hash.txt",
+      "prompt": "/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 103012,
+    "cache_creation_tokens": 0,
+    "cache_read_tokens": 11697408,
+    "output_tokens": 72808,
+    "api_call_count": 81,
+    "subagent_tokens_complete": true
+  }
+}
