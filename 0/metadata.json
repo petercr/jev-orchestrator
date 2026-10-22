@@ -1,0 +1,30 @@
+{
+  "cli_version": "0.11.6-nightly.202610170622.9254299eb",
+  "checkpoint_id": "01M5JCJPVW7M464DY1SNW10WAZ",
+  "session_id": "01a155d6-cabb-7712-be8d-5efffd522a09",
+  "strategy": "manual-commit",
+  "created_at": "2026-10-22T18:04:42.480393035Z",
+  "branch": "fix/61-explicit-routing-recovery",
+  "checkpoints_count": 1,
+  "files_touched": [
+    "PLAN.md",
+    "docs/presentation/v0.5-routing-investigation.md",
+    "docs/releases/dev-orchestrator-0.5.0.md"
+  ],
+  "agent": "Codex",
+  "model": "gpt-6.1-sol",
+  "turn_id": "73d0de2392c3",
+  "checkpoint_transcript_start": 3909,
+  "transcript_lines_at_start": 3909,
+  "compact_transcript_start": 473,
+  "token_usage": {
+    "input_tokens": 43640,
+    "cache_creation_tokens": 0,
+    "cache_read_tokens": 5079680,
+    "output_tokens": 22155,
+    "api_call_count": 43
+  },
+  "session_metrics": {
+    "turn_count": 10
+  }
+}

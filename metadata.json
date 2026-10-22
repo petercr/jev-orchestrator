@@ -1,0 +1,28 @@
+{
+  "cli_version": "0.11.6-nightly.202610170622.9254299eb",
+  "checkpoint_id": "01M5JCJPVW7M464DY1SNW10WAZ",
+  "strategy": "manual-commit",
+  "branch": "fix/61-explicit-routing-recovery",
+  "checkpoints_count": 1,
+  "files_touched": [
+    "PLAN.md",
+    "docs/presentation/v0.5-routing-investigation.md",
+    "docs/releases/dev-orchestrator-0.5.0.md"
+  ],
+  "sessions": [
+    {
+      "metadata": "/0/metadata.json",
+      "transcript": "/0/full.jsonl",
+      "compact_transcript": "/0/transcript.jsonl",
+      "content_hash": "/0/content_hash.txt",
+      "prompt": ""
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 43640,
+    "cache_creation_tokens": 0,
+    "cache_read_tokens": 5079680,
+    "output_tokens": 22155,
+    "api_call_count": 43
+  }
+}
