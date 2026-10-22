@@ -1,0 +1,33 @@
+{
+  "cli_version": "0.11.6-nightly.202610170622.9254299eb",
+  "checkpoint_id": "01M5JC33GXT6ERE5N1A7CMVCHG",
+  "session_id": "01a155d6-cabb-7712-be8d-5efffd522a09",
+  "strategy": "manual-commit",
+  "created_at": "2026-10-22T17:56:11.137171383Z",
+  "branch": "fix/61-explicit-routing-recovery",
+  "checkpoints_count": 1,
+  "files_touched": [
+    "CHANGELOG.md",
+    "README.md",
+    "src/cli/presentation.test.ts",
+    "src/cli/presentation.ts",
+    "src/orchestration/recovery.test.ts"
+  ],
+  "agent": "Codex",
+  "model": "gpt-6.1-sol",
+  "turn_id": "73d0de2392c3",
+  "checkpoint_transcript_start": 3758,
+  "transcript_lines_at_start": 3758,
+  "compact_transcript_start": 454,
+  "token_usage": {
+    "input_tokens": 72748,
+    "cache_creation_tokens": 0,
+    "cache_read_tokens": 3926144,
+    "output_tokens": 20627,
+    "api_call_count": 27,
+    "subagent_tokens_complete": true
+  },
+  "session_metrics": {
+    "turn_count": 10
+  }
+}
