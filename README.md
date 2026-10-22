@@ -14,6 +14,9 @@ that unscoped npm package belongs to another project.
 was published on 2026-10-19, with clearer action reviews and a focused
 controlled-repair policy fix. See the [release notes](CHANGELOG.md) and
 [publication record](docs/releases/dev-orchestrator-0.4.0.md).
+This checkout prepares `0.5.0` with styled terminal interaction; its
+[release verification](docs/releases/dev-orchestrator-0.5.0.md) precedes npm
+publication.
 
 The default mode remains **decision-only**: it inspects a repository, sends a
 compact state object to the selected decision model, applies deterministic
@@ -841,7 +844,7 @@ package exposes only `dev-agent`. Flags and configuration remain compatible.
 Install the published package and run `dev-agent`:
 
 ```bash
-pnpm add --save-dev dev-orchestrator@0.3.1
+pnpm add --save-dev dev-orchestrator@0.4.0
 pnpm exec dev-agent --version
 pnpm exec dev-agent . "Inspect this repository and choose the safest useful first action" \
   --mock --no-trace --json
@@ -857,7 +860,7 @@ Then, from the other project, install that exact archive and run the installed
 binary against that project:
 
 ```bash
-pnpm add --save-dev /absolute/path/to/dev-orchestrator-0.4.0.tgz
+pnpm add --save-dev /absolute/path/to/dev-orchestrator-0.5.0.tgz
 pnpm exec dev-agent --version
 pnpm exec dev-agent . "Inspect this repository and choose the safest useful first action" \
   --mock --no-trace --json
@@ -865,7 +868,7 @@ pnpm exec dev-agent . "Inspect this repository and choose the safest useful firs
 
 The expected mock result is one JSON object with `status: "unexecuted"`; it
 must not edit the target project or require an API key. The installed version
-must report the exact archive's version (`0.4.0` for this checkout). Do not pack or publish
+must report the exact archive's version (`0.5.0` for this checkout). Do not pack or publish
 `.env`, traces, build cache, or `node_modules`.
 
 Initial provider milestone verification on 2026-10-03 passed typecheck, all 269 tests,
@@ -884,6 +887,13 @@ author has effective `write` or `admin` repository permission. The permission
 check itself does not check out or execute PR code; only after it passes does
 the workflow check out the PR head without persisted credentials. For everyone
 else, verification is skipped.
+
+The separate `Terminal verification` workflow uses a read-only, maintainer
+permission gate and Node 22 on Ubuntu and Windows. It checks the compiled CLI,
+installs an exact checkout archive in a private consumer, and repeats the
+offline PTY/ConPTY matrix. Its optional native test dependencies stay outside
+normal installation and the published package; captures are retained for seven
+days. See the [harness instructions](scripts/terminal/README.md).
 
 ## Entire Cloud trails and reviews
 
@@ -971,7 +981,9 @@ tracks the merged release source, exact archive, and installed-package checks.
 Existing approval and validation requirements remain in force. The pilot does
 not establish improved live reliability, fewer detours, or speed.
 
-A [v0.5 presentation candidate](PLAN.md#v05-candidate-terminal-presentation-and-interaction)
+## v0.5 terminal presentation
+
+The [v0.5 presentation milestone](PLAN.md#v05-candidate-terminal-presentation-and-interaction)
 now integrates styled orchestration prompts, phase progress, candidate review,
 and grouped results in this checkout. The
 [integration record](docs/presentation/v0.5-integration.md) follows the
@@ -994,8 +1006,9 @@ In a plain Windows console, submit Ctrl+D or Ctrl+Z followed by Enter to close
 the prompt; styled mode handles Ctrl+D immediately.
 
 The synthetic comparison remains available through `pnpm prototype:ui` and
-`pnpm prototype:ui --renderer plain`. This is unreleased v0.5 work; the published
-package remains v0.4.0. The optional
+`pnpm prototype:ui --renderer plain`. This checkout is the `0.5.0` release
+candidate; the published package remains v0.4.0 until
+[publication](docs/releases/dev-orchestrator-0.5.0.md). The optional
 [terminal verification harness](scripts/terminal/README.md) exercises compiled
 and installed CLIs on POSIX PTYs and native Windows ConPTY without live calls.
 The [verification record](docs/presentation/v0.5-verification.md) documents
