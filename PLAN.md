@@ -373,6 +373,22 @@ dependency decision are recorded below.
    it did not reproduce the failure or establish pinning as a mitigation.
    Provider precision clarification and an accepted fix or mitigation remain
    outstanding. The issue and publication blocker remain open.
+   A [recovery mitigation candidate](docs/presentation/v0.5-routing-mitigation-results.md)
+   now discloses the limitation, explains unchanged strict rejection, and
+   verifies repeated explicit recovery with both workers in deterministic
+   tests. All 1,409 tests, check, build, and schema validation passed. A fresh
+   three-launch live cohort completed all three tasks with original-example
+   acceptance, fresh test/lint receipts, and separate completion approvals;
+   one natural 0.99 rejection required explicit recovery. Repeated recovery
+   was not exercised live in that cohort. The new archive, SHA-256
+   `93ec79dd5f11284e44e2a72f807d85d8cd524be8a9a54e8b6df809d8adc925c5`,
+   passed fresh installs, 49 CLI checks, and both 33-scenario WSL/Windows
+   terminal matrices. This proposes accepting occasional evaluation failures
+   and possible budget exhaustion with manual recovery; it does not fix
+   provider output. The operator explicitly accepted that tradeoff on
+   2026-10-22 and asked to continue, resolving #61's release blocker through
+   mitigation. Merge PR #63 and verify merged candidate inputs before npm
+   publication; retain the known limitation and original failed observations.
 
 ## v0.6 draft: saved runs and safe resume
 

@@ -3,11 +3,12 @@ import os from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { JevEvaluationError } from '../ai/errors.js';
+import { createEvaluator } from '../ai/evaluate.js';
 import { boundAgentStateForEvaluation, normalizeAssessment } from '../ai/contract.js';
 import { inspectRepo } from '../repo/inspect.js';
 import { createInitialState, runOrchestration } from './loop.js';
 import { executeCandidate, type ToolResult } from './execute.js';
-import type { Action, EvaluationResult } from '../types.js';
+import { ACTIONS, type Action, type EvaluationResult } from '../types.js';
 import * as trace from '../logging/trace.js';
 
 const roots: string[] = [];
@@ -57,6 +58,78 @@ afterEach(async () => {
 });
 
 describe('orchestration recovery and issue progress', () => {
+  it.each(['codex', 'claude'] as const)('requires two explicit recoveries after validation with %s, retaining permissions and acceptance approval', async (worker) => {
+    const repo = await repository();
+    const action = worker === 'codex' ? 'CALL_CODEX' : 'CALL_CLAUDE';
+    let requests = 0;
+    const fetchMock = vi.fn<typeof fetch>().mockImplementation(async (endpoint, request) => {
+      requests += 1;
+      expect(String(endpoint)).toBe('https://api.typesafe.ai/v1/systemone');
+      expect(JSON.parse(String(request?.body)).model).toBe('jev-1.14.0');
+      const choice = requests === 1 ? action : requests === 2 ? 'RUN_TESTS' : 'FINISH';
+      const total = requests === 3 ? 0.99 : requests === 4 ? 1.01 : 1;
+      const boolean = (noul: number) => ({ type: 'noul', noul });
+      return Response.json({ model: 'jev-1.14.0', answers: {
+        taskComplete: boolean(choice === 'FINISH' ? 0.99 : 0.01),
+        needsMoreInformation: boolean(0.01), needsTesting: boolean(0.01), stuck: boolean(0.01),
+        nextAction: { type: 'choice', choice, confidence: 0.99,
+          probabilities: Object.fromEntries(ACTIONS.map((name) => [name,
+            name === choice ? Math.min(total, 1) : name === 'ASK_USER' && total > 1 ? 0.01 : 0])) },
+      } });
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    const evaluate = createEvaluator({ provider: 'typesafe', model: 'jev-1.14.0', apiKey: 'fixture-secret' });
+    const runner = vi.fn().mockResolvedValue({ exitCode: 0, stdout: 'Independent verify passed.', stderr: '', timedOut: false });
+    const execute = vi.fn<typeof executeCandidate>().mockImplementation(async (proposal) => {
+      if (proposal.action === action) {
+        await writeFile(path.join(repo.root, 'implementation.mjs'), 'export const fixed = true;\n');
+        return result(action);
+      }
+      return executeCandidate(proposal, runner);
+    });
+    const approve = vi.fn().mockResolvedValue({ kind: 'approve' });
+    const recoverEvaluation = vi.fn().mockImplementation(async (context) => {
+      expect(requests).toBe(2 + recoverEvaluation.mock.calls.length);
+      expect(approve).toHaveBeenCalledTimes(2);
+      expect(execute).toHaveBeenCalledTimes(2);
+      expect(context.state).toMatchObject({ workerSelection: worker, tests: { ran: true, passed: true },
+        [worker === 'codex' ? 'codexCalls' : 'claudeCalls']: 1,
+        evidence: { validationGeneration: 1, validations: [{ generation: 1, script: 'verify', passed: true }] },
+      });
+      // Prompt input is a copy; neither it nor changed environment can switch routes or grant permissions.
+      context.state.workerSelection = worker === 'codex' ? 'claude' : 'codex';
+      context.state.codexNetworkAccess = true;
+      context.state.codexCalls = 0;
+      context.state.claudeCalls = 0;
+      context.state.evidence.validations = [];
+      vi.stubEnv('ROUTER_PROVIDER', 'openrouter');
+      vi.stubEnv('ROUTER_MODEL', 'openai/gpt-6-luna-decisions');
+      return 'continue';
+    });
+    const outcome = await runOrchestration(createInitialState(repo, 'Implement the fixture; run npm run verify before acceptance.', worker), {
+      evaluate, approve, recoverEvaluation, execute, askForInformation: async () => '',
+    });
+    expect(outcome).toMatchObject({ status: 'finished', iterations: 5, state: {
+      workerSelection: worker, codexCalls: worker === 'codex' ? 1 : 0, claudeCalls: worker === 'claude' ? 1 : 0,
+      tests: { ran: true, passed: true }, evidence: { validationGeneration: 1, validations: [{ script: 'verify', passed: true }] },
+    }, summary: { counts: { evaluations: 5, evaluationFailures: 2, evaluationRecoveries: 2, approvals: 3 } } });
+    expect(outcome.state.codexNetworkAccess).toBeUndefined();
+    expect(fetchMock).toHaveBeenCalledTimes(5);
+    expect(runner).toHaveBeenCalledOnce();
+    expect(runner.mock.calls[0]?.[0]).toMatchObject({ command: 'npm', args: ['run', 'verify'] });
+    expect(approve).toHaveBeenCalledTimes(3);
+    expect(approve.mock.calls.at(-1)?.[0].proposal.action).toBe('FINISH');
+    expect(await readFile(path.join(repo.root, 'implementation.mjs'), 'utf8')).toBe('export const fixed = true;\n');
+    const rows = await records(outcome.tracePath);
+    for (const iteration of [3, 4]) {
+      const failure = rows.find((row) => row.iteration === iteration && row.recovery?.decision === undefined);
+      expect(failure).toMatchObject({ evaluation: null, policy: null, approval: null, toolInput: null, toolResult: null,
+        failure: { code: 'invalid_response', stage: 'distribution', category: 'sum', probabilitySum: iteration === 3 ? 0.99 : 1.01 } });
+      expect(rows.find((row) => row.iteration === iteration && row.recovery?.decision === 'continue')).toBeDefined();
+    }
+    expect(JSON.stringify(rows)).not.toContain('fixture-secret');
+  });
+
   it('rejects malformed issue-tool metadata without accepting fetched criteria', async () => {
     const outcome = await runOrchestration(createInitialState(await repository(), url), {
       evaluate: async () => evaluation('READ_ISSUE'), approve: async () => ({ kind: 'approve' }),

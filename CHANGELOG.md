@@ -16,6 +16,11 @@ and Node.js 22+ is required.
 - Handle plain Windows console EOF keys followed by Enter without enabling
   raw input or terminal styling. Add isolated offline PTY/ConPTY verification
   for compiled and packed CLIs; no live model or coding-agent calls.
+- Explain rejected action totals and the possibility of another failure at
+  recovery. Document TypeSafe/Jev's observed invalid totals and repeated,
+  explicitly approved recovery within the existing iteration budget. Keep
+  the 0.001 tolerance, probabilities, selections, permissions, and budgets
+  unchanged; this mitigates interruption rather than fixing provider output.
 
 ### Compatibility and evidence
 
