@@ -116,6 +116,10 @@ and npm publication remains pending.
 
 ## Publication boundary
 
+Publication is blocked by [routing reliability issue #61](https://github.com/petercr/jev-orchestrator/issues/61).
+Resolve the issue and verify the fix or accepted mitigation and any changed
+candidate archive before starting npm publication.
+
 Merge the release preparation before publishing. Recheck the merged source,
 retained archive, and registry availability; give the operator advance notice
 before launching any timed npm browser authorization. Record the public

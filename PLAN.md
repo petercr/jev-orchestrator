@@ -32,13 +32,15 @@ queries, or tool arguments.
 ## Proposed release sequence
 
 Version 0.4 is published. Version 0.5's implementation, terminal verification,
-and release preparation are verified; publication is pending. Version 0.6
-remains a design proposal, not an implemented feature or release commitment.
+and release preparation are verified; publication is blocked by
+[routing reliability issue #61](https://github.com/petercr/jev-orchestrator/issues/61).
+Version 0.6 remains a design proposal, not an implemented feature or release
+commitment.
 
 | Version | Primary outcome | First deliverable |
 | --- | --- | --- |
 | [v0.4](#v04-draft-reliable-task-workflows) | More reliable completion of bounded coding tasks | Reproducible complete-workflow baseline |
-| [v0.5](#v05-candidate-terminal-presentation-and-interaction) | Clearer, more polished terminal interaction | Release preparation verified; publication pending |
+| [v0.5](#v05-candidate-terminal-presentation-and-interaction) | Clearer, more polished terminal interaction | Release preparation verified; publication blocked by [#61](https://github.com/petercr/jev-orchestrator/issues/61) |
 | [v0.6](#v06-draft-saved-runs-and-safe-resume) | Stop a run and continue it later with its context and remaining limits | Versioned saved-run contract and offline recovery fixtures |
 
 ## v0.4 draft: reliable task workflows
@@ -361,7 +363,9 @@ dependency decision are recorded below.
    first-pass lint deviation and live-service scope limits. All five runs
    restored terminal flags. This is mixed live evidence, not an all-successful
    release gate or a routing-reliability improvement claim; publication is
-   still pending.
+   blocked by [routing reliability issue #61](https://github.com/petercr/jev-orchestrator/issues/61).
+   Resolve that issue and verify the fix or accepted mitigation before npm
+   publication, retaining the original pilot's failures and safety boundaries.
 
 ## v0.6 draft: saved runs and safe resume
 
