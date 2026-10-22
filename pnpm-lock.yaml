@@ -8,13 +8,13 @@ importers:
 
   .:
     dependencies:
+      '@clack/prompts':
+        specifier: 1.8.1
+        version: 1.8.1
       ai:
         specifier: 7.0.106
         version: 7.0.106(zod@4.6.5)
     devDependencies:
-      '@clack/prompts':
-        specifier: 1.8.1
-        version: 1.8.1
       '@types/node':
         specifier: ^24.0.0
         version: 24.13.5

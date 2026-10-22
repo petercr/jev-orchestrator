@@ -5,6 +5,7 @@ import path from 'node:path';
 import type { AgentState, EvaluationAttribution, EvaluationResult, PolicyDecision } from '../types.js';
 import type { EvaluationFailure } from '../ai/errors.js';
 import type { RunMetrics, RunSummary } from '../orchestration/summary.js';
+import type { PromptStopReason } from '../cancellation.js';
 
 export const TRACE_SCHEMA_VERSION = 1;
 export const ORCHESTRATION_TRACE_SCHEMA_VERSION = 2;
@@ -58,6 +59,7 @@ export type OrchestrationTracePayload = {
   evaluation: EvaluationResult | null;
   policy: PolicyDecision | null;
   interruption?: { phase: InterruptionPhase; reason: 'signal' };
+  promptStop?: { phase: InterruptionPhase; reason: PromptStopReason };
   proposal: unknown;
   approval: unknown;
   toolInput: unknown;
@@ -287,6 +289,7 @@ export async function appendOrchestrationTrace(
       : { workerRequest: sanitizeTraceValue(payload.workerRequest, secretValues) }),
     stateAfter: sanitizeTraceValue(payload.stateAfter, secretValues),
     ...(payload.interruption ? { interruption: payload.interruption } : {}),
+    ...(payload.promptStop ? { promptStop: payload.promptStop } : {}),
     ...(payload.failure ? { failure: sanitizeTraceValue(payload.failure, secretValues) } : {}),
     ...(payload.recovery ? { recovery: payload.recovery } : {}),
     ...(payload.metrics ? { metrics: sanitizeTraceValue(payload.metrics, secretValues) } : {}),

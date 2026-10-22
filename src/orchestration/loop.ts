@@ -1,4 +1,4 @@
-import { interruptible, throwIfInterrupted, RunInterruptedError, type ExecutionOptions } from '../cancellation.js';
+import { interruptible, throwIfInterrupted, RunInterruptedError, PromptStoppedError, type PromptStopReason, type ExecutionOptions } from '../cancellation.js';
 import {
   appendOrchestrationTrace,
   createOrchestrationTrace,
@@ -638,11 +638,11 @@ export async function runOrchestration(
   let interruptedWorkerRequest: unknown;
   let interruptedIteration = 0;
   const executionOptions: ExecutionOptions = options.signal ? { signal: options.signal } : {};
-  const stop = async (): Promise<OrchestrationResult> => {
+  const stop = async (reason: 'signal' | PromptStopReason = 'signal'): Promise<OrchestrationResult> => {
     state = {
       ...state,
       currentGoal: 'Run interrupted without claiming completion.',
-      observations: [...state.observations, 'Run interrupted by a signal.'],
+      observations: [...state.observations, reason === 'signal' ? 'Run interrupted by a signal.' : `Run stopped: ${reason}.`],
     };
     const summary = metrics.summary(state);
     await appendOrchestrationTrace(trace, {
@@ -655,12 +655,15 @@ export async function runOrchestration(
       toolInput: interruptedInput,
       toolResult: interruptedResult,
       stateAfter: state,
-      interruption: { phase: interruptedPhase ?? phase, reason: 'signal' },
+      ...(reason === 'signal'
+        ? { interruption: { phase: interruptedPhase ?? phase, reason } }
+        : { promptStop: { phase, reason } }),
       ...(interruptedWorkerRequest === undefined ? {} : { workerRequest: interruptedWorkerRequest }),
       metrics: { timings: summary.timings, counts: summary.counts },
       summary,
     });
-    return { status: 'stopped', state, tracePath: trace.path, iterations: interruptedIteration, summary };
+    return { status: 'stopped', state, tracePath: trace.path, iterations: interruptedIteration, summary,
+      ...(reason === 'signal' ? {} : { exitCode: 1 }) };
   };
   try {
     throwIfInterrupted(options.signal);
@@ -958,6 +961,7 @@ export async function runOrchestration(
     };
   } catch (error) {
     if (error instanceof RunInterruptedError || options.signal?.aborted) return await stop();
+    if (error instanceof PromptStoppedError) return await stop(error.reason);
     throw error;
   } finally {
     options.signal?.removeEventListener('abort', latchPhase);
