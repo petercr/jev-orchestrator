@@ -366,6 +366,13 @@ dependency decision are recorded below.
    blocked by [routing reliability issue #61](https://github.com/petercr/jev-orchestrator/issues/61).
    Resolve that issue and verify the fix or accepted mitigation before npm
    publication, retaining the original pilot's failures and safety boundaries.
+   The [initial investigation](docs/presentation/v0.5-routing-investigation.md)
+   identifies a gap between the native API's approximate-total contract and
+   the required 0.001 tolerance. A separate six-evaluation read-only probe
+   passed unchanged values for the moving alias and both pinned versions;
+   it did not reproduce the failure or establish pinning as a mitigation.
+   Provider precision clarification and an accepted fix or mitigation remain
+   outstanding. The issue and publication blocker remain open.
 
 ## v0.6 draft: saved runs and safe resume
 
