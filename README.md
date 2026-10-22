@@ -358,6 +358,18 @@ continuation requests a fresh evaluation and does not approve a repository
 action. Decision-only `--json` evaluation errors add allowlisted diagnostics
 under `error.failure`; raw response data is excluded from those diagnostics.
 
+Known TypeSafe/Jev limitation: the v0.5 live pilot rejected action totals near
+`0.99`, including a repeated rejection in one run. Strict validation remains
+in force; a new evaluation can fail again. In orchestration mode, review each
+failure and explicitly choose `continue` only while iterations remain. More
+than one recovery is supported within the same eight-iteration budget; it
+retains the provider/model, worker selection, network permissions, edits, and
+current-generation check evidence. Decision-only mode returns an error
+instead of offering in-process recovery. A stopped or exhausted run has not
+accepted the task, even when its patch and checks pass. See
+[issue #61](https://github.com/petercr/jev-orchestrator/issues/61) and the
+[investigation](https://github.com/petercr/jev-orchestrator/blob/main/docs/presentation/v0.5-routing-investigation.md).
+
 Ctrl+C (`SIGINT`) or `SIGTERM` also stops an approval-gated run while Jev,
 approval, information input, or an approved tool or worker is pending. The
 first signal wins; repeated signals during cleanup do not start another action.

@@ -310,7 +310,17 @@ describe('terminal explanations and recovery', () => {
     expect(output).toContain('No candidate or action approval came from the failed evaluation');
     expect(output).toContain('consumes another iteration. 2 iterations remain');
     expect(output).toContain('Codex 1/2');
+    expect(output).toContain('Provider/model selection and worker/network permissions remain fixed');
+    expect(output).not.toContain('failed the sum check');
     expect(output).toContain('Enter continue to reevaluate, or stop');
+  });
+
+  it('explains rejected totals without promising that another evaluation will succeed', () => {
+    const output = formatRecoveryLines({ state: state(), remainingIterations: 2, tracePath: '/fixture/trace.jsonl',
+      failure: { code: 'invalid_response', stage: 'distribution', category: 'sum', probabilitySum: 0.99 } }).join('\n');
+    expect(output).toContain('probabilities failed the sum check; they were not adjusted');
+    expect(output).toContain('A fresh evaluation may fail again');
+    expect(output).toContain('consumes another iteration. 2 iterations remain');
   });
 });
 

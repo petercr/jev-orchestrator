@@ -121,8 +121,11 @@ export function formatApprovalLines(context: ApprovalContext): string[] {
 export function formatRecoveryLines(context: EvaluationRecoveryContext): string[] {
   return [
     'No candidate or action approval came from the failed evaluation.',
+    ...(context.failure.code === 'invalid_response' && context.failure.stage === 'distribution' && context.failure.category === 'sum'
+      ? ['The returned action probabilities failed the sum check; they were not adjusted. A fresh evaluation may fail again.'] : []),
     'Continue requests a fresh evaluation within the remaining budget. It does not approve a repository action.',
     `Continuing consumes another iteration. ${context.remainingIterations} iterations remain; worker call limits are retained.`,
+    'Provider/model selection and worker/network permissions remain fixed during recovery.',
     ...formatProgressLines(context.state),
     'Edits and evidence are preserved. Enter continue to reevaluate, or stop to end this run.',
   ];
