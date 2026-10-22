@@ -1,0 +1,5 @@
+we did a live run test of v0.5 before release right
+
+---
+
+well lets do a live pilot for v0.5 to make sure it works good
