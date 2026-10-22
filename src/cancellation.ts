@@ -1,6 +1,16 @@
 /** Execution control is deliberately separate from serializable approved inputs. */
 export type ExecutionOptions = { signal?: AbortSignal };
 
+export type PromptStopReason = 'input_closed' | 'input_timeout' | 'input_cancelled';
+
+/** A missing response must not become an approval, clarification, or signal. */
+export class PromptStoppedError extends Error {
+  constructor(readonly reason: PromptStopReason) {
+    super(`Prompt stopped: ${reason}.`);
+    this.name = 'PromptStoppedError';
+  }
+}
+
 export class RunInterruptedError extends Error {
   constructor() {
     super('Run interrupted.');

@@ -74,6 +74,11 @@ describe('evaluation error reporting', () => {
 });
 
 describe('parseArgs', () => {
+  it('keeps --plain display-only and respects the task separator', () => {
+    expect(parseArgs(['/repo', 'Task', '--orchestrate', '--plain'])).toMatchObject({ kind: 'run', options: { plain: true } });
+    expect(parseArgs(['/repo', 'Task', '--', '--plain'])).toMatchObject({ kind: 'run', options: { task: 'Task --plain' } });
+    expect(() => parseArgs(['--help', '--plain'])).toThrow(CliUsageError);
+  });
   it('accepts explicit Codex command networking without changing worker choice', () => {
     expect(parseArgs(['/repo', 'Fix task', '--worker', 'codex', '--codex-network'])).toMatchObject({
       kind: 'run', options: { workerSelection: 'codex', codexNetworkAccess: true },

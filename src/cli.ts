@@ -3,7 +3,6 @@ import type { ExecutionOptions } from './cancellation.js';
 import { throwIfInterrupted } from './cancellation.js';
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
-import { createInterface, type Interface } from 'node:readline/promises';
 import { pathToFileURL } from 'node:url';
 import { createEvaluator } from './ai/evaluate.js';
 import { PROBABILITY_SUM_TOLERANCE } from './ai/contract.js';
@@ -14,6 +13,8 @@ import { writeTrace } from './logging/trace.js';
 import { evaluationAttribution, redactSensitiveText } from './logging/trace.js';
 import { mockEvaluation } from './mock.js';
 import { formatApprovalLines, formatOutcomeLines, formatRecoveryLines } from './cli/presentation.js';
+import { createPresentation, createTerminal, terminalText, type CliTerminal } from './cli/terminal.js';
+import { executeCandidate } from './orchestration/execute.js';
 import {
   createInitialState,
   runOrchestration,
@@ -51,6 +52,7 @@ export type CliOptions = {
   orchestrate: boolean;
   workerSelection?: WorkerSelection;
   codexNetworkAccess?: true;
+  plain?: true;
 };
 
 export type CliCommand =
@@ -92,7 +94,7 @@ export class CliUsageError extends Error {
 }
 
 export function usage(): string {
-  return `dev-agent <repo-path> <task> [--mock] [--no-trace] [--json] [--orchestrate] [--worker codex|claude] [--codex-network]
+  return `dev-agent <repo-path> <task> [--mock] [--no-trace] [--json] [--orchestrate] [--worker codex|claude] [--codex-network] [--plain]
 
 Options:
   --mock       Use the offline deterministic evaluation.
@@ -101,6 +103,7 @@ Options:
   --orchestrate  Enter the bounded, manually approved execution loop.
   --worker     Restrict coding work to codex or claude; otherwise the evaluator may choose either.
   --codex-network  Allow Codex command networking, including local sockets; keep its file sandbox.
+  --plain      Use static plain orchestration output (also used for pipes, CI, NO_COLOR, or TERM=dumb).
   --version    Print the installed package version.
   --help, -h   Print this help text.
 
@@ -153,6 +156,7 @@ export function parseArgs(argv: string[]): CliCommand {
   let orchestrate = false;
   let workerSelection: WorkerSelection | undefined;
   let codexNetworkAccess: true | undefined;
+  let plain: true | undefined;
   let showHelp = false;
   let showVersion = false;
   let parseFlags = true;
@@ -190,6 +194,9 @@ export function parseArgs(argv: string[]): CliCommand {
       case '--orchestrate':
         orchestrate = true;
         break;
+      case '--plain':
+        plain = true;
+        break;
       case '--worker':
         selectWorker(args[++index]);
         break;
@@ -220,7 +227,7 @@ export function parseArgs(argv: string[]): CliCommand {
     if (showHelp && showVersion) {
       throw usageError('Use either --help or --version, not both.');
     }
-    if (mock || noTrace || json || orchestrate || workerSelection !== undefined || codexNetworkAccess !== undefined || positional.length > 0) {
+    if (mock || noTrace || json || orchestrate || plain || workerSelection !== undefined || codexNetworkAccess !== undefined || positional.length > 0) {
       throw usageError('--help and --version cannot be combined with a decision request.');
     }
     return showHelp ? { kind: 'help' } : { kind: 'version' };
@@ -247,6 +254,7 @@ export function parseArgs(argv: string[]): CliCommand {
       repoPath, task, mock, noTrace, json, orchestrate,
       ...(workerSelection === undefined ? {} : { workerSelection }),
       ...(codexNetworkAccess === undefined ? {} : { codexNetworkAccess }),
+      ...(plain === undefined ? {} : { plain }),
     },
   };
 }
@@ -359,11 +367,11 @@ export function printApprovalProposal(context: ApprovalContext): void {
 }
 
 async function promptForApproval(
-  terminal: Interface,
+  terminal: CliTerminal,
   context: ApprovalContext,
   options: ExecutionOptions = {},
 ): Promise<ApprovalDecision> {
-  printApprovalProposal(context);
+  terminal.review(context);
   while (true) {
     const answer = await terminal.question(
       'Choose approve, reject, stop, or an allowed action name: ',
@@ -372,24 +380,24 @@ async function promptForApproval(
     throwIfInterrupted(options.signal);
     const decision = parseApprovalChoice(answer, context);
     if (decision) return decision;
-    console.log('Invalid choice. This input approved no action.');
+    terminal.line('Invalid choice. This input approved no action.');
   }
 }
 
 async function promptForEvaluationRecovery(
-  terminal: Interface,
+  terminal: CliTerminal,
   context: EvaluationRecoveryContext,
   options: ExecutionOptions,
 ): Promise<'continue' | 'stop'> {
-  console.log(`\nEvaluation failed: ${formatEvaluationFailure(context.failure)}.`);
-  for (const line of formatRecoveryLines(context)) console.log(line);
-  console.log(`Trace: ${redactSensitiveText(context.tracePath)}`);
+  terminal.section('Evaluation failed', [
+    `${formatEvaluationFailure(context.failure)}.`, ...formatRecoveryLines(context), `Trace: ${redactSensitiveText(context.tracePath)}`,
+  ]);
   while (true) {
     const answer = (await terminal.question('Enter continue to reevaluate this state, or stop: ', options)).trim().toLowerCase();
     throwIfInterrupted(options.signal);
     if (answer === 'continue') return 'continue';
     if (answer === 'stop' || answer === 'quit') return 'stop';
-    console.log('Explicit continue or stop is required; no action has been approved.');
+    terminal.line('Explicit continue or stop is required; no action has been approved.');
   }
 }
 
@@ -405,7 +413,7 @@ export async function runCliOrchestration(options: CliOptions): Promise<Orchestr
   const sigterm = (): void => interrupt('SIGTERM');
   process.on('SIGINT', sigint);
   process.on('SIGTERM', sigterm);
-  let terminal: Interface | undefined;
+  let terminal: CliTerminal | undefined;
   const executionOptions = { signal: controller.signal };
   try {
     // Inspection is read-only and already bounded. Drain it before returning;
@@ -416,24 +424,29 @@ export async function runCliOrchestration(options: CliOptions): Promise<Orchestr
     const state = createInitialState(repo, options.task, options.workerSelection, options.codexNetworkAccess);
     const configuration = options.mock || controller.signal.aborted ? undefined : resolveEvaluationConfiguration();
     const evaluate = configuration ? createEvaluator(configuration) : mockEvaluation;
-    terminal = createInterface({ input: process.stdin, output: process.stdout });
-    terminal.on('SIGINT', sigint);
+    terminal = await createTerminal({
+      ...(options.plain ? { plain: true } : {}), interrupt: sigint,
+      writeLine: (line) => console.log(line),
+    });
     const prompts = terminal;
 
-    console.log('\nDev Orchestrator — approval-gated orchestration');
-    console.log(`Repo: ${redactSensitiveText(repo.root)}`);
-    console.log(`Task: ${redactSensitiveText(options.task)}`);
-    console.log(`Mode: ${options.mock ? 'mock' : `live (${configuration?.provider ?? 'interrupted'})`}`);
-    if (configuration) printEvaluationAttribution({ provider: configuration.provider, requestedModel: configuration.model });
-    console.log(`Worker selection: ${options.workerSelection ?? 'Codex or Claude'}`);
-    if (options.codexNetworkAccess) console.log('Codex command network: enabled; workspace file sandbox retained.');
-    console.log('No repository action runs without approval.');
+    const oneLine = (value: string): string => terminalText(value).replace(/\s+/gu, ' ').trim();
+    prompts.header('Dev Orchestrator — approval-gated orchestration', [
+      `Repo: ${oneLine(repo.root)}`, `Task: ${oneLine(options.task)}`,
+      `Mode: ${options.mock ? 'mock' : `live (${configuration?.provider ?? 'interrupted'})`}`,
+      ...(configuration ? [`Provider: ${configuration.provider}`, `Requested model: ${oneLine(configuration.model)}`] : []),
+      `Worker selection: ${options.workerSelection ?? 'Codex or Claude'}`,
+      ...(options.codexNetworkAccess ? ['Codex command network: enabled; workspace file sandbox retained.'] : []),
+      'No repository action runs without approval.',
+    ]);
 
     const result = await runOrchestration(state, {
-      evaluate: async (currentState) => evaluate(currentState, executionOptions),
+      evaluate: async (currentState) => prompts.phase('Evaluating task', async () => evaluate(currentState, executionOptions), executionOptions),
       approve: async (context) => promptForApproval(prompts, context, executionOptions),
       askForInformation: async () => prompts.question('Provide the required information: ', executionOptions),
       recoverEvaluation: async (context) => promptForEvaluationRecovery(prompts, context, executionOptions),
+      execute: async (proposal, runner, execution = {}) => prompts.phase(`Approved ${proposal.action}`,
+        () => executeCandidate(proposal, runner, execution), execution, (result) => result.ok),
     }, {
       signal: controller.signal,
       initialInspectionMs,
@@ -441,8 +454,7 @@ export async function runCliOrchestration(options: CliOptions): Promise<Orchestr
     });
     return { ...result, ...(exitCode === undefined ? {} : { exitCode }) };
   } finally {
-    terminal?.removeListener('SIGINT', sigint);
-    terminal?.close();
+    terminal?.dispose();
     process.removeListener('SIGINT', sigint);
     process.removeListener('SIGTERM', sigterm);
   }
@@ -452,8 +464,8 @@ function printHumanDecision(decision: DecisionOutput): void {
   const { assessment, policy } = decision;
   console.log('\nDev Orchestrator — decision-only milestone');
   console.log('Status: unexecuted decision (no tools or coding agents ran)\n');
-  console.log(`Repo: ${decision.repo.root}`);
-  console.log(`Task: ${decision.task}`);
+  console.log(`Repo: ${terminalText(decision.repo.root).replace(/\s+/gu, ' ')}`);
+  console.log(`Task: ${terminalText(decision.task).replace(/\s+/gu, ' ')}`);
   if (decision.workerSelection) console.log(`Worker selection: ${decision.workerSelection}`);
   if (decision.codexNetworkAccess) console.log('Codex command network: enabled; workspace file sandbox retained.');
   console.log(`Mode: ${decision.mode === 'mock' ? 'mock' : `live (${decision.provider})`}\n`);
@@ -468,13 +480,13 @@ function printHumanDecision(decision: DecisionOutput): void {
   console.log(`Reason: ${policy.reason}`);
   console.log(`Latency: ${decision.latencyMs}ms`);
   printEvaluationAttribution(decision);
-  if (decision.tracePath !== undefined) console.log(`Trace: ${decision.tracePath}`);
+  if (decision.tracePath !== undefined) console.log(`Trace: ${terminalText(decision.tracePath).replace(/\s+/gu, ' ')}`);
 }
 
 function printEvaluationAttribution(evaluation: EvaluationAttribution): void {
   if (evaluation.provider) console.log(`Provider: ${evaluation.provider}`);
-  if (evaluation.requestedModel) console.log(`Requested model: ${redactSensitiveText(evaluation.requestedModel)}`);
-  if (evaluation.servedModel) console.log(`Served model: ${redactSensitiveText(evaluation.servedModel)}`);
+  if (evaluation.requestedModel) console.log(`Requested model: ${terminalText(evaluation.requestedModel).replace(/\s+/gu, ' ')}`);
+  if (evaluation.servedModel) console.log(`Served model: ${terminalText(evaluation.servedModel).replace(/\s+/gu, ' ')}`);
 }
 
 export function formatRunSummary(summary: RunSummary): string {
@@ -569,15 +581,22 @@ export async function main(argv: string[] = process.argv.slice(2)): Promise<void
   if (command.options.orchestrate) {
     const result = await runCliOrchestration(command.options);
     if (result.exitCode !== undefined) process.exitCode = result.exitCode;
-    console.log(`\nLoop status: ${result.status}`);
-    console.log(`Iterations: ${result.iterations}`);
-    console.log(`Trace: ${redactSensitiveText(path.relative(process.cwd(), result.tracePath))}`);
-    if (result.failure) console.log(`Failure: ${formatEvaluationFailure(result.failure)}.`);
-    if (result.status === 'iteration_limit') {
-      console.log('Task completion was not approved before the iteration limit; edits and evidence are preserved. Exit code: 1.');
+    const view = await createPresentation({ ...(command.options.plain ? { plain: true } : {}), writeLine: (line) => console.log(line) });
+    const outcome = [
+      `\nLoop status: ${result.status}`, `Iterations: ${result.iterations}`,
+      `Trace: ${redactSensitiveText(path.relative(process.cwd(), result.tracePath))}`,
+      ...(result.failure ? [`Failure: ${formatEvaluationFailure(result.failure)}.`] : []),
+      ...(result.status === 'iteration_limit' ? ['Task completion was not approved before the iteration limit; edits and evidence are preserved. Exit code: 1.'] : []),
+      ...formatOutcomeLines(result),
+    ];
+    if (view.styled) {
+      view.section('Run result', outcome);
+      view.section('Run summary', formatRunSummary(result.summary).trim().split('\n').slice(1));
+      view.end(result.status === 'finished' ? 'Task acceptance approved.' : 'Run stopped; edits and evidence preserved.');
+    } else {
+      outcome.forEach(view.line);
+      view.line(formatRunSummary(result.summary));
     }
-    for (const line of formatOutcomeLines(result)) console.log(line);
-    console.log(formatRunSummary(result.summary));
     return;
   }
 
@@ -600,7 +619,7 @@ if (isDirectInvocation()) {
     if (wantsJsonError(process.argv.slice(2))) {
       console.error(JSON.stringify(output));
     } else {
-      console.error(`\nError: ${output.error.message}`);
+      console.error(`\nError: ${terminalText(output.error.message).replace(/\s+/gu, ' ')}`);
       if (output.error.failure) console.error(`Failure: ${formatEvaluationFailure(output.error.failure)}.`);
     }
     process.exitCode = output.exitCode;

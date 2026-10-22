@@ -602,7 +602,7 @@ permissions, approvals, or budgets.
 A failed evaluation adds a schema-v2 record with null evaluation, policy,
 approval, and tool fields, plus allowlisted `failure` diagnostics and recovery
 availability. A separate record captures the explicit `continue`/`stop`
-decision; both share the consumed iteration number. Cancellation during that
+decision; both share the consumed iteration number. A signal during that
 prompt adds the usual terminal interruption record with phase `recovery`.
 No exception message, rejected response body, headers, or cause is failure
 evidence. Consumers should use iteration numbers rather than counting lines.
@@ -616,6 +616,13 @@ approved request and its pre-attempt validation generation. If interruption
 arrives during an ordinary trace write, that record is followed by one terminal
 interruption record. Arbitrary signal reasons and provider error bodies are
 never interruption evidence.
+
+An unanswered prompt that closes, times out, or is cancelled adds optional
+`promptStop: { phase, reason }` evidence within schema version `2`. Reasons are
+`input_closed`, `input_timeout`, or `input_cancelled`; the CLI stops with exit
+code `1`. This does not invent an approval, clarification, recovery response,
+or signal. Existing signal records retain `interruption.reason: "signal"`.
+Terminal styling preferences are absent from state, candidates, and traces.
 
 Worker iterations additionally record a bounded request identity, evidence
 revision, validation generation, context references, and repair reason. Trace
@@ -965,13 +972,29 @@ Existing approval and validation requirements remain in force. The pilot does
 not establish improved live reliability, fewer detours, or speed.
 
 A [v0.5 presentation candidate](PLAN.md#v05-candidate-terminal-presentation-and-interaction)
-tracks styled prompts, phase progress, and clearer action/result displays.
-The [offline prototype and library decision](docs/presentation/v0.5-prototype.md)
-selects Clack for the following integration step. In this checkout, run
-`pnpm prototype:ui` to compare the synthetic scenes with
-`pnpm prototype:ui --renderer plain`. Add `--scenario review --interactive`
-to exercise the demo prompt. The prototype is development tooling; the published
-CLI keeps its current presentation and approval behavior.
+now integrates styled orchestration prompts, phase progress, candidate review,
+and grouped results in this checkout. The
+[integration record](docs/presentation/v0.5-integration.md) follows the
+[offline prototype and Clack decision](docs/presentation/v0.5-prototype.md).
+Try the actual approval loop without a model credential:
+
+```bash
+pnpm dev -- . "Inspect this repo and choose the safest useful first action" --mock --orchestrate
+pnpm dev -- . "Inspect this repo and choose the safest useful first action" --mock --orchestrate --plain
+```
+
+Interactive terminals use styled output. `--plain`, pipes, CI, `NO_COLOR`, or
+`TERM=dumb` select static output. Both modes require typed choices and show a
+resolved alternative before its separate approval. Blank input approves
+nothing. EOF, a 15-minute prompt timeout, or prompt cancellation stops with
+exit code `1`; typed `stop`/`quit` exits `0`, SIGINT exits `130`, and SIGTERM
+exits `143`. Signal cancellation still drains active execution and preserves
+partial edits and evidence. Decision-only JSON retains schema version `1`.
+
+The synthetic comparison remains available through `pnpm prototype:ui` and
+`pnpm prototype:ui --renderer plain`. This is unreleased v0.5 work; the published
+package remains v0.4.0. Broader terminal and native Windows verification is the
+next plan step.
 
 The [v0.6 draft](PLAN.md#v06-draft-saved-runs-and-safe-resume) proposes opt-in
 saved runs, local history, and continuation after a clean stop. It preserves

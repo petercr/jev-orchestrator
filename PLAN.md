@@ -37,7 +37,7 @@ implemented features or release commitments.
 | Version | Primary outcome | First deliverable |
 | --- | --- | --- |
 | [v0.4](#v04-draft-reliable-task-workflows) | More reliable completion of bounded coding tasks | Reproducible complete-workflow baseline |
-| [v0.5](#v05-candidate-terminal-presentation-and-interaction) | Clearer, more polished terminal interaction | Offline terminal UI prototype and library decision |
+| [v0.5](#v05-candidate-terminal-presentation-and-interaction) | Clearer, more polished terminal interaction | Styled CLI adapter integrated; broader terminal verification pending |
 | [v0.6](#v06-draft-saved-runs-and-safe-resume) | Stop a run and continue it later with its context and remaining limits | Versioned saved-run contract and offline recovery fixtures |
 
 ## v0.4 draft: reliable task workflows
@@ -248,13 +248,13 @@ Requested on 2026-10-17: make `dev-agent` look and feel better, potentially
 using a Node terminal UI library. Recommended placement is v0.5, alongside
 v0.4's clearer blocker messages and output grouping. The operator confirmed
 moving on to v0.5 on 2026-10-21. Implementation started with the
-[offline presentation prototype](docs/presentation/v0.5-prototype.md); Clack is
-selected for the following integration step.
+[offline presentation prototype](docs/presentation/v0.5-prototype.md); the
+[production CLI integration](docs/presentation/v0.5-integration.md) now uses
+Clack through a narrow terminal adapter.
 
-The current CLI uses `console.log` and `node:readline/promises` in
-`src/cli.ts`. Presentation can move behind a small CLI-owned adapter while
+The CLI's terminal adapter owns styled output and a single prompt reader;
 policy, candidate selection, approval decisions, and execution retain their
-existing boundaries. The intended experience includes a concise run header,
+existing boundaries. The experience includes a concise run header,
 readable action/parameter review, consistent status labels, phase progress,
 keyboard-friendly alternatives, and a clear validation/result summary.
 
@@ -288,19 +288,27 @@ dependency decision are recorded below.
    before expanding the integration.
    Delivered in the [prototype and library decision](docs/presentation/v0.5-prototype.md):
    `pnpm prototype:ui` compares the existing plain formatters with pinned Clack
-   1.8.1 across four synthetic scenes. The library is a development dependency;
-   the production CLI and authorization paths remain unchanged. Twenty-seven
+   1.8.1 across four synthetic scenes. This first slice used a development
+   dependency and left the production CLI unchanged. Twenty-seven
    deterministic tests and thirteen WSL PTY walkthroughs cover review content,
    static fallbacks, bounded input, narrow output, EOF, signals, and terminal
    restoration. The native spinner's Ctrl+C exit-0 behavior is reproduced and
    avoided by keeping progress and cancellation under application control.
-2. [ ] Integrate the chosen presentation through a narrow CLI adapter.
+2. [x] Integrate the chosen presentation through a narrow CLI adapter.
    Display the resolved candidate's action, parameters, worker/network
    permissions, and reason before explicit approval. A selected alternative
    still receives its own resolved-candidate review; completion still requires
    acceptance review. Empty input, prompt defaults, timeout, EOF, and library
    cancellation must never become approval or recovery. Preserve typed
    stop/quit and signal-driven cleanup through the existing run controller.
+   Delivered in the [integration record](docs/presentation/v0.5-integration.md):
+   styled orchestration uses Clack notes and typed prompts; `--plain`, pipes,
+   CI, `NO_COLOR`, and `TERM=dumb` use static output. The adapter preserves
+   resolved-candidate review and existing approval parsing. Missing input stops
+   with bounded optional `promptStop` evidence, distinct from signal records.
+   All 1,404 tests, typecheck, build, schema validation, and eleven walkthroughs
+   each against compiled and packed CLIs passed. Native Windows and broader
+   terminal acceptance remain in step 3.
 3. [ ] Verify interactive terminals, narrow widths, long paths, Windows/WSL,
    and plain non-TTY/CI output. Honor `NO_COLOR`, provide readable static
    output for accessibility, and keep JSON output and trace data free of
