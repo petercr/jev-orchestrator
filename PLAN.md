@@ -349,6 +349,19 @@ dependency decision are recorded below.
    `ca979099e6df2dfe61c7997731329b583393a3f486cb2e69428d0f6845fa601b`.
    Publication remains pending the preparation merge and operator npm
    authorization; no live model or worker was called by these checks.
+   The operator then requested a fresh [live pilot](docs/presentation/v0.5-live-results.md)
+   before publication. Its frozen five-launch cohort used real TypeSafe/Jev,
+   Codex, and Claude against the exact prepared archive. Three of four coding
+   runs reached approved completion; all four patches passed original examples
+   and fresh independent checks. One run stopped after repeated malformed
+   distributions; four evaluations were rejected across the cohort, with
+   three explicit recoveries and no replaced observations. A staged repair
+   completed on iteration eight, and a fifth launch stopped on Ctrl+C with
+   exit 130 and zero approvals or edits. The report retains the repair's
+   first-pass lint deviation and live-service scope limits. All five runs
+   restored terminal flags. This is mixed live evidence, not an all-successful
+   release gate or a routing-reliability improvement claim; publication is
+   still pending.
 
 ## v0.6 draft: saved runs and safe resume
 

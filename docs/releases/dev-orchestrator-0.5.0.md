@@ -81,8 +81,38 @@ The archive, verifiers, logs, mock review trace, package audit, installed-file
 comparison, and terminal captures are retained outside Git under
 `/home/peterc/.cache/dev-package-checks/v050-20261022`. The installed CLI
 verifier mocks fetch and blocks real HTTP requests in CLI processes, using
-only fixture credentials. Tests and terminal verification call no live model
-or coding agent and do not load `.env` or `.env.local` value files.
+only fixture credentials. Those automated checks call no live model or coding
+agent and do not load `.env` or `.env.local` value files. The separately
+authorized live pilot below uses actual services and existing credentials
+loaded by Varlock without reading or printing local value files.
+
+## Live pilot before publication
+
+The operator requested a fresh live v0.5 pilot after reviewing the preparation.
+The [frozen protocol](../presentation/v0.5-live-protocol.md) and
+[results](../presentation/v0.5-live-results.md) retain five launches on
+2026-10-22 against this exact archive, using real TypeSafe/Jev, Codex, and
+Claude processes on WSL. No runtime, archive, or recorded source/input bytes
+changed for the pilot.
+
+Three of the four implementation runs reached separately approved completion;
+all four patches met their original examples and fresh independent test/lint
+checks. The remaining run exited `evaluation_failed` after its second
+malformed distribution. Four of 26 evaluations were rejected for totals near
+0.99, and three explicit recoveries consumed the existing iteration budget.
+Those failures remain observations; they were not replaced or renormalized.
+The staged repair completed at iteration eight with fresh generation-2 checks.
+Its omitted first-generation lint is recorded as a protocol deviation; both
+checks passed after repair before completion. The fifth launch verified
+Ctrl+C at an approval prompt: exit 130, zero approvals, zero worker calls, and
+no edits. All five runs restored terminal flags.
+
+This supports live integration and presentation within the pilot's scope,
+with a material router reliability limitation. It does not establish an
+all-successful live matrix, improved routing quality, live native Windows
+workers, other live providers, or real active-worker cancellation. Keep the
+mixed result visible in release review. The retained archive remains unchanged
+and npm publication remains pending.
 
 ## Publication boundary
 
