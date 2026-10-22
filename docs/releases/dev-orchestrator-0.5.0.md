@@ -3,8 +3,9 @@
 The v0.5 implementation is merged through PR #59 at
 `fcc8c2b095d16370bdaf2135dea2fefc7aa12425`. The current candidate adds clearer
 recovery guidance and disclosure for #61 at
-`4b49a1030d6a52421849efe76e220ceadda744f7`. npm publication remains pending
-explicit acceptance of that mitigation and its merge. The executable is
+`4b49a1030d6a52421849efe76e220ceadda744f7`. The operator accepted that
+mitigation on 2026-10-22. npm publication remains pending its merge and the
+normal publication checks. The executable is
 `dev-agent`, with Node.js 22+ and the existing provider defaults and aliases.
 
 | Item | Current mitigation candidate |
@@ -175,16 +176,19 @@ No npm publication has been started.
 
 ## Publication boundary
 
-Publication is blocked by [routing reliability issue #61](https://github.com/petercr/jev-orchestrator/issues/61).
-Resolve the issue and verify the fix or accepted mitigation and any changed
-candidate archive before starting npm publication.
+The operator accepted the verified mitigation for
+[routing reliability issue #61](https://github.com/petercr/jev-orchestrator/issues/61)
+on 2026-10-22 and asked to continue. That resolves the publication blocker
+through mitigation; it does not fix provider output. Merge PR #63 and verify
+its merged inputs against the retained candidate before npm publication.
 The [initial precision investigation](../presentation/v0.5-routing-investigation.md)
 and separate six-evaluation probe did not establish a provider fix. The
-verified recovery mitigation above still requires explicit operator acceptance
+verified recovery mitigation above has explicit operator acceptance
 of occasional evaluation failures and possible budget exhaustion as a v0.5
 limitation. The 0.001 tolerance, probabilities, model defaults, permissions,
-and production recovery behavior remain unchanged. Until that tradeoff is
-explicitly accepted, keep #61 open and publication blocked.
+and production recovery behavior remain unchanged. The mitigation report
+records the acceptance and distinguishes it from GitHub's premature issue
+closure on the earlier investigation PR.
 
 Merge the release preparation before publishing. Recheck the merged source,
 retained archive, and registry availability; give the operator advance notice

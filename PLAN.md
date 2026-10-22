@@ -385,8 +385,10 @@ dependency decision are recorded below.
    passed fresh installs, 49 CLI checks, and both 33-scenario WSL/Windows
    terminal matrices. This proposes accepting occasional evaluation failures
    and possible budget exhaustion with manual recovery; it does not fix
-   provider output. Explicit operator acceptance remains required before
-   #61 or its publication blocker can be cleared.
+   provider output. The operator explicitly accepted that tradeoff on
+   2026-10-22 and asked to continue, resolving #61's release blocker through
+   mitigation. Merge PR #63 and verify merged candidate inputs before npm
+   publication; retain the known limitation and original failed observations.
 
 ## v0.6 draft: saved runs and safe resume
 
