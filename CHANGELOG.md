@@ -1,5 +1,18 @@
 # Release notes
 
+## Unreleased — v0.5 terminal presentation
+
+- Integrate Clack through a CLI-owned terminal adapter for orchestration
+  reviews, typed prompts, phase progress, and results. Preserve the existing
+  approval parser, resolved-alternative confirmation, completion acceptance,
+  worker permissions, budgets, and independent validation.
+- Add `--plain` and static fallbacks for non-TTY streams, CI, `NO_COLOR`, and
+  `TERM=dumb`. Keep JSON schema v1 and orchestration schema v2, with optional
+  bounded `promptStop` evidence for unanswered prompts.
+- Handle plain Windows console EOF keys followed by Enter without enabling
+  raw input or terminal styling. Add isolated offline PTY/ConPTY verification
+  for compiled and packed CLIs; no live model or coding-agent calls.
+
 ## dev-orchestrator 0.4.0 — task reviews and controlled repair
 
 Published on npm on 2026-10-19 as

@@ -990,11 +990,16 @@ nothing. EOF, a 15-minute prompt timeout, or prompt cancellation stops with
 exit code `1`; typed `stop`/`quit` exits `0`, SIGINT exits `130`, and SIGTERM
 exits `143`. Signal cancellation still drains active execution and preserves
 partial edits and evidence. Decision-only JSON retains schema version `1`.
+In a plain Windows console, submit Ctrl+D or Ctrl+Z followed by Enter to close
+the prompt; styled mode handles Ctrl+D immediately.
 
 The synthetic comparison remains available through `pnpm prototype:ui` and
 `pnpm prototype:ui --renderer plain`. This is unreleased v0.5 work; the published
-package remains v0.4.0. Broader terminal and native Windows verification is the
-next plan step.
+package remains v0.4.0. The optional
+[terminal verification harness](scripts/terminal/README.md) exercises compiled
+and installed CLIs on POSIX PTYs and native Windows ConPTY without live calls.
+The [verification record](docs/presentation/v0.5-verification.md) documents
+the completed matrix, the Windows EOF correction, and the scope limits.
 
 The [v0.6 draft](PLAN.md#v06-draft-saved-runs-and-safe-resume) proposes opt-in
 saved runs, local history, and continuation after a clean stop. It preserves

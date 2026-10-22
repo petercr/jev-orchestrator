@@ -70,6 +70,17 @@ describe.each([false, true])('production prompt with plain=%s', (plain) => {
 });
 
 describe('production presentation ownership', () => {
+  it.each(['\u0004', '\u001a'])('recognizes a plain console EOF line without enabling raw input (%j)', async (key) => {
+    const io = streams();
+    terminal = await createTerminal({ ...io, plain: true, interrupt: vi.fn() });
+    const response = terminal.question('Choose:');
+    io.input.write(`${key}\r`);
+    await expect(response).rejects.toEqual(new PromptStoppedError('input_closed'));
+    await expect(terminal.question('Choose again:')).rejects.toEqual(new PromptStoppedError('input_closed'));
+    expect(io.raw).toEqual([]);
+    expect(io.text()).not.toContain('\u001b');
+  });
+
   it('uses plain output for explicit plain mode, pipes, CI, NO_COLOR, and dumb terminals', () => {
     expect(styledTerminal(false, true, {})).toBe(true);
     expect(styledTerminal(true, true, {})).toBe(false);

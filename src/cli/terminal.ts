@@ -136,6 +136,12 @@ export async function createTerminal(options: PresentationOptions & {
         throwIfInterrupted(execution.signal);
         if (controller.signal.aborted) throw new PromptStoppedError(reason);
         if (clack?.isCancel(answer)) throw new PromptStoppedError('input_cancelled');
+        // Windows cooked console input delivers EOF keys as a line rather than
+        // closing stdin. Keep plain mode line-oriented, without a raw reader.
+        if (!clack && input.isTTY && (answer === '\u0004' || answer === '\u001a')) {
+          closed();
+          throw new PromptStoppedError('input_closed');
+        }
         return typeof answer === 'string' ? answer : '';
       } catch (error) {
         throwIfInterrupted(execution.signal);

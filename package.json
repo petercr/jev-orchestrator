@@ -24,6 +24,7 @@
     "build": "tsc -p tsconfig.build.json",
     "check": "tsc -p tsconfig.json --noEmit && tsc -p scripts/presentation/tsconfig.json",
     "prototype:ui": "node --import tsx scripts/presentation/prototype.ts",
+    "verify:terminal": "node scripts/terminal/verify.mjs",
     "dev": "node --import tsx src/cli.ts",
     "dev:env": "varlock run --inject vars -- node --import tsx src/cli.ts",
     "env:check": "varlock load --agent",
