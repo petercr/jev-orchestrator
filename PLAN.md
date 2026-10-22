@@ -31,13 +31,16 @@ queries, or tool arguments.
 
 ## Proposed release sequence
 
-Version 0.4 is delivered. Versions 0.5 and 0.6 remain planning targets, not
-implemented features or release commitments.
+Version 0.4 is published. Version 0.5's implementation, terminal verification,
+and release preparation are verified; publication is blocked by
+[routing reliability issue #61](https://github.com/petercr/jev-orchestrator/issues/61).
+Version 0.6 remains a design proposal, not an implemented feature or release
+commitment.
 
 | Version | Primary outcome | First deliverable |
 | --- | --- | --- |
 | [v0.4](#v04-draft-reliable-task-workflows) | More reliable completion of bounded coding tasks | Reproducible complete-workflow baseline |
-| [v0.5](#v05-candidate-terminal-presentation-and-interaction) | Clearer, more polished terminal interaction | Presentation and terminal verification complete; unreleased |
+| [v0.5](#v05-candidate-terminal-presentation-and-interaction) | Clearer, more polished terminal interaction | Release preparation verified; publication blocked by [#61](https://github.com/petercr/jev-orchestrator/issues/61) |
 | [v0.6](#v06-draft-saved-runs-and-safe-resume) | Stop a run and continue it later with its context and remaining limits | Versioned saved-run contract and offline recovery fixtures |
 
 ## v0.4 draft: reliable task workflows
@@ -252,7 +255,7 @@ moving on to v0.5 on 2026-10-21. Implementation started with the
 [production CLI integration](docs/presentation/v0.5-integration.md) now uses
 Clack through a narrow terminal adapter. The
 [terminal verification record](docs/presentation/v0.5-verification.md) covers
-the final delivery step and its remaining scope limits.
+the cross-platform checks and their remaining scope limits.
 
 The CLI's terminal adapter owns styled output and a single prompt reader;
 policy, candidate selection, approval decisions, and execution retain their
@@ -330,6 +333,39 @@ dependency decision are recorded below.
    Ubuntu/Windows workflow repeats compiled and installed checks. The package
    remains unreleased, and this does not certify live worker launchers or
    screen-reader/font behavior.
+4. [ ] Prepare, verify, and publish v0.5.0.
+   Update package metadata, version assertions, release notes, and current
+   commands. Verify the exact archive with offline provider-contract checks,
+   installed executables, and the terminal matrix. Preserve historical
+   archives and record source attribution, package contents, and checksums.
+   Merge the preparation before publication, give advance notice before a
+   timed npm authorization, and verify the public archive and a fresh registry
+   installation. Track preparation separately from publication in the
+   [release record](docs/releases/dev-orchestrator-0.5.0.md).
+   Preparation verified on 2026-10-22 UTC: 86 focused tests, typecheck, schema
+   validation, all 1,406 tests, and build passed. The exact archive passed
+   49 offline installed CLI checks and 18 mocked transport requests. Installed
+   WSL and native Windows consumers each passed 33 terminal scenarios and two
+   decision JSON/trace checks. All 72 files match both installations, and the
+   68 compiled files match PR #59's verified runtime. Archive SHA-256:
+   `ca979099e6df2dfe61c7997731329b583393a3f486cb2e69428d0f6845fa601b`.
+   Publication remains pending the preparation merge and operator npm
+   authorization; no live model or worker was called by these checks.
+   The operator then requested a fresh [live pilot](docs/presentation/v0.5-live-results.md)
+   before publication. Its frozen five-launch cohort used real TypeSafe/Jev,
+   Codex, and Claude against the exact prepared archive. Three of four coding
+   runs reached approved completion; all four patches passed original examples
+   and fresh independent checks. One run stopped after repeated malformed
+   distributions; four evaluations were rejected across the cohort, with
+   three explicit recoveries and no replaced observations. A staged repair
+   completed on iteration eight, and a fifth launch stopped on Ctrl+C with
+   exit 130 and zero approvals or edits. The report retains the repair's
+   first-pass lint deviation and live-service scope limits. All five runs
+   restored terminal flags. This is mixed live evidence, not an all-successful
+   release gate or a routing-reliability improvement claim; publication is
+   blocked by [routing reliability issue #61](https://github.com/petercr/jev-orchestrator/issues/61).
+   Resolve that issue and verify the fix or accepted mitigation before npm
+   publication, retaining the original pilot's failures and safety boundaries.
 
 ## v0.6 draft: saved runs and safe resume
 

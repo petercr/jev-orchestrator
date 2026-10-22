@@ -1,6 +1,10 @@
 # Release notes
 
-## Unreleased — v0.5 terminal presentation
+## dev-orchestrator 0.5.0 — terminal presentation
+
+This checkout prepares the release; npm publication is pending.
+The package remains `dev-orchestrator`, the executable remains `dev-agent`,
+and Node.js 22+ is required.
 
 - Integrate Clack through a CLI-owned terminal adapter for orchestration
   reviews, typed prompts, phase progress, and results. Preserve the existing
@@ -12,6 +16,22 @@
 - Handle plain Windows console EOF keys followed by Enter without enabling
   raw input or terminal styling. Add isolated offline PTY/ConPTY verification
   for compiled and packed CLIs; no live model or coding-agent calls.
+
+### Compatibility and evidence
+
+Decision-only remains the default. Provider selection and aliases, immutable
+worker/network permissions, the eight-iteration and two-call worker limits,
+independent validation, manual acceptance, and the 95% automatic completion
+threshold remain unchanged. No saved-run resume or unattended execution is
+introduced. Clack 1.8.1 is now a runtime dependency; optional native terminal
+verification dependencies are excluded from the package.
+
+The implementation passed 1,406 deterministic tests and 132 local compiled/
+installed terminal walkthroughs on WSL and native Windows. Node 22 CI repeats
+both terminal matrices on Ubuntu and Windows. These establish presentation and
+enforcement with synthetic service boundaries, not live routing quality,
+native worker launcher availability, screen-reader certification, or speed.
+See the [verification record](https://github.com/petercr/jev-orchestrator/blob/main/docs/presentation/v0.5-verification.md).
 
 ## dev-orchestrator 0.4.0 — task reviews and controlled repair
 
