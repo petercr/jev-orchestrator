@@ -2,7 +2,8 @@
 
 ## dev-orchestrator 0.5.0 — terminal presentation
 
-This checkout prepares the release; npm publication is pending.
+Published on npm on 2026-10-22 as
+[dev-orchestrator@0.5.0](https://www.npmjs.com/package/dev-orchestrator/v/0.5.0).
 The package remains `dev-orchestrator`, the executable remains `dev-agent`,
 and Node.js 22+ is required.
 
@@ -37,6 +38,16 @@ both terminal matrices on Ubuntu and Windows. These establish presentation and
 enforcement with synthetic service boundaries, not live routing quality,
 native worker launcher availability, screen-reader certification, or speed.
 See the [verification record](https://github.com/petercr/jev-orchestrator/blob/main/docs/presentation/v0.5-verification.md).
+
+The final recovery-mitigation candidate passed all 1,409 deterministic tests.
+A separate three-launch live cohort completed all three tasks, retaining one
+rejected evaluation and its explicit recovery. Repeated recovery is verified
+deterministically; the original mixed pilot remains recorded. The operator
+accepted occasional evaluation failures and possible budget exhaustion as a
+documented limitation. The public npm/GitHub archive matches the tested
+candidate, and a fresh registry installation passed all 49 CLI checks and
+matched all 72 package files. See the
+[publication record](docs/releases/dev-orchestrator-0.5.0.md).
 
 ## dev-orchestrator 0.4.0 — task reviews and controlled repair
 

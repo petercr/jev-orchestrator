@@ -10,13 +10,10 @@ v0.3.1 onward.
 The GitHub repository keeps its existing name. The original v0.3.0 GitHub
 archive is recorded separately under its historical `jev-orchestrator` name;
 that unscoped npm package belongs to another project.
-[dev-orchestrator@0.4.0](https://www.npmjs.com/package/dev-orchestrator/v/0.4.0)
-was published on 2026-10-19, with clearer action reviews and a focused
-controlled-repair policy fix. See the [release notes](CHANGELOG.md) and
-[publication record](docs/releases/dev-orchestrator-0.4.0.md).
-This checkout prepares `0.5.0` with styled terminal interaction; its
-[release verification](docs/releases/dev-orchestrator-0.5.0.md) precedes npm
-publication.
+[dev-orchestrator@0.5.0](https://www.npmjs.com/package/dev-orchestrator/v/0.5.0)
+was published on 2026-10-22 with styled terminal interaction, plain fallbacks,
+and clearer evaluation-recovery guidance. See the [release notes](CHANGELOG.md)
+and [publication record](docs/releases/dev-orchestrator-0.5.0.md).
 
 The default mode remains **decision-only**: it inspects a repository, sends a
 compact state object to the selected decision model, applies deterministic
@@ -1018,9 +1015,9 @@ In a plain Windows console, submit Ctrl+D or Ctrl+Z followed by Enter to close
 the prompt; styled mode handles Ctrl+D immediately.
 
 The synthetic comparison remains available through `pnpm prototype:ui` and
-`pnpm prototype:ui --renderer plain`. This checkout is the `0.5.0` release
-candidate; the published package remains v0.4.0 until
-[publication](docs/releases/dev-orchestrator-0.5.0.md). The optional
+`pnpm prototype:ui --renderer plain`. Version `0.5.0` is published; its
+[publication record](docs/releases/dev-orchestrator-0.5.0.md) retains the
+verified public archive and fresh registry-install checks. The optional
 [terminal verification harness](scripts/terminal/README.md) exercises compiled
 and installed CLIs on POSIX PTYs and native Windows ConPTY without live calls.
 The [verification record](docs/presentation/v0.5-verification.md) documents

@@ -31,16 +31,17 @@ queries, or tool arguments.
 
 ## Proposed release sequence
 
-Version 0.4 is published. Version 0.5's implementation, terminal verification,
-and release preparation are verified; publication is blocked by
-[routing reliability issue #61](https://github.com/petercr/jev-orchestrator/issues/61).
+Versions 0.4 and 0.5 are published. The
+[v0.5 publication record](docs/releases/dev-orchestrator-0.5.0.md) retains the
+verified public archive, fresh registry installation, and operator-accepted
+recovery mitigation for [#61](https://github.com/petercr/jev-orchestrator/issues/61).
 Version 0.6 remains a design proposal, not an implemented feature or release
 commitment.
 
 | Version | Primary outcome | First deliverable |
 | --- | --- | --- |
 | [v0.4](#v04-draft-reliable-task-workflows) | More reliable completion of bounded coding tasks | Reproducible complete-workflow baseline |
-| [v0.5](#v05-candidate-terminal-presentation-and-interaction) | Clearer, more polished terminal interaction | Release preparation verified; publication blocked by [#61](https://github.com/petercr/jev-orchestrator/issues/61) |
+| [v0.5](#v05-candidate-terminal-presentation-and-interaction) | Clearer, more polished terminal interaction | Published on 2026-10-22; [verified archive and installation](docs/releases/dev-orchestrator-0.5.0.md) |
 | [v0.6](#v06-draft-saved-runs-and-safe-resume) | Stop a run and continue it later with its context and remaining limits | Versioned saved-run contract and offline recovery fixtures |
 
 ## v0.4 draft: reliable task workflows
@@ -331,9 +332,9 @@ dependency decision are recorded below.
    Plain Windows EOF control lines now stop safely after Enter. All 1,406
    tests, typecheck, build, and schema validation passed; a Node 22
    Ubuntu/Windows workflow repeats compiled and installed checks. The package
-   remains unreleased, and this does not certify live worker launchers or
+   was unreleased at that checkpoint; those checks do not certify live worker launchers or
    screen-reader/font behavior.
-4. [ ] Prepare, verify, and publish v0.5.0.
+4. [x] Prepare, verify, and publish v0.5.0.
    Update package metadata, version assertions, release notes, and current
    commands. Verify the exact archive with offline provider-contract checks,
    installed executables, and the terminal matrix. Preserve historical
@@ -349,7 +350,7 @@ dependency decision are recorded below.
    decision JSON/trace checks. All 72 files match both installations, and the
    68 compiled files match PR #59's verified runtime. Archive SHA-256:
    `ca979099e6df2dfe61c7997731329b583393a3f486cb2e69428d0f6845fa601b`.
-   Publication remains pending the preparation merge and operator npm
+   Publication initially remained pending the preparation merge and operator npm
    authorization; no live model or worker was called by these checks.
    The operator then requested a fresh [live pilot](docs/presentation/v0.5-live-results.md)
    before publication. Its frozen five-launch cohort used real TypeSafe/Jev,
@@ -362,17 +363,17 @@ dependency decision are recorded below.
    exit 130 and zero approvals or edits. The report retains the repair's
    first-pass lint deviation and live-service scope limits. All five runs
    restored terminal flags. This is mixed live evidence, not an all-successful
-   release gate or a routing-reliability improvement claim; publication is
-   blocked by [routing reliability issue #61](https://github.com/petercr/jev-orchestrator/issues/61).
-   Resolve that issue and verify the fix or accepted mitigation before npm
-   publication, retaining the original pilot's failures and safety boundaries.
+   release gate or a routing-reliability improvement claim; it blocked
+   publication on [routing reliability issue #61](https://github.com/petercr/jev-orchestrator/issues/61).
+   Resolution required a verified fix or accepted mitigation, retaining the
+   original pilot's failures and safety boundaries.
    The [initial investigation](docs/presentation/v0.5-routing-investigation.md)
    identifies a gap between the native API's approximate-total contract and
    the required 0.001 tolerance. A separate six-evaluation read-only probe
    passed unchanged values for the moving alias and both pinned versions;
    it did not reproduce the failure or establish pinning as a mitigation.
-   Provider precision clarification and an accepted fix or mitigation remain
-   outstanding. The issue and publication blocker remain open.
+   At the end of that initial investigation, provider precision clarification
+   and an accepted fix or mitigation were still outstanding.
    A [recovery mitigation candidate](docs/presentation/v0.5-routing-mitigation-results.md)
    now discloses the limitation, explains unchanged strict rejection, and
    verifies repeated explicit recovery with both workers in deterministic
@@ -387,8 +388,15 @@ dependency decision are recorded below.
    and possible budget exhaustion with manual recovery; it does not fix
    provider output. The operator explicitly accepted that tradeoff on
    2026-10-22 and asked to continue, resolving #61's release blocker through
-   mitigation. Merge PR #63 and verify merged candidate inputs before npm
-   publication; retain the known limitation and original failed observations.
+   mitigation. PR #63 merged at `0550f6dec038394edb0b3f03e4705cc8d78cd777`;
+   all 82 retained source/input hashes and 72 package files matched the merged
+   checkout. Published on npm on 2026-10-22 at 19:22:53 UTC, with `latest`
+   pointing to `0.5.0`. The public npm archive and GitHub release asset match
+   the retained candidate. A fresh registry installation passed 49 CLI checks
+   with 18 mocked transport requests and matched all 72 files. Tag `v0.5.0`
+   points to that verified merge. The [publication record](docs/releases/dev-orchestrator-0.5.0.md)
+   retains the pnpm verification-consumer age exception and provenance;
+   the known limitation and original failed observations remain visible.
 
 ## v0.6 draft: saved runs and safe resume
 

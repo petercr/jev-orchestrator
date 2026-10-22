@@ -1,18 +1,23 @@
-# dev-orchestrator 0.5.0 release preparation
+# dev-orchestrator 0.5.0 release record
 
-The v0.5 implementation is merged through PR #59 at
-`fcc8c2b095d16370bdaf2135dea2fefc7aa12425`. The current candidate adds clearer
-recovery guidance and disclosure for #61 at
-`4b49a1030d6a52421849efe76e220ceadda744f7`. The operator accepted that
-mitigation on 2026-10-22. npm publication remains pending its merge and the
-normal publication checks. The executable is
+Published on npm on 2026-10-22 at `19:22:53.194 UTC` as
+[dev-orchestrator@0.5.0](https://www.npmjs.com/package/dev-orchestrator/v/0.5.0).
+The public registry's `latest` tag points to `0.5.0`. The executable remains
 `dev-agent`, with Node.js 22+ and the existing provider defaults and aliases.
 
-| Item | Current mitigation candidate |
+The v0.5 implementation baseline is PR #59 at
+`fcc8c2b095d16370bdaf2135dea2fefc7aa12425`. PR #63 added recovery guidance and
+disclosure for the operator-accepted #61 mitigation, then merged at
+`0550f6dec038394edb0b3f03e4705cc8d78cd777`. All 82 retained source/input
+hashes and 72 package files matched the merged checkout before publication,
+allowing only pnpm's recorded removal of `packageManager` and `scripts.prepack`.
+
+| Item | Published archive |
 | --- | --- |
 | Package / executable | `dev-orchestrator@0.5.0` / `dev-agent` |
 | Candidate source | `4b49a1030d6a52421849efe76e220ceadda744f7` |
-| Branch | `fix/61-explicit-routing-recovery` |
+| Verified publication commit / tag | `0550f6dec038394edb0b3f03e4705cc8d78cd777` / `v0.5.0` |
+| Mitigation preparation branch | `fix/61-explicit-routing-recovery` |
 | Archive | `dev-orchestrator-0.5.0.tgz` |
 | Size | 93,965 bytes; 360,426 bytes unpacked |
 | SHA-256 | `93ec79dd5f11284e44e2a72f807d85d8cd524be8a9a54e8b6df809d8adc925c5` |
@@ -20,8 +25,11 @@ normal publication checks. The executable is
 | Integrity | `sha512-MN5ZHShtZ6FU63E1kM2bZ4F4h/DjYn2gQZAiLBgjD9VRaI2P1nfVGlS2/1LqMw6wP7Q3PV+F2/dqXY72sMJp4A==` |
 | Preparation Node / pnpm | 24.22.1 / 11.19.0 |
 
+The [GitHub release](https://github.com/petercr/jev-orchestrator/releases/tag/v0.5.0)
+was published at `19:26:03 UTC`. Its attached npm archive and the public npm
+tarball both match the SHA-256 above, including independently downloaded bytes.
 The original candidate below remains retained for its original live pilot;
-its checksum must not be attributed to the current candidate.
+it was not published, and its checksum must not be attributed to the release.
 
 | Item | Original prepared archive (retained history) |
 | --- | --- |
@@ -130,8 +138,8 @@ with a material router reliability limitation. It does not establish an
 all-successful live matrix, improved routing quality, live native Windows
 workers, other live providers, or real active-worker cancellation. Keep the
 mixed result visible in release review. That original archive remains unchanged.
-The new candidate below has a separate archive and verification record;
-npm publication remains pending.
+The final candidate below has a separate archive and verification record.
+Publication was still pending at that point in the original pilot.
 
 ## Recovery mitigation candidate verification
 
@@ -172,15 +180,17 @@ Evidence, archive, installed hashes, protocol, traces, receipts, full patches,
 audits, verifiers, and terminal captures are retained outside Git under
 `/home/peterc/.cache/dev-issue61-mitigation-20261022`; native Windows captures
 are also under `C:\Users\pcruc\AppData\Local\Temp\dev-issue61-mitigation-20261022`.
-No npm publication has been started.
+This candidate verification preceded publication. The public-registry and
+GitHub receipts are recorded below.
 
-## Publication boundary
+## Publication and registry verification
 
 The operator accepted the verified mitigation for
 [routing reliability issue #61](https://github.com/petercr/jev-orchestrator/issues/61)
-on 2026-10-22 and asked to continue. That resolves the publication blocker
-through mitigation; it does not fix provider output. Merge PR #63 and verify
-its merged inputs against the retained candidate before npm publication.
+on 2026-10-22 and asked to continue. That resolved the publication blocker
+through mitigation; it did not fix provider output. PR #63 merged after all
+CI and Entire gates passed, including both Node 22 terminal matrices. Its
+merged inputs matched the retained candidate before npm publication.
 The [initial precision investigation](../presentation/v0.5-routing-investigation.md)
 and separate six-evaluation probe did not establish a provider fix. The
 verified recovery mitigation above has explicit operator acceptance
@@ -190,8 +200,42 @@ and production recovery behavior remain unchanged. The mitigation report
 records the acceptance and distinguishes it from GitHub's premature issue
 closure on the earlier investigation PR.
 
-Merge the release preparation before publishing. Recheck the merged source,
-retained archive, and registry availability; give the operator advance notice
-before launching any timed npm browser authorization. Record the public
-archive and fresh registry-install verification after publication. Historical
-archives and already published versions remain unchanged.
+The operator received notice before the fresh browser sign-in and the
+separate timed publication authorization. npm accepted the exact retained
+archive with `public` access and tag `latest`, then processed the release
+before exposing public metadata. No archive was rebuilt or republished while
+waiting for availability.
+
+Verified after publication:
+
+- Credential-free registry metadata reports version/latest `0.5.0`, the
+  expected `dev-agent` executable, matching SHA-1/integrity, and the fixed
+  npm tarball URL. Its downloaded bytes match the candidate exactly.
+- A fresh public-registry consumer installed `dev-orchestrator@0.5.0` with
+  lifecycle scripts disabled. All 49 installed CLI checks passed, including
+  18 mocked transport requests across all six routes, version/help, mock
+  execution, configuration rejection, schemas, and a stopped mock review.
+  No live model or worker ran in those verification checks.
+- pnpm's release-age guard initially refused the just-published package.
+  Only the disposable consumer used `minimumReleaseAgeExclude` for the exact
+  `dev-orchestrator@0.5.0` version, following the
+  [pnpm setting](https://pnpm.io/settings/dependency-resolution#minimumreleaseageexclude).
+  Global and repository settings were not changed; other dependencies kept
+  their age requirements.
+- All 72 registry-installed files match the published tarball. The Node
+  shebang and executable mode are preserved, and only `dev-agent` is exposed.
+- Annotated tag `v0.5.0` points to the verified publication commit. The GitHub
+  release asset's reported digest and independently downloaded bytes match
+  the same 93,965-byte npm archive.
+
+The publication terminal receipt, processing observations, metadata and
+archive verification, fresh consumer and installed CLI report, installed-file
+comparison, and GitHub download proof remain outside Git under
+`/home/peterc/.cache/dev-issue61-mitigation-20261022`. The registry installation
+record is in `public-registry-verification`; the GitHub download proof is in
+`github-release-verification`.
+
+Later README/changelog publication-status updates are documentation changes
+after release, not replacements for the immutable published archive. Retain
+the source/tag attribution and checksums above; do not rebuild or replace an
+already published version. Historical archives remain unchanged.
