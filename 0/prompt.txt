@@ -1,0 +1,13 @@
+bro what did we talk a bout!! yo ugotta let me know that stuff frist. ok try now
+
+---
+
+<send_user_message_question_reply>
+[{"answer":"good","question":"Please use this fresh [npm sign-in link](https://www.npmjs.com/login?next=/login/cli/e2878869-7ad4-42c4-8d50-93644d4ebfc7) now. The CLI is waiting; earlier links are no longer in use.","questionItemId":"[\"request_user_input_async\",\"call_d52a397665c641fdb1b3d9520d939eb9\",0]"}]
+</send_user_message_question_reply>
+
+---
+
+<send_user_message_question_reply>
+[{"answer":"good","question":"npm now needs its separate publish approval. Please approve this [publication request for dev-orchestrator@0.5.0](https://www.npmjs.com/auth/cli/d64a3839-13f4-4dfc-b580-40726bd172bf). The publish command is waiting.","questionItemId":"[\"request_user_input_async\",\"call_da3aaf5391fd4a62a6e97c10d8282ba0\",0]"}]
+</send_user_message_question_reply>
