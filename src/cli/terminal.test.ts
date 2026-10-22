@@ -100,12 +100,15 @@ describe('production presentation ownership', () => {
     expect(stripVTControlCharacters(before)).toContain('Evaluating task');
   });
 
-  it('treats raw-mode Ctrl+D and library cancellation as stopped input', async () => {
+  it.each([
+    ['Ctrl+D', '\u0004', 'input_closed'],
+    ['Escape', '\u001b', 'input_cancelled'],
+  ] as const)('treats %s as stopped input', async (_key, value, reason) => {
     const io = streams();
     terminal = await createTerminal({ ...io, environment: {}, interrupt: vi.fn() });
     const response = terminal.question('Choose:');
-    io.input.write('\u0004');
-    await expect(response).rejects.toEqual(new PromptStoppedError('input_closed'));
+    io.input.write(value);
+    await expect(response).rejects.toEqual(new PromptStoppedError(reason));
     expect(io.raw.at(-1)).toBe(false);
   });
 });

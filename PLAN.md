@@ -306,7 +306,7 @@ dependency decision are recorded below.
    CI, `NO_COLOR`, and `TERM=dumb` use static output. The adapter preserves
    resolved-candidate review and existing approval parsing. Missing input stops
    with bounded optional `promptStop` evidence, distinct from signal records.
-   All 1,403 tests, typecheck, build, schema validation, and eleven walkthroughs
+   All 1,404 tests, typecheck, build, schema validation, and eleven walkthroughs
    each against compiled and packed CLIs passed. Native Windows and broader
    terminal acceptance remain in step 3.
 3. [ ] Verify interactive terminals, narrow widths, long paths, Windows/WSL,

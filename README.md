@@ -602,7 +602,7 @@ permissions, approvals, or budgets.
 A failed evaluation adds a schema-v2 record with null evaluation, policy,
 approval, and tool fields, plus allowlisted `failure` diagnostics and recovery
 availability. A separate record captures the explicit `continue`/`stop`
-decision; both share the consumed iteration number. Cancellation during that
+decision; both share the consumed iteration number. A signal during that
 prompt adds the usual terminal interruption record with phase `recovery`.
 No exception message, rejected response body, headers, or cause is failure
 evidence. Consumers should use iteration numbers rather than counting lines.
