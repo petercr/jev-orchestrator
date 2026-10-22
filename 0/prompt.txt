@@ -1,0 +1,5 @@
+ok pr merged now lets plan out what v0.6 release should look like
+
+---
+
+ol commit pish and pr
