@@ -1,0 +1,78 @@
+name: Terminal verification
+
+on:
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: terminal-pr-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  maintainer_permission:
+    name: Check terminal verification permission
+    runs-on: ubuntu-latest
+    timeout-minutes: 1
+    outputs:
+      trusted: ${{ steps.permission.outputs.result }}
+    steps:
+      - id: permission
+        uses: actions/github-script@v8
+        with:
+          result-encoding: string
+          script: |
+            try {
+              const { data } = await github.rest.repos.getCollaboratorPermissionLevel({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                username: context.payload.pull_request.user.login,
+              });
+              return ['admin', 'write'].includes(data.permission) ? 'true' : 'false';
+            } catch {
+              return 'false';
+            }
+
+  terminal:
+    name: Terminal (${{ matrix.os }}, Node 22)
+    needs: maintainer_permission
+    if: ${{ needs.maintainer_permission.outputs.trusted == 'true' }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 10
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          package-manager-cache: false
+      - run: corepack enable
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --dir scripts/terminal install --frozen-lockfile
+      - run: pnpm test src/cli/terminal.test.ts src/cli/terminal.integration.test.ts --maxWorkers=2
+      - run: pnpm build
+      - run: pnpm verify:terminal --output "${{ runner.temp }}/terminal-compiled"
+      - name: Pack and install a separate consumer
+        run: |
+          pnpm pack --pack-destination "$RUNNER_TEMP/terminal-package"
+          node --input-type=module -e 'import fs from "node:fs"; const root = process.argv[1]; fs.mkdirSync(root); fs.writeFileSync(root + "/package.json", JSON.stringify({name:"terminal-consumer",private:true,packageManager:"pnpm@11.19.0"}));' "$RUNNER_TEMP/terminal-consumer"
+          pnpm --dir "$RUNNER_TEMP/terminal-consumer" add --ignore-scripts "$RUNNER_TEMP"/terminal-package/*.tgz
+      - run: pnpm verify:terminal --cli "${{ runner.temp }}/terminal-consumer/node_modules/dev-orchestrator/dist/cli.js" --output "${{ runner.temp }}/terminal-packed"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: terminal-${{ matrix.os }}-node22
+          path: |
+            ${{ runner.temp }}/terminal-compiled
+            ${{ runner.temp }}/terminal-packed
+          retention-days: 7

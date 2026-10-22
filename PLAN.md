@@ -37,7 +37,7 @@ implemented features or release commitments.
 | Version | Primary outcome | First deliverable |
 | --- | --- | --- |
 | [v0.4](#v04-draft-reliable-task-workflows) | More reliable completion of bounded coding tasks | Reproducible complete-workflow baseline |
-| [v0.5](#v05-candidate-terminal-presentation-and-interaction) | Clearer, more polished terminal interaction | Styled CLI adapter integrated; broader terminal verification pending |
+| [v0.5](#v05-candidate-terminal-presentation-and-interaction) | Clearer, more polished terminal interaction | Presentation and terminal verification complete; unreleased |
 | [v0.6](#v06-draft-saved-runs-and-safe-resume) | Stop a run and continue it later with its context and remaining limits | Versioned saved-run contract and offline recovery fixtures |
 
 ## v0.4 draft: reliable task workflows
@@ -250,7 +250,9 @@ v0.4's clearer blocker messages and output grouping. The operator confirmed
 moving on to v0.5 on 2026-10-21. Implementation started with the
 [offline presentation prototype](docs/presentation/v0.5-prototype.md); the
 [production CLI integration](docs/presentation/v0.5-integration.md) now uses
-Clack through a narrow terminal adapter.
+Clack through a narrow terminal adapter. The
+[terminal verification record](docs/presentation/v0.5-verification.md) covers
+the final delivery step and its remaining scope limits.
 
 The CLI's terminal adapter owns styled output and a single prompt reader;
 policy, candidate selection, approval decisions, and execution retain their
@@ -309,7 +311,7 @@ dependency decision are recorded below.
    All 1,404 tests, typecheck, build, schema validation, and eleven walkthroughs
    each against compiled and packed CLIs passed. Native Windows and broader
    terminal acceptance remain in step 3.
-3. [ ] Verify interactive terminals, narrow widths, long paths, Windows/WSL,
+3. [x] Verify interactive terminals, narrow widths, long paths, Windows/WSL,
    and plain non-TTY/CI output. Honor `NO_COLOR`, provide readable static
    output for accessibility, and keep JSON output and trace data free of
    styling and spinner frames. Keep untrusted terminal control sequences from
@@ -317,6 +319,17 @@ dependency decision are recorded below.
    execution, process cleanup, terminal restoration, and final exit statuses.
    Verify the packed CLI with both styled and plain output. The presentation
    layer must preserve budgets, validation evidence, and approval enforcement.
+   Delivered in the [verification record](docs/presentation/v0.5-verification.md):
+   an isolated offline harness passed 33 scenarios each against compiled and
+   packed CLIs on both WSL PTYs and native Windows ConPTY (132 walkthroughs),
+   plus schema-v1 JSON/trace checks on the installed consumers. It covers
+   40/60/80/120 columns, long paths, static fallbacks, both adapters, repair,
+   recovery, prompt stops, active cancellation, and terminal restoration.
+   Plain Windows EOF control lines now stop safely after Enter. All 1,406
+   tests, typecheck, build, and schema validation passed; a Node 22
+   Ubuntu/Windows workflow repeats compiled and installed checks. The package
+   remains unreleased, and this does not certify live worker launchers or
+   screen-reader/font behavior.
 
 ## v0.6 draft: saved runs and safe resume
 
