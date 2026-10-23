@@ -620,7 +620,7 @@ modules rather than introducing a workflow framework.
    not initialize storage or acquire locks; repository/configuration preflight
    is implemented in PR 4. Delivered in PR #68, with all 1,481 tests passing
    serially alongside type checking, build, and a compiled CLI smoke.
-4. [ ] **Explicit resume.** Add CLI compatibility checks, exclusive ownership,
+4. [x] **Explicit resume.** Add CLI compatibility checks, exclusive ownership,
    preflight/review, fresh evaluator binding, repository/context refresh,
    validation invalidation, and entry at the next unused iteration. Add a
    two-process happy path for each worker selection and explicit recovery
@@ -629,8 +629,10 @@ modules rather than introducing a workflow framework.
    implementation adds a bounded content sidecar tied to the clean-stop ledger,
    refuses older stops without it, rechecks content after the operator review,
    and requires fresh instruction reads and independent validation. Linux
-   subprocess fixtures cover both worker selections; the full provider/platform
-   matrix and installed-package verification remain in PR 5.
+   subprocess fixtures cover both worker selections. Delivered in PR #69, with
+   all 1,513 tests passing serially alongside type checking, build, and a
+   compiled CLI smoke. The full provider/platform matrix and installed-package
+   verification remain in PR 5.
 5. [ ] **Restart and platform verification.** Extend deterministic integration
    coverage across all six supported evaluation routes and both workers.
    Exercise repeated restarts, exhausted budgets, missing/conflicting config,
@@ -638,6 +640,9 @@ modules rather than introducing a workflow framework.
    storage errors, EOF, signals, and unresolved execution. Extend the compiled
    and installed PTY/Windows ConPTY matrix on supported Node versions. Keep
    existing decision-only, unsaved orchestration, and JSON behavior covered.
+   The [offline verification record](docs/saved-runs-verification.md) documents
+   the three-segment provider/worker matrix, preflight failure checks, and
+   compiled/installed terminal evidence. The live pilot remains separate.
 6. [ ] **Live pilot and v0.6.0 release.** Freeze a candidate archive and bounded
    protocol, obtain operator authorization for live calls, then run the pilot
    below before any publication. Fix failures in a separately identified

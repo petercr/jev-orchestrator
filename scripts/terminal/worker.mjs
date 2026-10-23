@@ -1,11 +1,12 @@
 // A local fixture child, substituted only at the process boundary.
 import { spawn } from 'node:child_process';
-import { readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 
 const active = process.env.TERMINAL_CASE.startsWith('active');
 const firstRepair = process.env.TERMINAL_CASE === 'repair' && readFileSync('value.mjs', 'utf8').includes('= 1');
 writeFileSync('value.mjs', `export const value = ${active || firstRepair ? 3 : 2};\n`);
 writeFileSync('worker.pid', String(process.pid));
+writeFileSync('worker-count', String((existsSync('worker-count') ? Number(readFileSync('worker-count', 'utf8')) : 0) + 1));
 if (active) {
   if (process.platform !== 'win32') {
     // Prove process-group escalation also drains a TERM-resistant descendant.

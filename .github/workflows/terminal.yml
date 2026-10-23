@@ -36,15 +36,16 @@ jobs:
             }
 
   terminal:
-    name: Terminal (${{ matrix.os }}, Node 22)
+    name: Terminal (${{ matrix.os }}, Node ${{ matrix.node }})
     needs: maintainer_permission
     if: ${{ needs.maintainer_permission.outputs.trusted == 'true' }}
     strategy:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, windows-latest]
+        node: [22, 24, 26]
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 10
+    timeout-minutes: 20
     defaults:
       run:
         shell: bash
@@ -54,9 +55,12 @@ jobs:
           persist-credentials: false
       - uses: actions/setup-node@v5
         with:
-          node-version: 22
+          node-version: ${{ matrix.node }}
           package-manager-cache: false
-      - run: corepack enable
+      - uses: pnpm/action-setup@v6
+        with:
+          version: 11.19.0
+          run_install: false
       - run: pnpm install --frozen-lockfile
       - run: pnpm --dir scripts/terminal install --frozen-lockfile
       - run: pnpm test src/cli/terminal.test.ts src/cli/terminal.integration.test.ts --maxWorkers=2
@@ -71,7 +75,7 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: terminal-${{ matrix.os }}-node22
+          name: terminal-${{ matrix.os }}-node${{ matrix.node }}
           path: |
             ${{ runner.temp }}/terminal-compiled
             ${{ runner.temp }}/terminal-packed

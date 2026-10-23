@@ -25,7 +25,8 @@ globalThis.fetch = async (url) => {
   }
   const recovery = mode.startsWith('recovery');
   const worker = process.env.TERMINAL_WORKER === 'claude' ? 'CALL_CLAUDE' : 'CALL_CODEX';
-  const route = mode === 'repair' ? [worker, 'RUN_TESTS', worker, 'RUN_TESTS', 'FINISH'] : [worker, 'RUN_TESTS', 'FINISH'];
+  const route = mode.startsWith('saved-resume') ? ['RUN_TESTS', 'RUN_TESTS', 'FINISH']
+    : mode === 'repair' ? [worker, 'RUN_TESTS', worker, 'RUN_TESTS', 'FINISH'] : [worker, 'RUN_TESTS', 'FINISH'];
   const action = mode.startsWith('information') ? 'ASK_USER'
     : mode === 'iteration-limit' ? worker
       : route[Math.max(0, evaluations - 1 - Number(recovery))] ?? 'FINISH';
