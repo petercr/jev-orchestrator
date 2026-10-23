@@ -1,0 +1,36 @@
+{
+  "cli_version": "0.11.6-nightly.202610170622.9254299eb",
+  "checkpoint_id": "01M5MSFKYFKPC3SVM0MXWBZ72F",
+  "strategy": "manual-commit",
+  "branch": "feat/v0.6-local-run-history",
+  "checkpoints_count": 1,
+  "files_touched": [
+    "AGENTS.md",
+    "PLAN.md",
+    "README.md",
+    "docs/saved-runs-v1.md",
+    "src/cli.test.ts",
+    "src/cli.ts",
+    "src/cli/history.ts",
+    "src/saved-runs/history.test.ts",
+    "src/saved-runs/history.ts",
+    "src/saved-runs/store.ts"
+  ],
+  "sessions": [
+    {
+      "metadata": "/0/metadata.json",
+      "transcript": "/0/full.jsonl",
+      "compact_transcript": "/0/transcript.jsonl",
+      "content_hash": "/0/content_hash.txt",
+      "prompt": "/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 213110,
+    "cache_creation_tokens": 0,
+    "cache_read_tokens": 8408064,
+    "output_tokens": 43474,
+    "api_call_count": 64,
+    "subagent_tokens_complete": true
+  }
+}

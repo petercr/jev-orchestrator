@@ -1,0 +1,38 @@
+{
+  "cli_version": "0.11.6-nightly.202610170622.9254299eb",
+  "checkpoint_id": "01M5MSFKYFKPC3SVM0MXWBZ72F",
+  "session_id": "01a155d6-cabb-7712-be8d-5efffd522a09",
+  "strategy": "manual-commit",
+  "created_at": "2026-10-23T16:28:43.537851538Z",
+  "branch": "feat/v0.6-local-run-history",
+  "checkpoints_count": 1,
+  "files_touched": [
+    "AGENTS.md",
+    "PLAN.md",
+    "README.md",
+    "docs/saved-runs-v1.md",
+    "src/cli.test.ts",
+    "src/cli.ts",
+    "src/cli/history.ts",
+    "src/saved-runs/history.test.ts",
+    "src/saved-runs/history.ts",
+    "src/saved-runs/store.ts"
+  ],
+  "agent": "Codex",
+  "model": "gpt-6.1-sol",
+  "turn_id": "e17f16d7d291",
+  "checkpoint_transcript_start": 7773,
+  "transcript_lines_at_start": 7773,
+  "compact_transcript_start": 940,
+  "token_usage": {
+    "input_tokens": 213110,
+    "cache_creation_tokens": 0,
+    "cache_read_tokens": 8408064,
+    "output_tokens": 43474,
+    "api_call_count": 64,
+    "subagent_tokens_complete": true
+  },
+  "session_metrics": {
+    "turn_count": 16
+  }
+}
