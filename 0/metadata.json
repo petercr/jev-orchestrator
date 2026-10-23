@@ -1,0 +1,53 @@
+{
+  "cli_version": "0.11.6-nightly.202610170622.9254299eb",
+  "checkpoint_id": "01M5N4HMC005ZH14R05BS9502C",
+  "session_id": "01a155d6-cabb-7712-be8d-5efffd522a09",
+  "strategy": "manual-commit",
+  "created_at": "2026-10-23T19:42:04.319008689Z",
+  "branch": "feat/v0.6-explicit-resume",
+  "checkpoints_count": 1,
+  "save_step_count": 1,
+  "files_touched": [
+    "AGENTS.md",
+    "PLAN.md",
+    "README.md",
+    "docs/saved-runs-v1.md",
+    "scripts/presentation/fixtures.ts",
+    "src/cli.cancellation.test.ts",
+    "src/cli.test.ts",
+    "src/cli.ts",
+    "src/cli/presentation.ts",
+    "src/logging/trace.ts",
+    "src/orchestration/candidate.ts",
+    "src/orchestration/loop.ts",
+    "src/orchestration/summary.test.ts",
+    "src/orchestration/summary.ts",
+    "src/policy.ts",
+    "src/repo/inspect.ts",
+    "src/repo/preparation.ts",
+    "src/saved-runs/contract.ts",
+    "src/saved-runs/history.test.ts",
+    "src/saved-runs/history.ts",
+    "src/saved-runs/restart.test.ts",
+    "src/saved-runs/resume.test.ts",
+    "src/saved-runs/resume.ts",
+    "src/saved-runs/snapshot.ts",
+    "src/saved-runs/store.ts",
+    "src/saved-runs/types.ts",
+    "src/types.ts"
+  ],
+  "agent": "Codex",
+  "model": "gpt-6.1-sol",
+  "turn_id": "fbbc9408dc3e",
+  "compact_transcript_start": 0,
+  "token_usage": {
+    "input_tokens": 287779,
+    "cache_creation_tokens": 0,
+    "cache_read_tokens": 10204416,
+    "output_tokens": 58775,
+    "api_call_count": 47
+  },
+  "session_metrics": {
+    "turn_count": 17
+  }
+}
