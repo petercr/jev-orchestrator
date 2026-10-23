@@ -75,6 +75,8 @@ export type AgentEvidence = {
     reportedEnvironmentLimitations?: Array<'loopback_bind_denied'>;
   };
   repoRefreshRequired?: boolean;
+  /** Root instruction reads required by a fresh resume preflight. */
+  requiredInstructionFiles?: string[];
 };
 
 export type AgentState = {

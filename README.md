@@ -1027,12 +1027,14 @@ The [v0.6 release plan](PLAN.md#v06-draft-saved-runs-and-safe-resume) adds
 opt-in saved runs, local history, and continuation after a clean stop on the
 same machine and Git worktree. In this source checkout, `--save-run` connects
 the bounded store to the orchestration loop, and `--list-runs` / `--show-run`
-inspect local history. Restart continuation is still planned. Try it with:
+inspect local history. `--resume` reviews and continues an eligible clean stop
+on the same machine and canonical Git worktree. Try it with:
 
 ```bash
 pnpm dev -- . "Inspect this repo and choose the safest useful first action" --mock --orchestrate --save-run
 pnpm dev -- --list-runs --plain
 pnpm dev -- --show-run <run-id> --plain
+pnpm dev -- --resume <run-id> --plain
 ```
 
 Saving requires a Git worktree with a committed HEAD. The CLI prints the run
@@ -1068,10 +1070,43 @@ record returns 0.
 
 History is a reporting snapshot. Directory availability does not check current
 HEAD, working-file contents, or configuration, and earlier validation passes
-will not authorize completion after restart. The `--resume` command arrives in
-the next milestone. Records may contain task text and source excerpts; the
+will not authorize completion after restart. Records may contain task text and source excerpts; the
 store is local and unencrypted. There is no deletion or retention command yet.
 See the storage contract for platform paths and manual housekeeping guidance.
+
+Resume loads the stored task, original iteration ceiling, consumed worker
+calls, and fixed mock/live, provider/model, worker, and network selections.
+It accepts only the run ID and optional `--plain`; task and execution overrides
+are rejected. Live runs reload credentials from the current environment, using
+the saved provider/model when selectors are unset. Explicit conflicting
+selectors or a changed Cloudflare account block continuation. Other providers
+have no non-secret account identifier in this client; the review explains that
+credential account continuity cannot be verified. A model alias also does not
+pin the remote deployment served later.
+
+The review shows remaining limits, prior stop, repository drift, fresh checks,
+and required instruction reads. Type `continue` to enter the next unused
+iteration or `stop` to leave the record unchanged. Continuing after a recorded
+evaluation failure also makes its explicit recovery decision once in that
+review. The review approves no action. File candidates are rebuilt, earlier
+reads are discarded, root instructions require approved reads, and validation
+starts a fresh generation. Original required checks remain required even if a
+script has been removed. Every tool/worker, check, and completion still needs
+its own approval. Traces identify the saved run and segment; elapsed phase
+times exclude the time between processes and report continuation waits
+separately from active work.
+
+A clean stop now saves bounded content fingerprints in `repository.json`,
+bound to its ledger event. It covers tracked and untracked files, including
+Git-ignored source, outside fixed generated/secret exclusions. Comparison is
+limited to 512 paths, 1 MiB per file, and 32 MiB total; oversized, linked, unstable,
+or otherwise unverifiable input blocks continuation. Removed root instructions,
+changed HEAD/worktree identity, incomplete records, and unresolved ownership or
+execution also block it. Partial edits are kept, including operator changes;
+the CLI never restores files or resets Git. Older development records without
+content fingerprints remain inspectable; start a new saved run to use resume.
+Full platform/provider restart verification and the live pilot remain required
+before the v0.6 release.
 
 ## v0.3 decision-model release
 

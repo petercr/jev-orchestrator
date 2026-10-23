@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import type { ExecutionOptions } from './cancellation.js';
-import { throwIfInterrupted } from './cancellation.js';
+import { throwIfInterrupted, PromptStoppedError, RunInterruptedError } from './cancellation.js';
 import { readFile } from 'node:fs/promises';
 import { randomUUID } from 'node:crypto';
 import path from 'node:path';
@@ -27,11 +27,13 @@ import {
 } from './orchestration/loop.js';
 import { applyPolicy } from './policy.js';
 import type { RunSummary } from './orchestration/summary.js';
-import { inspectGitIdentity, inspectRepo } from './repo/inspect.js';
+import { inspectGitIdentity, inspectRepo, orchestrationWorktreeRoot } from './repo/inspect.js';
 import { createSavedRunConfiguration, createSavedRunRepository, isSavedRunId } from './saved-runs/contract.js';
 import { inspectSavedRun, listSavedRuns } from './saved-runs/history.js';
 import { openSavedRunStore, SavedRunStore } from './saved-runs/store.js';
 import type { SavedRunEventInput, SavedRunOwnership, SavedRunStatus } from './saved-runs/types.js';
+import { captureRepositorySnapshot, snapshotHash, type RepositorySnapshot } from './saved-runs/snapshot.js';
+import { refreshResumeState, resolveResumeConfiguration, resumePosition, validateSnapshotDrift } from './saved-runs/resume.js';
 import type {
   Action,
   AgentAssessment,
@@ -67,6 +69,7 @@ export type CliCommand =
   | { kind: 'version' }
   | { kind: 'list-runs'; plain?: true }
   | { kind: 'show-run'; runId: string; plain?: true }
+  | { kind: 'resume'; runId: string; plain?: true }
   | { kind: 'run'; options: CliOptions };
 
 export type DecisionOutput = EvaluationAttribution & {
@@ -106,6 +109,7 @@ export function usage(): string {
   return `dev-agent <repo-path> <task> [--mock] [--no-trace] [--json] [--orchestrate] [--save-run] [--worker codex|claude] [--codex-network] [--plain]
 dev-agent --list-runs [--plain]
 dev-agent --show-run <run-id> [--plain]
+dev-agent --resume <run-id> [--plain]
 
 Options:
   --mock       Use the offline deterministic evaluation.
@@ -115,6 +119,7 @@ Options:
   --save-run     Persist the bounded orchestration state and event history.
   --list-runs    Inspect up to 20 local saved runs without credentials or network access.
   --show-run     Inspect one saved run by UUID, including older records.
+  --resume       Review and continue a cleanly stopped run with its original limits.
   --worker     Restrict coding work to codex or claude; otherwise the evaluator may choose either.
   --codex-network  Allow Codex command networking, including local sockets; keep its file sandbox.
   --plain      Use static plain orchestration/history output (also used for pipes, CI, NO_COLOR, or TERM=dumb).
@@ -174,7 +179,7 @@ export function parseArgs(argv: string[]): CliCommand {
   let plain: true | undefined;
   let showHelp = false;
   let showVersion = false;
-  let history: { kind: 'list-runs' } | { kind: 'show-run'; runId: string } | undefined;
+  let history: { kind: 'list-runs' } | { kind: 'show-run' | 'resume'; runId: string } | undefined;
   let parseFlags = true;
   const positional: string[] = [];
 
@@ -184,12 +189,12 @@ export function parseArgs(argv: string[]): CliCommand {
     if (value !== 'codex' && value !== 'claude') throw usageError('--worker requires codex or claude.');
     workerSelection = value;
   };
-  const selectHistory = (runId?: string): void => {
-    if (history) throw usageError('Use exactly one --list-runs or --show-run command.');
+  const selectHistory = (runId?: string, resume = false): void => {
+    if (history) throw usageError('Use exactly one --list-runs, --show-run, or --resume command.');
     if (runId === undefined) history = { kind: 'list-runs' };
     else {
-      if (!isSavedRunId(runId)) throw usageError('--show-run requires a saved run UUID, not a file path.');
-      history = { kind: 'show-run', runId };
+      if (!isSavedRunId(runId)) throw usageError('Saved run commands require a UUID, not a file path.');
+      history = { kind: resume ? 'resume' : 'show-run', runId };
     }
   };
   for (let index = 0; index < args.length; index += 1) {
@@ -228,6 +233,9 @@ export function parseArgs(argv: string[]): CliCommand {
       case '--show-run':
         selectHistory(args[++index] ?? '');
         break;
+      case '--resume':
+        selectHistory(args[++index] ?? '', true);
+        break;
       case '--plain':
         plain = true;
         break;
@@ -254,6 +262,10 @@ export function parseArgs(argv: string[]): CliCommand {
           selectHistory(arg.slice('--show-run='.length));
           break;
         }
+        if (arg.startsWith('--resume=')) {
+          selectHistory(arg.slice('--resume='.length), true);
+          break;
+        }
         if (arg.startsWith('-')) {
           throw usageError(`Unknown option: ${arg}`);
         }
@@ -273,7 +285,7 @@ export function parseArgs(argv: string[]): CliCommand {
 
   if (history) {
     if (mock || noTrace || json || orchestrate || saveRun || workerSelection !== undefined || codexNetworkAccess !== undefined || positional.length > 0) {
-      throw usageError('Saved run history accepts only --list-runs or --show-run <run-id>, with optional --plain.');
+      throw usageError('Saved run commands accept no task or execution overrides; only --plain may be added.');
     }
     return { ...history, ...(plain ? { plain } : {}) };
   }
@@ -450,7 +462,11 @@ async function promptForEvaluationRecovery(
   }
 }
 
-export async function runCliOrchestration(options: CliOptions): Promise<OrchestrationResult> {
+type ResumeRequest = { resumeRunId: string; plain?: true };
+
+export function runCliOrchestration(request: CliOptions): Promise<OrchestrationResult>;
+export function runCliOrchestration(request: ResumeRequest): Promise<OrchestrationResult | undefined>;
+export async function runCliOrchestration(request: CliOptions | ResumeRequest): Promise<OrchestrationResult | undefined> {
   const controller = new AbortController();
   let exitCode: number | undefined;
   const interrupt = (signal: 'SIGINT' | 'SIGTERM'): void => {
@@ -469,10 +485,24 @@ export async function runCliOrchestration(options: CliOptions): Promise<Orchestr
   let savedRunStore: Awaited<ReturnType<typeof openSavedRunStore>> | undefined;
   const executionOptions = { signal: controller.signal };
   try {
-    savedRunStore = await openSavedRunStore();
-    worktreeOwnership = await savedRunStore.acquireWorktreeOwnership(options.repoPath);
+    const resumeId = 'resumeRunId' in request ? request.resumeRunId : undefined;
+    savedRunStore = resumeId ? await SavedRunStore.openForInspection() : await openSavedRunStore();
+    if (!savedRunStore) throw new Error('The saved run store is unavailable.');
+    if (resumeId) runOwnership = await savedRunStore.acquireRunOwnership(resumeId);
+    const previous = resumeId ? await savedRunStore.read(resumeId) : undefined;
+    const position = previous ? resumePosition(previous.checkpoint, previous.events) : undefined;
+    const oldSnapshot = resumeId && position
+      ? await savedRunStore.readRepositorySnapshot(resumeId, position.repositorySnapshotHash) : undefined;
+    const options: CliOptions = previous ? {
+      repoPath: previous.checkpoint.repository.root, task: previous.checkpoint.state.task,
+      mock: previous.checkpoint.configuration.mode === 'mock', json: false, noTrace: false, orchestrate: true, saveRun: true,
+      ...(previous.checkpoint.configuration.workerSelection ? { workerSelection: previous.checkpoint.configuration.workerSelection } : {}),
+      ...(previous.checkpoint.configuration.codexNetworkAccess ? { codexNetworkAccess: true } : {}),
+      ...(request.plain ? { plain: true } : {}),
+    } : 'repoPath' in request ? request : (() => { throw new Error('Saved run context is unavailable.'); })();
+    worktreeOwnership = await savedRunStore.acquireWorktreeOwnership(await orchestrationWorktreeRoot(options.repoPath));
     const savedEvaluationConfiguration = options.saveRun && !options.mock
-      ? resolveEvaluationConfiguration()
+      ? previous ? resolveResumeConfiguration(previous.checkpoint.configuration) : resolveEvaluationConfiguration()
       : undefined;
     // Inspection is read-only and already bounded. Drain it before returning;
     // an initial interruption never enters evaluation or approval.
@@ -483,21 +513,91 @@ export async function runCliOrchestration(options: CliOptions): Promise<Orchestr
       const identity = await inspectGitIdentity(repo.root);
       if (identity.root !== repo.root) repo = await inspectRepo(identity.root);
       savedRepository = await createSavedRunRepository(identity.root, identity.gitCommonDirectory, identity.head);
+      if (previous && JSON.stringify(savedRepository) !== JSON.stringify(previous.checkpoint.repository)) {
+        throw new Error('Resume requires the same canonical Git worktree and unchanged HEAD.');
+      }
     }
-    const initialInspectionMs = performance.now() - inspectionStartedAt;
-    const state = createInitialState(repo, options.task, options.workerSelection, options.codexNetworkAccess);
+    let initialInspectionMs = performance.now() - inspectionStartedAt;
+    let state = previous ? refreshResumeState(previous.checkpoint, repo)
+      : createInitialState(repo, options.task, options.workerSelection, options.codexNetworkAccess);
     const configuration = options.mock
       ? undefined
       : controller.signal.aborted && !options.saveRun
         ? undefined
         : savedEvaluationConfiguration ?? resolveEvaluationConfiguration();
-    const evaluate = configuration ? createEvaluator(configuration) : mockEvaluation;
     terminal = await createTerminal({
       ...(options.plain ? { plain: true } : {}), interrupt: sigint,
       writeLine: (line) => console.log(line),
     });
     const prompts = terminal;
-    if (options.saveRun && savedRepository) {
+    const oneLine = (value: string): string => terminalText(value).replace(/\s+/gu, ' ').trim();
+    let resumeReviewWaitMs = 0;
+    let reviewedSnapshot: RepositorySnapshot | undefined;
+    if (previous && position && oldSnapshot && savedRepository) {
+      const snapshotStartedAt = performance.now();
+      reviewedSnapshot = await captureRepositorySnapshot(savedRepository);
+      const drift = validateSnapshotDrift(oldSnapshot, reviewedSnapshot);
+      state = refreshResumeState(previous.checkpoint, repo, reviewedSnapshot);
+      initialInspectionMs += performance.now() - snapshotStartedAt;
+      const priorStop = previous.events.at(-1);
+      const priorFailure = [...previous.events].reverse().find((event) => event.type === 'evaluation_failed');
+      prompts.section('Review saved run continuation', [
+        `Run: ${resumeId}`, `Task: ${oneLine(state.task)}`, `Repo: ${oneLine(repo.root)}`,
+        `Last stop: ${priorStop?.type === 'run_stopped' ? priorStop.reason : 'unavailable'}; HEAD: ${savedRepository.head}`,
+        `Next iteration: ${position.nextIteration}/${previous.checkpoint.iterationLimit}; ${previous.checkpoint.iterationLimit - position.nextIteration + 1} remaining.`,
+        `Worker: ${options.workerSelection ?? 'Codex or Claude'}; calls used: Codex ${state.codexCalls}/2, Claude ${state.claudeCalls}/2.`,
+        `Mode/provider/model: ${previous.checkpoint.configuration.mode}/${previous.checkpoint.configuration.provider}/${previous.checkpoint.configuration.model}. Codex command network: ${options.codexNetworkAccess === true ? 'enabled' : 'disabled'}.`,
+        `Changed paths since the clean stop (${drift.length}): ${drift.slice(0, 20).map((file) => terminalText(file)).join(', ') || 'none'}${drift.length > 20 ? '; additional paths omitted from display' : ''}.`,
+        `Fresh required checks: ${oneLine(state.repo.requiredValidationScripts?.join(', ') || 'none detected')}.`,
+        `Required new instruction reads: ${state.evidence?.requiredInstructionFiles?.join(', ') || 'none'}.`,
+        'Partial edits remain. Changed content may include operator edits. All prior file reads and validation are stale.',
+        ...(previous.checkpoint.configuration.mode === 'live' ? [
+          previous.checkpoint.configuration.provider === 'cloudflare'
+            ? 'Cloudflare account identity matches its stored fingerprint.'
+            : 'Credential account continuity cannot be verified; the current environment credential may belong to a different account.',
+          'The stored model identifier is retained; an alias does not pin the provider deployment served later.',
+        ] : []),
+        ...(position.recoveryRequired ? ['Continuing also explicitly recovers the recorded evaluation failure once; it retains all consumed budgets.'] : []),
+        ...(position.recoveryRequired && priorFailure?.type === 'evaluation_failed'
+          ? [`Recorded failure: ${priorFailure.code} at ${priorFailure.stage}/${priorFailure.category}.`] : []),
+        'This review approves no repository action. Each new candidate, validation, and completion still requires its own approval.',
+      ]);
+      const reviewStartedAt = performance.now();
+      try {
+        while (true) {
+          const answer = (await prompts.question(position.recoveryRequired
+            ? 'Enter continue to resume and explicitly recover the evaluation failure, or stop: '
+            : 'Enter continue to resume with the displayed limits, or stop: ', executionOptions)).trim().toLowerCase();
+          throwIfInterrupted(controller.signal);
+          if (answer === 'stop' || answer === 'quit') {
+            prompts.line('Continuation stopped; the saved run is unchanged.');
+            return undefined;
+          }
+          if (answer === 'continue') break;
+          prompts.line('Explicit continue or stop is required. No action has been approved.');
+        }
+      } catch (error) {
+        if (error instanceof PromptStoppedError || error instanceof RunInterruptedError || controller.signal.aborted) {
+          process.exitCode = exitCode ?? 1;
+          prompts.line('Continuation stopped before acceptance; the saved run is unchanged.');
+          return undefined;
+        }
+        throw error;
+      }
+      resumeReviewWaitMs = performance.now() - reviewStartedAt;
+      const refreshStartedAt = performance.now();
+      const afterReview = await captureRepositorySnapshot(savedRepository);
+      if (snapshotHash(afterReview) !== snapshotHash(reviewedSnapshot)) {
+        throw new Error('Repository contents changed during the continuation review; rerun --resume to review them.');
+      }
+      throwIfInterrupted(controller.signal);
+      await savedRunStore.append(resumeId!, {
+        type: 'run_resumed', segment: position.segment,
+        ...(position.recoveryRequired ? { evaluationRecoveryApproved: true } : {}),
+      }, state);
+      initialInspectionMs += performance.now() - refreshStartedAt;
+      savedRunId = resumeId;
+    } else if (options.saveRun && savedRepository) {
       const runId = randomUUID();
       runOwnership = await savedRunStore.acquireRunOwnership(runId);
       await savedRunStore.create({
@@ -514,8 +614,8 @@ export async function runCliOrchestration(options: CliOptions): Promise<Orchestr
       });
       savedRunId = runId;
     }
+    const evaluate = configuration ? createEvaluator(configuration) : mockEvaluation;
 
-    const oneLine = (value: string): string => terminalText(value).replace(/\s+/gu, ' ').trim();
     prompts.header('Dev Orchestrator — approval-gated orchestration', [
       `Repo: ${oneLine(repo.root)}`, `Task: ${oneLine(options.task)}`,
       `Mode: ${options.mock ? 'mock' : `live (${configuration?.provider ?? 'interrupted'})`}`,
@@ -536,19 +636,33 @@ export async function runCliOrchestration(options: CliOptions): Promise<Orchestr
     }, {
       signal: controller.signal,
       initialInspectionMs,
+      resumeReviewWaitMs,
+      ...(position?.recoveryRequired ? { initialEvaluationRecoveryApproved: true } : {}),
+      ...(position && previous ? { startIteration: position.nextIteration, segment: position.segment, maxIterations: previous.checkpoint.iterationLimit } : {}),
+      ...(savedRunId ? { savedRunId } : {}),
       ...(controller.signal.aborted ? { initialPhase: 'inspection' as const } : {}),
       ...(savedRunId ? {
         persistence: {
-          record: (event: SavedRunEventInput, currentState: AgentState) =>
-            savedRunStore!.append(savedRunId!, event, currentState),
+          record: async (event: SavedRunEventInput, currentState: AgentState) => {
+            const snapshot = event.type === 'run_stopped' && event.resumable && savedRepository
+              ? await captureRepositorySnapshot(savedRepository) : undefined;
+            return savedRunStore!.append(savedRunId!, event, currentState, snapshot);
+          },
         },
       } : {}),
     });
     let savedRunStatus: SavedRunStatus | undefined;
     let savedRunStatusUnavailable: true | undefined;
+    let savedRunTotals: OrchestrationResult['savedRunTotals'];
     if (savedRunId) {
       try {
-        savedRunStatus = (await savedRunStore.read(savedRunId)).checkpoint.status;
+        const stored = await savedRunStore.read(savedRunId);
+        savedRunStatus = stored.checkpoint.status;
+        savedRunTotals = {
+          iterations: stored.events.filter((event) => event.type === 'iteration_reserved').length,
+          codexCalls: stored.checkpoint.state.codexCalls, claudeCalls: stored.checkpoint.state.claudeCalls,
+          segments: 1 + stored.events.filter((event) => event.type === 'run_resumed').length,
+        };
       } catch {
         // A failed append can leave the checkpoint and ledger inconsistent.
         savedRunStatusUnavailable = true;
@@ -561,9 +675,17 @@ export async function runCliOrchestration(options: CliOptions): Promise<Orchestr
       ...result,
       ...(savedRunId === undefined ? {} : { savedRunId }),
       ...(savedRunStatus === undefined ? {} : { savedRunStatus }),
+      ...(savedRunTotals === undefined ? {} : { savedRunTotals }),
       ...(savedRunStatusUnavailable === undefined ? {} : { savedRunStatusUnavailable }),
       ...(resultExitCode === undefined ? {} : { exitCode: resultExitCode }),
     };
+  } catch (error) {
+    if ('resumeRunId' in request && controller.signal.aborted) {
+      process.exitCode = exitCode ?? 130;
+      terminal?.line('Continuation interrupted before evaluation; inspect the saved run status.');
+      return undefined;
+    }
+    throw error;
   } finally {
     try {
       terminal?.dispose();
@@ -620,6 +742,7 @@ export function formatRunSummary(summary: RunSummary): string {
     `Evaluation: ${seconds(timings.evaluationMs)}; preparation: ${seconds(timings.preparationMs)}`,
     `Worker: ${seconds(timings.workerMs)}; independent validation: ${seconds(timings.validationMs)}`,
     `Approval wait: ${seconds(timings.approvalWaitMs)}; information wait: ${seconds(timings.informationWaitMs)}; recovery wait: ${seconds(timings.recoveryWaitMs)}`,
+    ...(timings.resumeReviewWaitMs ? [`Continuation review wait: ${seconds(timings.resumeReviewWaitMs)}`] : []),
     `Inspection: ${seconds(timings.inspectionMs)}; diagnostics: ${seconds(timings.diagnosticsMs)}; other: ${seconds(timings.otherMs)}`,
     `Evaluations: ${counts.evaluations}; failures: ${counts.evaluationFailures}; explicit recoveries: ${counts.evaluationRecoveries}`,
     `Approval requests: ${counts.approvalRequests}; approvals: ${counts.approvals}; rejections: ${counts.rejections}; manual alternatives: ${counts.alternatives}`,
@@ -702,7 +825,7 @@ export async function main(argv: string[] = process.argv.slice(2)): Promise<void
     const view = await createPresentation({ ...(command.plain ? { plain: true } : {}), writeLine: (line) => console.log(line) });
     try {
       view.section('Local saved run history', [
-        'Read-only snapshot; resume is not available in this source milestone yet.',
+        'Read-only snapshot. Continue an eligible stop with dev-agent --resume <run-id> [--plain].',
       ]);
       if (command.kind === 'list-runs') {
         const listing = await listSavedRuns(store);
@@ -720,10 +843,14 @@ export async function main(argv: string[] = process.argv.slice(2)): Promise<void
     return;
   }
 
-  if (command.options.orchestrate) {
-    const result = await runCliOrchestration(command.options);
+  if (command.kind === 'resume' || command.options.orchestrate) {
+    const result = command.kind === 'resume'
+      ? await runCliOrchestration({ resumeRunId: command.runId, ...(command.plain ? { plain: true } : {}) })
+      : await runCliOrchestration(command.options);
+    if (!result) return;
     if (result.exitCode !== undefined) process.exitCode = result.exitCode;
-    const view = await createPresentation({ ...(command.options.plain ? { plain: true } : {}), writeLine: (line) => console.log(line) });
+    const plain = command.kind === 'resume' ? command.plain : command.options.plain;
+    const view = await createPresentation({ ...(plain ? { plain: true } : {}), writeLine: (line) => console.log(line) });
     const outcome = [
       `\nLoop status: ${result.status}`, `Iterations: ${result.iterations}`,
       ...(result.savedRunId ? [
@@ -733,6 +860,10 @@ export async function main(argv: string[] = process.argv.slice(2)): Promise<void
       ] : []),
       ...(result.persistenceFailure ? [
         'The run stopped after a saved-state write failed; no later evaluation or execution was started.',
+      ] : []),
+      ...(result.savedRunTotals ? [
+        `Durable totals: ${result.savedRunTotals.iterations} iterations; Codex ${result.savedRunTotals.codexCalls}/2, Claude ${result.savedRunTotals.claudeCalls}/2; ${result.savedRunTotals.segments} segments.`,
+        'Phase durations and interaction counts below describe this process segment; time between processes is excluded.',
       ] : []),
       `Trace: ${redactSensitiveText(path.relative(process.cwd(), result.tracePath))}`,
       ...(result.failure ? [`Failure: ${formatEvaluationFailure(result.failure)}.`] : []),

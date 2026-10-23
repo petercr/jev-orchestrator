@@ -86,6 +86,9 @@ function summarizeRecord(record: SavedRecord, available: boolean): SavedRunDetai
   if (stop?.type === 'run_stopped' && !stop.resumable && checkpoint.status === 'blocked') {
     blockers.push(`The recorded ${stop.reason} stop was not marked resumable.`);
   }
+  if (checkpoint.status === 'stopped' && stop?.type === 'run_stopped' && !stop.repositorySnapshotHash) {
+    blockers.push('This stop predates content fingerprints and remains inspection only; start a new saved run.');
+  }
   if (unresolved.length > 0) {
     blockers.push(`${unresolved.length} reserved execution attempt(s) have no outcome; their allowances stay charged.`);
   }
@@ -129,7 +132,14 @@ export async function inspectSavedRun(store: SavedRunStore | undefined, runId: s
   if (!store) return { kind: 'unavailable', runId, code: 'not_found' };
   try {
     const record = await store.readForInspection(runId);
-    return summarizeRecord(record, await repositoryAvailable(record.checkpoint));
+    const detail = summarizeRecord(record, await repositoryAvailable(record.checkpoint));
+    const stop = record.events.at(-1);
+    if (stop?.type === 'run_stopped' && stop.repositorySnapshotHash) {
+      try { await store.readRepositorySnapshot(runId, stop.repositorySnapshotHash); } catch (error) {
+        detail.blockers.push(`Repository comparison evidence is unavailable: ${inspectionErrorText(error instanceof SavedRunStoreError ? error.code : 'storage_failure')}`);
+      }
+    }
+    return detail;
   } catch (error) {
     return { kind: 'unavailable', runId, code: error instanceof SavedRunStoreError ? error.code : 'storage_failure' };
   }

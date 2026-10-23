@@ -2,7 +2,8 @@
 
 This document records the storage contract introduced for v0.6 PR 1. The CLI
 now creates records through opt-in `--orchestrate --save-run` and inspects them
-through `--list-runs` / `--show-run <run-id>`. Executable resume remains planned.
+through `--list-runs` / `--show-run <run-id>`. `--resume <run-id>` continues
+eligible clean stops after a fresh review and preflight.
 Saved records are never executable instructions or approved candidates.
 
 ## Files and bounds
@@ -16,7 +17,8 @@ The default store is outside the repository:
   back to `~/.local/state/dev-orchestrator/saved-runs`.
 
 The store contains `runs/<uuid>/checkpoint.json`,
-`runs/<uuid>/events.jsonl`, and ownership files under `locks/`. It is rejected
+`runs/<uuid>/events.jsonl`, a clean-stop `runs/<uuid>/repository.json` sidecar,
+and ownership files under `locks/`. It is rejected
 when located inside the selected worker-writable repository. Run IDs are
 version-4 UUIDs; callers cannot choose a path through an ID.
 
@@ -44,6 +46,9 @@ used as fallback. Listing or showing never grants continuation permission.
 | Runs per store | 128 |
 | Orchestration iteration ceiling | 8 |
 | Calls per worker | 2 |
+| Content snapshot record | 512 KiB |
+| Compared paths / bytes per file / total bytes | 512 / 1 MiB / 32 MiB |
+| Git file metadata | 32 KiB, using the fixed two-second Git diagnostic deadline |
 
 The v1 checkpoint has exactly these top-level fields: `schemaVersion`,
 `runId`, `createdAt`, `updatedAt`, `sequence`, `ledgerHead`, `status`,
@@ -90,6 +95,26 @@ execution prevents a resumable stop. These checks validate stored history; they
 do not replace the orchestration policy or independently establish that task
 acceptance criteria were met.
 
+New clean-stop events include `repositorySnapshotHash`, the SHA-256 of a
+version-1 `repository.json` manifest. The manifest contains bounded relative
+paths and content hashes (or null for missing tracked/root context files),
+never file contents. It includes tracked and untracked files, even Git-ignored
+source. Generated directories `node_modules`, `dist`, `traces`, `.entire`,
+`.cache`, `.next`, `.turbo`, `coverage`, and `.venv` are excluded. Secret paths
+such as `.env*`, `.npmrc`, `.netrc`, `.ssh`, `.aws`, credential/secret files,
+private-key names, and key/certificate extensions are excluded without reading
+their contents. Root instruction files and `package.json` are checked even
+when absent or ignored. Links, unsafe names, oversize inputs, or concurrent
+changes during collection reject the snapshot.
+
+The manifest is flushed and atomically replaced before its stop event and
+checkpoint commit. A mismatch, missing sidecar, partial write, or stale sidecar
+prevents continuation. Older development records without this optional event
+field remain readable but are inspection only. There is no migration or
+automatic fingerprint reconstruction. Required final trace writes complete
+before a terminal saved transition, so a trace failure cannot manufacture a
+clean continuation point.
+
 ## Durability and ownership
 
 On POSIX, the store and run directories use mode `0700`, and record and lock
@@ -121,13 +146,13 @@ the operator's control and outside worker-writable repositories.
 
 ## Credential continuity decision
 
-Resume will freeze the provider and model identifier and reload the selected
+Resume freezes the provider and model identifier and reloads the selected
 credential from the operator's current environment. It will never save a
 credential value or compare a hash of one. Cloudflare's non-secret account ID
 can be compared using its stored fingerprint. The other configured providers
 expose no non-secret account identity in this client, so continuity for those
-credentials cannot be verified. Before implementing resume, its review must
-state that limitation and require an explicit operator continuation decision;
+credentials cannot be verified. Its review states that limitation and
+requires an explicit operator continuation decision;
 reloading a credential does not prove that it belongs to the same account.
 
 Provider aliases such as `jev-latest` also do not pin the model implementation

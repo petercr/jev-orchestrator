@@ -35,8 +35,8 @@ async function isRegularFile(file: string): Promise<boolean> {
   }
 }
 
-async function git(root: string, args: string[]): Promise<string> {
-  return new Promise((resolve) => {
+async function git(root: string, args: string[], required = false): Promise<string> {
+  return new Promise((resolve, reject) => {
     const child = spawn('git', ['-c', 'core.fsmonitor=false', ...args], {
       cwd: root,
       stdio: ['ignore', 'pipe', 'ignore'],
@@ -56,11 +56,12 @@ async function git(root: string, args: string[]): Promise<string> {
     }, GIT_TIMEOUT_MS);
     timeout.unref();
 
-    const finish = (value: string): void => {
+    const finish = (value: string, success = false): void => {
       if (settled) return;
       settled = true;
       clearTimeout(timeout);
-      resolve(value);
+      if (required && !success) reject(new Error('Unable to collect bounded Git file metadata.'));
+      else resolve(value);
     };
 
     child.stdout.on('data', (chunk: Buffer) => {
@@ -78,8 +79,23 @@ async function git(root: string, args: string[]): Promise<string> {
     });
     child.on('error', () => finish(''));
     child.on('close', (code) => // Leading spaces are fixed-width Git status columns, not padding.
-      finish(code === 0 && !interrupted ? output.replace(/\r?\n$/u, '') : ''));
+      finish(code === 0 && !interrupted ? output.replace(/\r?\n$/u, '') : '', code === 0 && !interrupted));
   });
+}
+
+/** Fixed read-only enumeration; no Git hooks, credentials, or optional locks. */
+export async function inspectGitFiles(root: string): Promise<string[]> {
+  const generated = ['node_modules', 'dist', 'traces', '.entire', '.cache', '.next', '.turbo', 'coverage', '.venv'];
+  const output = await git(root, ['ls-files', '--cached', '--others',
+    ...generated.map((name) => `--exclude=**/${name}/**`), '-z'], true);
+  if (output !== '' && !output.endsWith('\0')) throw new Error('Git file metadata is incomplete.');
+  return output === '' ? [] : [...new Set(output.slice(0, -1).split('\0'))].sort();
+}
+
+export async function orchestrationWorktreeRoot(root: string): Promise<string> {
+  const canonical = await realpath(root);
+  const gitRoot = await git(canonical, ['rev-parse', '--show-toplevel']);
+  return gitRoot ? await realpath(gitRoot) : canonical;
 }
 
 async function readTopLevelFiles(root: string): Promise<string[]> {

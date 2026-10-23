@@ -8,6 +8,7 @@ import { createInterface } from 'node:readline/promises';
 import * as inspection from './repo/inspect.js';
 import * as evaluation from './ai/evaluate.js';
 import { JevEvaluationError } from './ai/errors.js';
+import { PromptStoppedError } from './cancellation.js';
 import { mockEvaluation } from './mock.js';
 import { ACTIONS } from './types.js';
 import { formatRunSummary, main, runCliOrchestration, runDecision, type CliOptions } from './cli.js';
@@ -52,6 +53,96 @@ async function options(): Promise<CliOptions> {
   await writeFile(path.join(root, 'README.md'), 'fixture');
   return { repoPath: root, task: 'Inspect fixture', mock: true, json: false, noTrace: false, orchestrate: true };
 }
+
+async function savedStop() {
+  const opts = await options();
+  execFileSync('git', ['init', '--quiet'], { cwd: opts.repoPath, stdio: 'ignore' });
+  execFileSync('git', ['-c', 'user.name=Fixture', '-c', 'user.email=fixture@example.invalid',
+    'commit', '--allow-empty', '-m', 'fixture'], { cwd: opts.repoPath, stdio: 'ignore' });
+  terminal.question.mockResolvedValueOnce('stop');
+  const result = await runCliOrchestration({ ...opts, saveRun: true, workerSelection: 'codex', codexNetworkAccess: true });
+  const store = await openSavedRunStore(path.join(process.env.XDG_STATE_HOME ?? '', 'dev-orchestrator', 'saved-runs'));
+  return { opts, result, store, runId: result.savedRunId! };
+}
+
+describe('CLI continuation review', () => {
+  it('shares canonical worktree ownership when an unsaved invocation targets a subdirectory', async () => {
+    const opts = await options();
+    execFileSync('git', ['init', '--quiet'], { cwd: opts.repoPath, stdio: 'ignore' });
+    const subdirectory = path.join(opts.repoPath, 'nested');
+    await mkdir(subdirectory);
+    const store = await openSavedRunStore(path.join(process.env.XDG_STATE_HOME ?? '', 'dev-orchestrator', 'saved-runs'));
+    const ownership = await store.acquireWorktreeOwnership(opts.repoPath);
+    const inspect = vi.spyOn(inspection, 'inspectRepo');
+    try {
+      await expect(runCliOrchestration({ ...opts, repoPath: subdirectory })).rejects.toMatchObject({ code: 'busy' });
+      expect(inspect).not.toHaveBeenCalled();
+    } finally { await ownership.release(); }
+  });
+
+  it.each(['stop', 'eof', 'signal'] as const)('keeps the saved record unchanged on review %s and releases ownership', async (kind) => {
+    const { store, runId } = await savedStop();
+    const before = await store.read(runId);
+    if (kind === 'stop') terminal.question.mockResolvedValueOnce('stop');
+    else if (kind === 'eof') terminal.question.mockRejectedValueOnce(new PromptStoppedError('input_closed'));
+    else terminal.onQuestion = () => { queueMicrotask(() => process.emit('SIGTERM')); };
+    const result = await runCliOrchestration({ resumeRunId: runId, plain: true });
+    expect(result).toBeUndefined();
+    expect((await store.read(runId)).checkpoint).toEqual(before.checkpoint);
+    if (kind !== 'stop') expect(process.exitCode).toBe(kind === 'signal' ? 143 : 1);
+    const ownership = await store.acquireRunOwnership(runId);
+    await ownership.release();
+  });
+
+  it('rejects edits made while the continuation review is waiting and preserves those edits', async () => {
+    const { opts, store, runId } = await savedStop();
+    const before = await store.read(runId);
+    terminal.question.mockImplementationOnce(async () => {
+      await writeFile(path.join(opts.repoPath, 'README.md'), 'Operator edits during the review.');
+      return 'continue';
+    });
+    await expect(runCliOrchestration({ resumeRunId: runId })).rejects.toThrow('changed during the continuation review');
+    expect((await store.read(runId)).checkpoint).toEqual(before.checkpoint);
+    expect(await readFile(path.join(opts.repoPath, 'README.md'), 'utf8')).toBe('Operator edits during the review.');
+  });
+
+  it('continues at the next iteration with fixed networking and no old approval execution', async () => {
+    const { store, runId } = await savedStop();
+    const execute = vi.spyOn((await import('./orchestration/execute.js')), 'executeCandidate');
+    terminal.question.mockResolvedValueOnce('continue').mockResolvedValueOnce('stop');
+    const result = await runCliOrchestration({ resumeRunId: runId });
+    expect(result).toMatchObject({
+      status: 'stopped', iterations: 2,
+      state: { workerSelection: 'codex', codexNetworkAccess: true, codexCalls: 0, evidence: { validationGeneration: 1 } },
+      summary: { counts: { approvals: 0 } },
+      savedRunTotals: { iterations: 2, segments: 2 },
+    });
+    expect(execute).not.toHaveBeenCalled();
+    expect((await store.read(runId)).events.filter((event) => event.type === 'run_resumed')).toHaveLength(1);
+  });
+
+  it('combines stored evaluation recovery with the explicit continuation review exactly once', async () => {
+    const { store, runId } = await savedStop();
+    const record = await store.read(runId);
+    // Recreate a bounded evaluation-failure stop through the store's real
+    // transitions; no rejected provider payload or executable candidate is saved.
+    await store.append(runId, { type: 'run_resumed', segment: 2 }, record.checkpoint.state);
+    const state = { ...record.checkpoint.state, iteration: 2 };
+    await store.append(runId, { type: 'iteration_reserved', iteration: 2 }, state);
+    await store.append(runId, { type: 'evaluation_failed', iteration: 2, code: 'invalid_response', stage: 'distribution', category: 'sum' }, state);
+    const { captureRepositorySnapshot } = await import('./saved-runs/snapshot.js');
+    await store.append(runId, { type: 'run_stopped', reason: 'evaluation_failure', resumable: true }, state,
+      await captureRepositorySnapshot(record.checkpoint.repository));
+    terminal.question.mockClear();
+    terminal.question.mockResolvedValueOnce('continue').mockResolvedValueOnce('stop');
+    const resumed = await runCliOrchestration({ resumeRunId: runId });
+    expect(resumed).toMatchObject({ iterations: 3, summary: { counts: { evaluationRecoveries: 1, approvals: 0 } } });
+    expect(terminal.question).toHaveBeenCalledTimes(2);
+    expect(terminal.question.mock.calls[0]?.[0]).toContain('explicitly recover');
+    const events = (await store.read(runId)).events;
+    expect(events.filter((event) => event.type === 'run_resumed' && event.evaluationRecoveryApproved)).toHaveLength(1);
+  });
+});
 
 describe('CLI interruption lifecycle', () => {
   it('persists an approved run, prints its ID, and releases both ownership locks', async () => {

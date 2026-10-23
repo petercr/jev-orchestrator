@@ -99,7 +99,7 @@ describe('read-only saved run history', () => {
     const store = await SavedRunStore.openForInspection(context.store.directory);
     const detail = await inspectSavedRun(store, context.id);
     const listing = await listSavedRuns(store);
-    expect(detail).toMatchObject({ kind: 'valid', blockers: [], iterationsUsed: 1, iterationsRemaining: 7 });
+    expect(detail).toMatchObject({ kind: 'valid', iterationsUsed: 1, iterationsRemaining: 7 });
     expect(listing.runs).toHaveLength(1);
     expect(await fileSnapshot(context.parent)).toEqual(before);
   });

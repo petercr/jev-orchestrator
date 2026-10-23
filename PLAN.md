@@ -43,7 +43,7 @@ not started and no release date is committed.
 | --- | --- | --- |
 | [v0.4](#v04-draft-reliable-task-workflows) | More reliable completion of bounded coding tasks | Reproducible complete-workflow baseline |
 | [v0.5](#v05-candidate-terminal-presentation-and-interaction) | Clearer, more polished terminal interaction | Published on 2026-10-22; [verified archive and installation](docs/releases/dev-orchestrator-0.5.0.md) |
-| [v0.6](#v06-draft-saved-runs-and-safe-resume) | Save, inspect, and resume a bounded task after a clean stop | Storage and loop integration merged; local history is the current milestone |
+| [v0.6](#v06-draft-saved-runs-and-safe-resume) | Save, inspect, and resume a bounded task after a clean stop | Saving and history merged; explicit resume is the current milestone |
 
 ## v0.4 draft: reliable task workflows
 
@@ -407,8 +407,9 @@ v0.5.0 and merge of its publication record in
 contract merged in [PR #66](https://github.com/petercr/jev-orchestrator/pull/66)
 at `d102eec`. PR 2's loop integration merged in
 [PR #67](https://github.com/petercr/jev-orchestrator/pull/67) at `4be904c`.
-The v0.6 scope is approved for implementation. Local history inspection is
-the current milestone; this work remains unpublished until the v0.6 release.
+Local history merged in [PR #68](https://github.com/petercr/jev-orchestrator/pull/68)
+at `7ac6cd9`. The v0.6 scope is approved for implementation. Explicit resume
+is the current milestone; this work remains unpublished until the v0.6 release.
 
 **Release outcome:** an operator can stop an opted-in task, close the terminal,
 inspect its history, and continue it in a new CLI process without losing its
@@ -608,7 +609,7 @@ modules rather than introducing a workflow framework.
    and clean stop; assert no unrecorded execution, double charge, or false
    resumable status. Delivered in PR #67, with 1,439 tests passing locally
    alongside type checking and build.
-3. [ ] **Local run history.** Add `--list-runs` and `--show-run` with bounded
+3. [x] **Local run history.** Add `--list-runs` and `--show-run` with bounded
    listing and a way to inspect an older known ID. Display status, task/repo,
    budgets, selections, pending validation, last failure, and precise blockers.
    Cover empty/corrupt stores, unavailable repositories, terminal sanitization,
@@ -617,13 +618,19 @@ modules rather than introducing a workflow framework.
    lists up to 20 records (unreadable first, then recent updates), supports any
    known ID directly, and shows the last 12 events in detail. Inspection does
    not initialize storage or acquire locks; repository/configuration preflight
-   remains part of the next PR.
+   is implemented in PR 4. Delivered in PR #68, with all 1,481 tests passing
+   serially alongside type checking, build, and a compiled CLI smoke.
 4. [ ] **Explicit resume.** Add CLI compatibility checks, exclusive ownership,
    preflight/review, fresh evaluator binding, repository/context refresh,
    validation invalidation, and entry at the next unused iteration. Add a
    two-process happy path for each worker selection and explicit recovery
    continuation. Prove old approvals never execute, budgets span restarts, and
-   all current policy/candidate/final-approval guards still apply.
+   all current policy/candidate/final-approval guards still apply. The current
+   implementation adds a bounded content sidecar tied to the clean-stop ledger,
+   refuses older stops without it, rechecks content after the operator review,
+   and requires fresh instruction reads and independent validation. Linux
+   subprocess fixtures cover both worker selections; the full provider/platform
+   matrix and installed-package verification remain in PR 5.
 5. [ ] **Restart and platform verification.** Extend deterministic integration
    coverage across all six supported evaluation routes and both workers.
    Exercise repeated restarts, exhausted budgets, missing/conflicting config,

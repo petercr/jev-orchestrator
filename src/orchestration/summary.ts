@@ -11,7 +11,7 @@ import type { ToolResult } from './execute.js';
 
 const TIMING_PHASES = [
   'evaluationMs', 'preparationMs', 'workerMs', 'validationMs',
-  'approvalWaitMs', 'informationWaitMs', 'recoveryWaitMs', 'inspectionMs', 'diagnosticsMs',
+  'approvalWaitMs', 'informationWaitMs', 'recoveryWaitMs', 'resumeReviewWaitMs', 'inspectionMs', 'diagnosticsMs',
 ] as const;
 
 type TimingPhase = typeof TIMING_PHASES[number];
@@ -60,15 +60,16 @@ export function executionTimingPhase(action: ExecutableAction): TimingPhase {
 }
 
 /** Local elapsed times and counters are reporting data, never policy input. */
-export function createRunMetrics(initialInspectionMs: number = 0) {
+export function createRunMetrics(initialInspectionMs: number = 0, resumeReviewWaitMs = 0) {
   if (!Number.isFinite(initialInspectionMs) || initialInspectionMs < 0) {
     throw new Error('Initial inspection duration must be finite and nonnegative.');
   }
+  if (!Number.isFinite(resumeReviewWaitMs) || resumeReviewWaitMs < 0) throw new Error('Resume review duration must be finite and nonnegative.');
   const startedAt = performance.now();
   const durations: Record<TimingPhase, number> = {
     evaluationMs: 0, preparationMs: 0, workerMs: 0, validationMs: 0,
     approvalWaitMs: 0, informationWaitMs: 0, recoveryWaitMs: 0,
-    inspectionMs: initialInspectionMs, diagnosticsMs: 0,
+    inspectionMs: initialInspectionMs, diagnosticsMs: 0, resumeReviewWaitMs,
   };
   const counts: RunCounts = {
     evaluations: 0, evaluationFailures: 0, evaluationRecoveries: 0,
@@ -80,8 +81,8 @@ export function createRunMetrics(initialInspectionMs: number = 0) {
   const snapshot = (): RunMetrics => {
     const phases = { ...durations };
     for (const phase of TIMING_PHASES) phases[phase] = Math.floor(phases[phase]);
-    const elapsedMs = Math.floor(Math.max(0, performance.now() - startedAt) + initialInspectionMs);
-    const waitMs = phases.approvalWaitMs + phases.informationWaitMs + phases.recoveryWaitMs;
+    const elapsedMs = Math.floor(Math.max(0, performance.now() - startedAt) + initialInspectionMs + resumeReviewWaitMs);
+    const waitMs = phases.approvalWaitMs + phases.informationWaitMs + phases.recoveryWaitMs + phases.resumeReviewWaitMs;
     return {
       timings: {
         ...phases,

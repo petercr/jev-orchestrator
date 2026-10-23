@@ -81,7 +81,7 @@ describe('orchestration run summary', () => {
     expect(outcome.summary.timings).toEqual({
       elapsedMs: 7_320, activeMs: 1_320, evaluationMs: 60, preparationMs: 50,
       workerMs: 1_000, validationMs: 150, approvalWaitMs: 6_000,
-      informationWaitMs: 0, recoveryWaitMs: 0, inspectionMs: 60, diagnosticsMs: 0, otherMs: 0,
+      informationWaitMs: 0, recoveryWaitMs: 0, resumeReviewWaitMs: 0, inspectionMs: 60, diagnosticsMs: 0, otherMs: 0,
     });
     expect(outcome.summary.counts).toMatchObject({
       evaluations: 6, approvalRequests: 6, approvals: 6, codexCalls: 1, claudeCalls: 0,

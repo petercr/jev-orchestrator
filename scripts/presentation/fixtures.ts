@@ -89,7 +89,7 @@ export function createFixtures(): {
         elapsedMs: 54_300, activeMs: 34_300, evaluationMs: 1_600,
         preparationMs: 200, workerMs: 24_000, validationMs: 7_000,
         inspectionMs: 1_000, diagnosticsMs: 0, otherMs: 500,
-        approvalWaitMs: 20_000, informationWaitMs: 0, recoveryWaitMs: 0,
+        approvalWaitMs: 20_000, informationWaitMs: 0, recoveryWaitMs: 0, resumeReviewWaitMs: 0,
       },
       counts: {
         evaluations: 6, evaluationFailures: 0, evaluationRecoveries: 0,
