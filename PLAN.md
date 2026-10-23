@@ -43,7 +43,7 @@ not started and no release date is committed.
 | --- | --- | --- |
 | [v0.4](#v04-draft-reliable-task-workflows) | More reliable completion of bounded coding tasks | Reproducible complete-workflow baseline |
 | [v0.5](#v05-candidate-terminal-presentation-and-interaction) | Clearer, more polished terminal interaction | Published on 2026-10-22; [verified archive and installation](docs/releases/dev-orchestrator-0.5.0.md) |
-| [v0.6](#v06-draft-saved-runs-and-safe-resume) | Save, inspect, and resume a bounded task after a clean stop | Six proposed PRs, starting with the storage contract and failure fixtures |
+| [v0.6](#v06-draft-saved-runs-and-safe-resume) | Save, inspect, and resume a bounded task after a clean stop | Storage and loop integration merged; local history is the current milestone |
 
 ## v0.4 draft: reliable task workflows
 
@@ -405,9 +405,10 @@ Originally drafted on 2026-10-17. Refined on 2026-10-22 after publication of
 v0.5.0 and merge of its publication record in
 [PR #64](https://github.com/petercr/jev-orchestrator/pull/64). PR 1's storage
 contract merged in [PR #66](https://github.com/petercr/jev-orchestrator/pull/66)
-at `d102eec`. The v0.6 scope is approved for implementation. PR 2 now connects
-that store to the orchestration loop; this work remains unpublished until the
-v0.6 release.
+at `d102eec`. PR 2's loop integration merged in
+[PR #67](https://github.com/petercr/jev-orchestrator/pull/67) at `4be904c`.
+The v0.6 scope is approved for implementation. Local history inspection is
+the current milestone; this work remains unpublished until the v0.6 release.
 
 **Release outcome:** an operator can stop an opted-in task, close the terminal,
 inspect its history, and continue it in a new CLI process without losing its
@@ -598,20 +599,25 @@ modules rather than introducing a workflow framework.
    credential continuity is explicitly unverifiable; resume must disclose that
    and require an operator decision. No CLI or executable resume route is part
    of this PR.
-2. [ ] **Opt-in saving throughout the loop.** Add `--save-run`, create the run
+2. [x] **Opt-in saving throughout the loop.** Add `--save-run`, create the run
    before its first evaluation, and persist reservations and outcomes at the
    established boundaries. Integrate worktree ownership for saved and unsaved
    runs. Preserve signal cleanup, prompts, trace writes, unsaved task behavior,
    and existing exit codes; document ownership conflicts. Print the saved ID/status.
    Inject failures before and after evaluation, approval, dispatch, outcome,
    and clean stop; assert no unrecorded execution, double charge, or false
-   resumable status.
+   resumable status. Delivered in PR #67, with 1,439 tests passing locally
+   alongside type checking and build.
 3. [ ] **Local run history.** Add `--list-runs` and `--show-run` with bounded
    listing and a way to inspect an older known ID. Display status, task/repo,
    budgets, selections, pending validation, last failure, and precise blockers.
    Cover empty/corrupt stores, unavailable repositories, terminal sanitization,
    and plain/styled output. Prove these commands work without credentials,
-   provider calls, worker launches, or repository mutations.
+   provider calls, worker launches, or repository mutations. The implementation
+   lists up to 20 records (unreadable first, then recent updates), supports any
+   known ID directly, and shows the last 12 events in detail. Inspection does
+   not initialize storage or acquire locks; repository/configuration preflight
+   remains part of the next PR.
 4. [ ] **Explicit resume.** Add CLI compatibility checks, exclusive ownership,
    preflight/review, fresh evaluator binding, repository/context refresh,
    validation invalidation, and entry at the next unused iteration. Add a

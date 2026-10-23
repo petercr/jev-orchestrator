@@ -1,9 +1,9 @@
 # Saved-run storage contract v1
 
-This document records the storage contract introduced for v0.6 PR 1. It is a
-local persistence foundation only: the CLI does not create, list, show, or
-resume saved runs yet. Saved records are never executable instructions or
-approved candidates.
+This document records the storage contract introduced for v0.6 PR 1. The CLI
+now creates records through opt-in `--orchestrate --save-run` and inspects them
+through `--list-runs` / `--show-run <run-id>`. Executable resume remains planned.
+Saved records are never executable instructions or approved candidates.
 
 ## Files and bounds
 
@@ -19,6 +19,22 @@ The store contains `runs/<uuid>/checkpoint.json`,
 `runs/<uuid>/events.jsonl`, and ownership files under `locks/`. It is rejected
 when located inside the selected worker-writable repository. Run IDs are
 version-4 UUIDs; callers cannot choose a path through an ID.
+
+Inspection does not create a missing store, change permissions, write traces,
+acquire locks, or remove ownership files. It verifies checkpoint/ledger integrity
+before displaying saved data. A present update lock prevents a stable read;
+concurrent writes can also produce an integrity error, which is reported
+without repair. Run and worktree locks are reported conservatively, since a PID
+cannot prove whether ownership is stale. Inspection does not require the
+repository to exist or resolve provider credentials.
+
+Listing scans at most 128 store entries and displays at most 20 records, placing
+unreadable records first and sorting valid records by update time. Unknown
+entry names are counted without displaying them. A store with more than 128
+entries refuses listing; `--show-run` still reads a known ID directly. Detail
+shows up to 12 recent events. Unreadable records display only the validated ID
+and an allowlisted error classification; unverified checkpoint text is never
+used as fallback. Listing or showing never grants continuation permission.
 
 | Record | Limit |
 | --- | ---: |
@@ -44,6 +60,12 @@ IDs, raw environment values, transport objects, abort signals, raw provider
 responses, and executable candidates are excluded. Task text and bounded
 repository excerpts can still contain sensitive information; the local store
 is not encrypted, and pattern-based redaction cannot identify every secret.
+
+No automatic retention or deletion is provided. For manual housekeeping, stop
+the CLI and confirm that no process owns the affected run or worktree before
+moving/removing an inactive `runs/<uuid>` directory. Preserve both checkpoint
+and ledger when retaining a record. Never edit counters, reconstruct a partial
+record, or remove an ownership file based only on its PID to force execution.
 
 ## Event ledger and ordering
 

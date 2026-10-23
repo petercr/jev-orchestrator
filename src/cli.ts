@@ -14,6 +14,7 @@ import { writeTrace } from './logging/trace.js';
 import { evaluationAttribution, redactSensitiveText } from './logging/trace.js';
 import { mockEvaluation } from './mock.js';
 import { formatApprovalLines, formatOutcomeLines, formatRecoveryLines } from './cli/presentation.js';
+import { formatSavedRunLines, formatSavedRunListingLines } from './cli/history.js';
 import { createPresentation, createTerminal, terminalText, type CliTerminal } from './cli/terminal.js';
 import { executeCandidate } from './orchestration/execute.js';
 import {
@@ -27,8 +28,9 @@ import {
 import { applyPolicy } from './policy.js';
 import type { RunSummary } from './orchestration/summary.js';
 import { inspectGitIdentity, inspectRepo } from './repo/inspect.js';
-import { createSavedRunConfiguration, createSavedRunRepository } from './saved-runs/contract.js';
-import { openSavedRunStore } from './saved-runs/store.js';
+import { createSavedRunConfiguration, createSavedRunRepository, isSavedRunId } from './saved-runs/contract.js';
+import { inspectSavedRun, listSavedRuns } from './saved-runs/history.js';
+import { openSavedRunStore, SavedRunStore } from './saved-runs/store.js';
 import type { SavedRunEventInput, SavedRunOwnership, SavedRunStatus } from './saved-runs/types.js';
 import type {
   Action,
@@ -63,6 +65,8 @@ export type CliOptions = {
 export type CliCommand =
   | { kind: 'help' }
   | { kind: 'version' }
+  | { kind: 'list-runs'; plain?: true }
+  | { kind: 'show-run'; runId: string; plain?: true }
   | { kind: 'run'; options: CliOptions };
 
 export type DecisionOutput = EvaluationAttribution & {
@@ -100,6 +104,8 @@ export class CliUsageError extends Error {
 
 export function usage(): string {
   return `dev-agent <repo-path> <task> [--mock] [--no-trace] [--json] [--orchestrate] [--save-run] [--worker codex|claude] [--codex-network] [--plain]
+dev-agent --list-runs [--plain]
+dev-agent --show-run <run-id> [--plain]
 
 Options:
   --mock       Use the offline deterministic evaluation.
@@ -107,9 +113,11 @@ Options:
   --json       Write one machine-readable decision to stdout.
   --orchestrate  Enter the bounded, manually approved execution loop.
   --save-run     Persist the bounded orchestration state and event history.
+  --list-runs    Inspect up to 20 local saved runs without credentials or network access.
+  --show-run     Inspect one saved run by UUID, including older records.
   --worker     Restrict coding work to codex or claude; otherwise the evaluator may choose either.
   --codex-network  Allow Codex command networking, including local sockets; keep its file sandbox.
-  --plain      Use static plain orchestration output (also used for pipes, CI, NO_COLOR, or TERM=dumb).
+  --plain      Use static plain orchestration/history output (also used for pipes, CI, NO_COLOR, or TERM=dumb).
   --version    Print the installed package version.
   --help, -h   Print this help text.
 
@@ -132,8 +140,8 @@ Environment:
   OPENROUTE_MODEL     OpenRouter model fallback when ROUTER_MODEL is blank
 
 Exit codes:
-  0  A decision, help text, or version was printed.
-  1  An operational error prevented a decision.
+  0  A decision, history, help text, or version was printed.
+  1  An operational error prevented a decision or complete history inspection.
   2  Invalid command-line usage.
   130  Approval-gated run interrupted by Ctrl+C / SIGINT.
   143  Approval-gated run interrupted by SIGTERM.`;
@@ -166,6 +174,7 @@ export function parseArgs(argv: string[]): CliCommand {
   let plain: true | undefined;
   let showHelp = false;
   let showVersion = false;
+  let history: { kind: 'list-runs' } | { kind: 'show-run'; runId: string } | undefined;
   let parseFlags = true;
   const positional: string[] = [];
 
@@ -174,6 +183,14 @@ export function parseArgs(argv: string[]): CliCommand {
     if (workerSelection !== undefined) throw usageError('--worker can only be specified once.');
     if (value !== 'codex' && value !== 'claude') throw usageError('--worker requires codex or claude.');
     workerSelection = value;
+  };
+  const selectHistory = (runId?: string): void => {
+    if (history) throw usageError('Use exactly one --list-runs or --show-run command.');
+    if (runId === undefined) history = { kind: 'list-runs' };
+    else {
+      if (!isSavedRunId(runId)) throw usageError('--show-run requires a saved run UUID, not a file path.');
+      history = { kind: 'show-run', runId };
+    }
   };
   for (let index = 0; index < args.length; index += 1) {
     const arg = args[index];
@@ -205,6 +222,12 @@ export function parseArgs(argv: string[]): CliCommand {
         if (saveRun) throw usageError('--save-run can only be specified once.');
         saveRun = true;
         break;
+      case '--list-runs':
+        selectHistory();
+        break;
+      case '--show-run':
+        selectHistory(args[++index] ?? '');
+        break;
       case '--plain':
         plain = true;
         break;
@@ -227,6 +250,10 @@ export function parseArgs(argv: string[]): CliCommand {
           selectWorker(arg.slice('--worker='.length));
           break;
         }
+        if (arg.startsWith('--show-run=')) {
+          selectHistory(arg.slice('--show-run='.length));
+          break;
+        }
         if (arg.startsWith('-')) {
           throw usageError(`Unknown option: ${arg}`);
         }
@@ -238,10 +265,17 @@ export function parseArgs(argv: string[]): CliCommand {
     if (showHelp && showVersion) {
       throw usageError('Use either --help or --version, not both.');
     }
-    if (mock || noTrace || json || orchestrate || saveRun || plain || workerSelection !== undefined || codexNetworkAccess !== undefined || positional.length > 0) {
+    if (history || mock || noTrace || json || orchestrate || saveRun || plain || workerSelection !== undefined || codexNetworkAccess !== undefined || positional.length > 0) {
       throw usageError('--help and --version cannot be combined with a decision request.');
     }
     return showHelp ? { kind: 'help' } : { kind: 'version' };
+  }
+
+  if (history) {
+    if (mock || noTrace || json || orchestrate || saveRun || workerSelection !== undefined || codexNetworkAccess !== undefined || positional.length > 0) {
+      throw usageError('Saved run history accepts only --list-runs or --show-run <run-id>, with optional --plain.');
+    }
+    return { ...history, ...(plain ? { plain } : {}) };
   }
 
   if (positional.length < 2) {
@@ -660,6 +694,29 @@ export async function main(argv: string[] = process.argv.slice(2)): Promise<void
   }
   if (command.kind === 'version') {
     console.log(await packageVersion());
+    return;
+  }
+
+  if (command.kind === 'list-runs' || command.kind === 'show-run') {
+    const store = await SavedRunStore.openForInspection();
+    const view = await createPresentation({ ...(command.plain ? { plain: true } : {}), writeLine: (line) => console.log(line) });
+    try {
+      view.section('Local saved run history', [
+        'Read-only snapshot; resume is not available in this source milestone yet.',
+      ]);
+      if (command.kind === 'list-runs') {
+        const listing = await listSavedRuns(store);
+        view.section('Saved runs', formatSavedRunListingLines(listing));
+        for (const run of listing.runs) view.section('Saved run', formatSavedRunLines(run, false));
+        if (listing.ignoredEntries || listing.runs.some((run) => run.kind === 'unavailable')) process.exitCode = EXIT_CODES.operationalError;
+      } else {
+        const run = await inspectSavedRun(store, command.runId);
+        view.section('Saved run', formatSavedRunLines(run));
+        if (run.kind === 'unavailable') process.exitCode = EXIT_CODES.operationalError;
+      }
+    } finally {
+      view.dispose();
+    }
     return;
   }
 

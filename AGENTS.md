@@ -40,6 +40,7 @@ context, or traces. Keep CLI explanation formatting read-only.
 
 - `src/cli.ts`: command-line entry point and initial `AgentState` construction.
 - `src/cli/presentation.ts`: bounded plain-text review, progress, recovery, and terminal explanations; no authorization or console side effects.
+- `src/cli/history.ts`: bounded, sanitized saved-run history formatting; display only.
 - `src/types.ts`: shared action, state, assessment, and policy types.
 - `src/ai/evaluate.ts`: bounded provider-neutral evaluation, with shared normalization in `src/ai/contract.ts` and Vercel/OpenRouter/TypeSafe/Cloudflare transport boundaries. Bind `createEvaluator` once per run; keep transport configuration outside serializable state.
 - `src/ai/cloudflare.ts`: bounded Clef/Clef-flash REST adapter, strict Workers AI envelope and duplicate-key validation, and allowlisted Cloudflare error classifications.
@@ -59,6 +60,7 @@ context, or traces. Keep CLI explanation formatting read-only.
 - `src/orchestration/summary.ts`: local phase timing, attempt counters, and run summaries.
 - `src/saved-runs/contract.ts`: versioned saved-run schema, strict state/configuration checks, and repository identity.
 - `src/saved-runs/store.ts`: bounded local checkpoint/event store, integrity checks, and process ownership locks; not an execution authority.
+- `src/saved-runs/history.ts`: read-only local inspection, ledger-derived budgets, and continuation-blocker reporting; never authorizes resume.
 - `src/agents/context.ts`: bounded evidence for approved worker requests.
 - `src/agents/claude-tools.ts`: private bounded stdio rename tool for Claude.
 - `src/agents/rename.ts`: deterministic repository file-rename constraints.

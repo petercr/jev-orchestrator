@@ -74,6 +74,28 @@ describe('evaluation error reporting', () => {
 });
 
 describe('parseArgs', () => {
+  const runId = 'e94a1138-0291-4411-b0b8-e368e0dc76e7';
+  it('parses local history commands independently of a task', () => {
+    expect(parseArgs(['--list-runs'])).toEqual({ kind: 'list-runs' });
+    expect(parseArgs(['--plain', '--list-runs'])).toEqual({ kind: 'list-runs', plain: true });
+    expect(parseArgs(['--show-run', runId, '--plain'])).toEqual({ kind: 'show-run', runId, plain: true });
+    expect(parseArgs([`--show-run=${runId}`])).toEqual({ kind: 'show-run', runId });
+    expect(parseArgs(['/repo', 'Document', '--', '--list-runs', '--show-run', runId])).toMatchObject({
+      kind: 'run', options: { task: `Document --list-runs --show-run ${runId}` },
+    });
+  });
+
+  it.each([
+    ['--show-run'], ['--show-run', '../checkpoint.json'], ['--show-run', '--plain'], ['--show-run='],
+    ['--show-run', 'not-a-run'], ['--list-runs', '--list-runs'], ['--list-runs', '--show-run', runId],
+    ['--show-run', runId, '--show-run', runId], ['--list-runs', '/repo', 'Task'],
+    ['--list-runs', '--help'], ['--show-run', runId, '--version'], ['--list-runs', '--json'],
+    ['--list-runs', '--mock'], ['--list-runs', '--orchestrate'], ['--list-runs', '--save-run'],
+    ['--list-runs', '--no-trace'], ['--show-run', runId, '--worker=codex'], ['--show-run', runId, '--codex-network'],
+  ])('rejects invalid history requests: %s', (...flags) => {
+    expect(() => parseArgs(flags)).toThrow(CliUsageError);
+  });
+
   it('keeps --plain display-only and respects the task separator', () => {
     expect(parseArgs(['/repo', 'Task', '--orchestrate', '--plain'])).toMatchObject({ kind: 'run', options: { plain: true } });
     expect(parseArgs(['/repo', 'Task', '--', '--plain'])).toMatchObject({ kind: 'run', options: { task: 'Task --plain' } });

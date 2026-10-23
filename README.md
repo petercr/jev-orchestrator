@@ -1026,11 +1026,13 @@ the completed matrix, the Windows EOF correction, and the scope limits.
 The [v0.6 release plan](PLAN.md#v06-draft-saved-runs-and-safe-resume) adds
 opt-in saved runs, local history, and continuation after a clean stop on the
 same machine and Git worktree. In this source checkout, `--save-run` connects
-the bounded store to the orchestration loop; history and restart continuation
-are still planned. Try it with:
+the bounded store to the orchestration loop, and `--list-runs` / `--show-run`
+inspect local history. Restart continuation is still planned. Try it with:
 
 ```bash
 pnpm dev -- . "Inspect this repo and choose the safest useful first action" --mock --orchestrate --save-run
+pnpm dev -- --list-runs --plain
+pnpm dev -- --show-run <run-id> --plain
 ```
 
 Saving requires a Git worktree with a committed HEAD. The CLI prints the run
@@ -1042,6 +1044,34 @@ or storage failure cannot be treated as a clean continuation point. The
 published `0.5.0` CLI does not include this in-progress v0.6 feature. The
 versioned format, local integrity checks, and current Windows limits are
 documented in [saved-run storage contract v1](docs/saved-runs-v1.md).
+
+History inspection works without provider credentials or network access, even
+if the repository has been removed. It reads the existing store without
+creating directories, changing permissions, taking locks, or writing traces.
+The listing shows at most 20 records: unreadable records first, then valid
+records by most recent update. `--show-run <run-id>` can inspect any known UUID,
+including an older record omitted from the list. Neither command accepts task
+arguments, execution flags, or `--json`; `--plain` is the only display option.
+Pipes, CI, `NO_COLOR`, and `TERM=dumb` also select plain output.
+
+Each record shows its saved task/repository, status, consumed and remaining
+iterations, worker allowances and restrictions, provider/model/network
+selection, pending validation, last recorded failure, and continuation blockers.
+Detail adds the saved HEAD, stop reason, current directory availability, and
+the last 12 ledger events. Budgets come from durable reservations; an attempt
+without an outcome stays charged. An ownership file is reported as present
+without guessing whether its process is alive or deleting the lock. A corrupt
+or unsupported record displays only its ID and error, with no unverified task
+or budget values. Missing/unreadable records or ignored unrecognized entries
+return exit code 1; an empty store or successfully inspected blocked/finished
+record returns 0.
+
+History is a reporting snapshot. Directory availability does not check current
+HEAD, working-file contents, or configuration, and earlier validation passes
+will not authorize completion after restart. The `--resume` command arrives in
+the next milestone. Records may contain task text and source excerpts; the
+store is local and unencrypted. There is no deletion or retention command yet.
+See the storage contract for platform paths and manual housekeeping guidance.
 
 ## v0.3 decision-model release
 
