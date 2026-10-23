@@ -14,8 +14,9 @@ pnpm verify:terminal --output /absolute/new/evidence-directory
 Use a new output directory outside the repository. On Windows, supply an
 absolute Windows path, for example `C:/Temp/dev-ui-check`. The directory retains
 fixtures, traces, application bytes, PTY bytes, reconstructed screens, and a
-JSON report even after failure. Each scenario has a 30-second deadline and a
-2 MiB output bound. `--only styled-40` selects one scenario for diagnosis.
+JSON report even after failure. Each terminal scenario has a 30-second deadline
+and a 2 MiB output bound. `--only styled-40` selects one scenario for diagnosis;
+`--only saved-codex` or `--only saved-claude` selects a saved-run walkthrough.
 
 To check an independently installed checkout archive, use:
 
@@ -26,8 +27,8 @@ pnpm verify:terminal --cli /absolute/consumer/node_modules/dev-orchestrator/dist
 The CLI path is resolved through package-manager symlinks. The
 [terminal CI workflow](../../.github/workflows/terminal.yml) builds, packs,
 installs a private consumer, and runs both variants on Ubuntu and Windows with
-Node 22. Its artifacts retain both reports and captures for seven days. It
-does not publish an npm package.
+Node 22, 24, and 26. Its artifacts retain both reports and captures for seven
+days. It does not publish an npm package.
 
 ## Boundaries and assertions
 
@@ -41,13 +42,26 @@ and a synthetic credential. Production credentials and local value files are
 not loaded. Timeout cases shorten the existing 15-minute timer to 150 ms at
 the test clock boundary; this does not change the production deadline.
 
-The 33 scenarios per platform cover 40/60/80/120 columns, both adapters,
+The original 33 scenarios per platform cover 40/60/80/120 columns, both adapters,
 explicit networking, plain/non-TTY/CI/`NO_COLOR`/`TERM=dumb`, repair, recovery,
 invalid input, budgets, prompt EOF/timeout/signals, alternative confirmation,
 active execution and evaluation cancellation, and typed stop/quit. POSIX tests
 include active SIGTERM and a TERM-resistant descendant. Windows substitutes an
 extra plain Ctrl+D/Enter case; plain Ctrl+Z/Enter is also checked. Both modes
 preserve separate completion acceptance and fresh independent checks.
+
+Another 14 terminal scenarios exercise saved runs with both workers, styled
+and plain reviews, immutable Codex networking, and two process restarts per
+task. Stop, EOF, Ctrl+C, and timeout during the continuation review preserve
+the checkpoint and ledger byte for byte. Invalid review input approves
+nothing. History inspection runs without a credential. Changed instructions
+and check content are displayed and freshly read/validated; completion needs
+separate approval. Ledger iterations, actual fixture launches, validation
+generations, segment trace IDs, and released ownership files are asserted.
+Six preflight blockers per worker cover missing credentials, conflicting
+models, partial ledgers, invalid snapshots, existing owners, and missing
+instructions in additional bounded pipe processes. State directories use
+isolated HOME/XDG_STATE_HOME/LOCALAPPDATA values outside each worker repository.
 
 `@xterm/headless` reconstructs the screen, including cursor movement and
 wrapping. Checks compare the candidate parameters retained by the trace with

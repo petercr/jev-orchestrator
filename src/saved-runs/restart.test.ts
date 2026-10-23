@@ -49,8 +49,8 @@ async function invoke(args: string[], cwd: string, environment: NodeJS.ProcessEn
   });
 }
 
-// The subprocess store is isolated through XDG_STATE_HOME. Native platform
-// storage and terminal verification is completed in the next milestone.
+// This source subprocess fixture isolates storage through XDG_STATE_HOME.
+// scripts/terminal verifies native storage with compiled and installed CLIs.
 describe.skipIf(process.platform !== 'linux')('two-process saved task continuation', () => {
   it.each(['codex', 'claude'] as const)('preserves the %s patch and charged call, then independently validates and accepts', async (worker) => {
     const parent = await mkdtemp(path.join(os.tmpdir(), 'dev-restart-'));

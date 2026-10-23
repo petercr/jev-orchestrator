@@ -1,5 +1,5 @@
 import { EventEmitter } from 'node:events';
-import { mkdtemp, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
+import { mkdtemp, mkdir, readFile, readdir, rename, rm, writeFile } from 'node:fs/promises';
 import { execFileSync } from 'node:child_process';
 import os from 'node:os';
 import path from 'node:path';
@@ -54,8 +54,18 @@ async function options(): Promise<CliOptions> {
   return { repoPath: root, task: 'Inspect fixture', mock: true, json: false, noTrace: false, orchestrate: true };
 }
 
-async function savedStop() {
+async function savedStop(provider?: 'typesafe' | 'cloudflare') {
   const opts = await options();
+  if (provider) {
+    opts.mock = false;
+    vi.stubEnv('ROUTER_PROVIDER', provider);
+    vi.stubEnv('JEV_PROVIDER', undefined);
+    vi.stubEnv('ROUTER_MODEL', provider === 'cloudflare' ? 'clef' : 'jev-latest');
+    vi.stubEnv('TYPESAFE_API_KEY', 'synthetic-preflight-key');
+    vi.stubEnv('CLOUDFLARE_AUTH_TOKEN', 'synthetic-preflight-key');
+    vi.stubEnv('CLOUDFLARE_ACCOUNT_ID', 'a'.repeat(32));
+    vi.spyOn(evaluation, 'createEvaluator').mockReturnValue(async (state) => mockEvaluation(state));
+  }
   execFileSync('git', ['init', '--quiet'], { cwd: opts.repoPath, stdio: 'ignore' });
   execFileSync('git', ['-c', 'user.name=Fixture', '-c', 'user.email=fixture@example.invalid',
     'commit', '--allow-empty', '-m', 'fixture'], { cwd: opts.repoPath, stdio: 'ignore' });
@@ -66,6 +76,82 @@ async function savedStop() {
 }
 
 describe('CLI continuation review', () => {
+  it.each(['missing credential', 'provider', 'model', 'empty selector', 'Cloudflare account'] as const)(
+    'rejects conflicting or unavailable %s without binding an evaluator or reserving an iteration', async (failure) => {
+      const { store, runId } = await savedStop(failure === 'Cloudflare account' ? 'cloudflare' : 'typesafe');
+      const before = await store.read(runId);
+      if (failure === 'missing credential') {
+        vi.stubEnv('TYPESAFE_API_KEY', undefined); vi.stubEnv('TYPESAFE_AI_API_KEY', undefined);
+      }
+      if (failure === 'provider') { vi.stubEnv('ROUTER_PROVIDER', 'openrouter'); vi.stubEnv('OPENROUTER_API_KEY', 'synthetic-preflight-key'); }
+      if (failure === 'model') vi.stubEnv('ROUTER_MODEL', 'changed-model');
+      if (failure === 'empty selector') vi.stubEnv('ROUTER_PROVIDER', '');
+      if (failure === 'Cloudflare account') vi.stubEnv('CLOUDFLARE_ACCOUNT_ID', 'b'.repeat(32));
+      terminal.question.mockClear(); vi.mocked(evaluation.createEvaluator).mockClear();
+      const execute = vi.spyOn((await import('./orchestration/execute.js')), 'executeCandidate');
+      await expect(runCliOrchestration({ resumeRunId: runId })).rejects.toThrow();
+      expect(evaluation.createEvaluator).not.toHaveBeenCalled(); expect(execute).not.toHaveBeenCalled();
+      expect(terminal.question).not.toHaveBeenCalled();
+      expect(await store.read(runId)).toEqual(before);
+      expect(await readdir(store.locksDirectory)).toEqual([]);
+    },
+  );
+
+  it.each(['HEAD', 'repository', 'instructions', 'run owner', 'worktree owner', 'snapshot', 'ledger', 'unresolved execution'] as const)(
+    'rejects %s before any continuation prompt, evaluation, approval, or execution', async (failure) => {
+      const { opts, store, runId } = await savedStop();
+      if (failure === 'HEAD') execFileSync('git', ['-c', 'user.name=Fixture', '-c', 'user.email=fixture@example.invalid',
+        'commit', '--allow-empty', '-m', 'changed HEAD'], { cwd: opts.repoPath, stdio: 'ignore' });
+      if (failure === 'repository') await rename(opts.repoPath, `${opts.repoPath}-moved`);
+      if (failure === 'instructions') {
+        // Save a new clean stop which includes instructions, then remove them.
+        await writeFile(path.join(opts.repoPath, 'AGENTS.md'), 'Required instructions.');
+        terminal.question.mockResolvedValueOnce('continue').mockResolvedValueOnce('stop');
+        await runCliOrchestration({ resumeRunId: runId });
+        await rm(path.join(opts.repoPath, 'AGENTS.md'));
+      }
+      const ownership = failure === 'run owner' ? await store.acquireRunOwnership(runId)
+        : failure === 'worktree owner' ? await store.acquireWorktreeOwnership(opts.repoPath) : undefined;
+      const runDirectory = path.join(store.runsDirectory, runId);
+      if (failure === 'snapshot') await writeFile(path.join(runDirectory, 'repository.json'), '{}');
+      if (failure === 'ledger') await writeFile(path.join(runDirectory, 'events.jsonl'), '{partial');
+      if (failure === 'unresolved execution') {
+        const record = await store.read(runId);
+        const state = { ...record.checkpoint.state, iteration: 2 };
+        await store.append(runId, { type: 'run_resumed', segment: 2 }, record.checkpoint.state);
+        await store.append(runId, { type: 'iteration_reserved', iteration: 2 }, state);
+        await store.append(runId, { type: 'evaluation_completed', iteration: 2 }, state);
+        await store.append(runId, { type: 'action_approved', iteration: 2, action: 'CALL_CODEX', decision: 'approve' }, state);
+        await store.append(runId, { type: 'execution_reserved', iteration: 2, action: 'CALL_CODEX',
+          attemptId: 'a'.repeat(8) + '-aaaa-4aaa-8aaa-' + 'a'.repeat(12) }, { ...state, codexCalls: 1 });
+      }
+      const before = await Promise.all(['checkpoint.json', 'events.jsonl'].map((file) => readFile(path.join(runDirectory, file), 'utf8')));
+      terminal.question.mockClear();
+      const evaluate = vi.spyOn(evaluation, 'createEvaluator');
+      const execute = vi.spyOn((await import('./orchestration/execute.js')), 'executeCandidate');
+      try {
+        await expect(runCliOrchestration({ resumeRunId: runId })).rejects.toThrow();
+        expect(terminal.question).not.toHaveBeenCalled();
+        expect(evaluate).not.toHaveBeenCalled(); expect(execute).not.toHaveBeenCalled();
+        expect(await Promise.all(['checkpoint.json', 'events.jsonl'].map((file) => readFile(path.join(runDirectory, file), 'utf8')))).toEqual(before);
+      } finally { await ownership?.release(); }
+      expect(await readdir(store.locksDirectory)).toEqual([]);
+    }, 15_000,
+  );
+
+  it('keeps removed validation scripts required after reviewing changed content', async () => {
+    const { opts, store, runId } = await savedStop();
+    await writeFile(path.join(opts.repoPath, 'package.json'), JSON.stringify({ scripts: { test: 'node check.mjs', build: 'node check.mjs' } }));
+    terminal.question.mockResolvedValueOnce('continue').mockResolvedValueOnce('stop');
+    await runCliOrchestration({ resumeRunId: runId });
+    await writeFile(path.join(opts.repoPath, 'package.json'), JSON.stringify({ scripts: { test: 'node check.mjs' } }));
+    terminal.question.mockResolvedValueOnce('continue').mockResolvedValueOnce('stop');
+    const result = await runCliOrchestration({ resumeRunId: runId });
+    expect(result?.state.repo.requiredValidationScripts).toEqual(['test', 'build']);
+    expect(result?.state.tests).toEqual({ ran: false });
+    expect((await store.read(runId)).checkpoint.state.iteration).toBe(3);
+  });
+
   it('shares canonical worktree ownership when an unsaved invocation targets a subdirectory', async () => {
     const opts = await options();
     execFileSync('git', ['init', '--quiet'], { cwd: opts.repoPath, stdio: 'ignore' });

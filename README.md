@@ -1105,8 +1105,9 @@ changed HEAD/worktree identity, incomplete records, and unresolved ownership or
 execution also block it. Partial edits are kept, including operator changes;
 the CLI never restores files or resets Git. Older development records without
 content fingerprints remain inspectable; start a new saved run to use resume.
-Full platform/provider restart verification and the live pilot remain required
-before the v0.6 release.
+The [offline restart verification record](docs/saved-runs-verification.md)
+covers the provider/worker matrix and compiled/installed terminal checks.
+The separately authorized live pilot remains required before the v0.6 release.
 
 ## v0.3 decision-model release
 
