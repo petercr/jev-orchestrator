@@ -1023,11 +1023,14 @@ and installed CLIs on POSIX PTYs and native Windows ConPTY without live calls.
 The [verification record](docs/presentation/v0.5-verification.md) documents
 the completed matrix, the Windows EOF correction, and the scope limits.
 
-The [v0.6 draft](PLAN.md#v06-draft-saved-runs-and-safe-resume) proposes opt-in
-saved runs, local history, and continuation after a clean stop. It preserves
-remaining budgets and requires fresh validation and action approvals. Its
-saved-run format would be separate from diagnostic traces. This capability is
-planned, not available in the published CLI.
+The [v0.6 release plan](PLAN.md#v06-draft-saved-runs-and-safe-resume) proposes
+opt-in saved runs, local history, and continuation after a clean stop on the
+same machine and Git worktree. It preserves remaining budgets and requires
+fresh validation and action approvals. Six proposed PRs cover the storage
+contract, saving, history, resume, failure/platform verification, and a live
+pilot before release. Saved records would be separate from diagnostic traces;
+unresolved execution after a crash would block continuation. Implementation
+has not started, and these options are unavailable in the published CLI.
 
 ## v0.3 decision-model release
 

@@ -8,7 +8,7 @@ policy. The supported decision models include TypeSafe AI's Jev, Cloudflare
 Clef/Clef-flash, and OpenAI Decisions through OpenRouter. The repository is
 [`petercr/jev-orchestrator`](https://github.com/petercr/jev-orchestrator).
 
-Build on the published v0.3.1 CLI, preserving the decision-only default and
+Build on the published v0.5.0 CLI, preserving the decision-only default and
 explicit approval-gated orchestration mode. Decision-only collects a bounded
 repository snapshot, asks the selected decision model for a typed recommendation,
 applies local policy, prints the unexecuted decision, and can write a safe JSONL
@@ -35,14 +35,15 @@ Versions 0.4 and 0.5 are published. The
 [v0.5 publication record](docs/releases/dev-orchestrator-0.5.0.md) retains the
 verified public archive, fresh registry installation, and operator-accepted
 recovery mitigation for [#61](https://github.com/petercr/jev-orchestrator/issues/61).
-Version 0.6 remains a design proposal, not an implemented feature or release
-commitment.
+Version 0.6 is the next release being planned. The proposal below turns the
+earlier saved-run draft into a bounded delivery sequence; implementation has
+not started and no release date is committed.
 
 | Version | Primary outcome | First deliverable |
 | --- | --- | --- |
 | [v0.4](#v04-draft-reliable-task-workflows) | More reliable completion of bounded coding tasks | Reproducible complete-workflow baseline |
 | [v0.5](#v05-candidate-terminal-presentation-and-interaction) | Clearer, more polished terminal interaction | Published on 2026-10-22; [verified archive and installation](docs/releases/dev-orchestrator-0.5.0.md) |
-| [v0.6](#v06-draft-saved-runs-and-safe-resume) | Stop a run and continue it later with its context and remaining limits | Versioned saved-run contract and offline recovery fixtures |
+| [v0.6](#v06-draft-saved-runs-and-safe-resume) | Save, inspect, and resume a bounded task after a clean stop | Six proposed PRs, starting with the storage contract and failure fixtures |
 
 ## v0.4 draft: reliable task workflows
 
@@ -400,145 +401,270 @@ dependency decision are recorded below.
 
 ## v0.6 draft: saved runs and safe resume
 
-Drafted on 2026-10-17 at the operator's request to plan v0.6. Saved runs and
-safe resume are the proposed focus, building on v0.4's workflow behavior and
-v0.5's presentation work. This is a design proposal; implementation has not
-started and the published CLI has no resume command.
+Originally drafted on 2026-10-17. Refined on 2026-10-22 after publication of
+v0.5.0 and merge of its publication record in
+[PR #64](https://github.com/petercr/jev-orchestrator/pull/64). This is the
+proposed v0.6 scope, ready for review. Implementation has not started; the
+published CLI has none of the saved-run options below.
 
-The intended outcome is to stop an opted-in orchestration run, close the
-terminal, and later continue the same task without reconstructing its context
-or losing track of consumed limits. A local history view should explain what
-happened, what remains, and whether continuation is possible. An existing
-task's partial edits stay in its working tree.
+**Release outcome:** an operator can stop an opted-in task, close the terminal,
+inspect its history, and continue it in a new CLI process without losing its
+approved context or resetting its limits. Partial edits stay in the worktree.
+Resuming requires fresh repository checks, validation, and action approvals.
 
-### User workflow and first-release boundary
+### Product scope
 
-Provisional command shape, to be finalized with CLI compatibility tests:
+| Priority | Deliverable | Observable result |
+| --- | --- | --- |
+| Required | Opt-in saved orchestration | The CLI prints a run ID, checkpoints progress, and explains whether the stopped run can continue. |
+| Required | Local history and detail | The operator can see the task, repository, status, consumed/remaining budgets, pending checks, and any resume blocker without credentials or network access. |
+| Required | Explicit continuation | A cleanly stopped run continues in a new process on the same machine and canonical Git worktree, starting at its next unused iteration. |
+| Required | Conservative failure handling | Storage errors, unresolved execution, incompatible records, and concurrent ownership stop execution with a specific explanation. |
+| Required | Verified release | Offline restart/failure coverage, installed-package terminal checks, and a recorded live stop/resume pilot pass before publication. |
+
+Keep this release focused. Cross-machine transfer, crash recovery for uncertain
+execution, background runs, worker-native conversation restoration, automatic
+retries/failover, expanded permissions/budgets, a dashboard, and new providers
+are outside v0.6. Run deletion, export/import, and automatic retention cleanup
+are also deferred; the first version documents storage and manual housekeeping
+for inactive records. Existing runs without saving remain supported.
+
+The [v0.5 routing limitation](docs/presentation/v0.5-routing-mitigation-results.md)
+remains visible: invalid distributions are rejected at the same `0.001`
+tolerance, and explicit recovery consumes the remaining iteration budget.
+Persistence must retain that failure and recovery requirement across restarts.
+An upstream provider correction is separate work; this release does not claim
+to improve the model's probability output.
+
+### Operator workflow
+
+Proposed command contract, to be frozen in the first implementation PR:
 
 ```text
 dev-agent . "Fix the bug and add regression tests" --orchestrate --save-run
 dev-agent --list-runs
 dev-agent --show-run <run-id>
-dev-agent --resume <run-id>
+dev-agent --resume <run-id> [--plain]
 ```
 
-Saving is opt-in for orchestration. Listing and showing runs are read-only
-local operations with bounded output. `--resume` explicitly reopens a saved
-orchestration run; every resolved action still requires approval. Keep these
-options distinct from existing repository/task positional arguments, and keep
-decision-only behavior unchanged. Run IDs resolve only inside the application's
-run store; they are not arbitrary file paths or shell arguments.
+Saving is opt-in and requires `--orchestrate`. The supported saved-run target
+is a Git worktree with a resolvable HEAD; ordinary unsaved operation keeps its
+existing repository support. The initial review explains what is stored and
+where. Stop, EOF, and signals retain their existing meaning and exit behavior;
+the terminal summary also prints the run ID and continuation status.
 
-The first release supports continuation on the same machine and canonical
-repository/worktree after a typed stop, an evaluation-failure stop, or a signal
-interruption whose process cleanup completed. Finished runs and runs at the
-iteration limit remain inspectable. Resume cannot grant extra iterations or
-worker calls. A new task with a new budget is a separate explicit run.
+Listing and showing are bounded, read-only local operations. A missing
+repository or missing provider credential must not prevent inspection. Plain
+output remains available; history JSON output is deferred so existing
+decision-only `--json` behavior stays stable. Run IDs resolve only within the
+application store and never accept arbitrary file paths.
 
-An unclean termination with an unresolved execution is inspectable but cannot
-resume execution in this first slice. Never replay an uncertain action, assume
-an orphaned worker has exited, or roll back partial edits. Cross-machine
-transfer, background workers, worker-native conversation restoration, and
-automatic retry after a crash are later scope.
+Resume uses the stored task and repository rather than new positional
+arguments. It shows the prior stop, remaining limits, refreshed repository
+changes, pending checks, and immutable selections before the operator chooses
+to continue or stop. That review grants no action approval. Resume rejects
+task, worker, network, mock/live, or provider/model overrides; presentation
+choice may change. Recovery from an evaluation failure remains explicit and
+does not get counted or requested twice by overlapping resume/recovery prompts.
 
-### Saved-run and continuation contract
+Example: three consumed evaluations and one Codex call leave five iterations
+and one Codex call. Resume starts at iteration four. Fresh validation consumes
+those remaining iterations; finishing is never promised when too little
+budget remains. Finished and exhausted runs stay inspectable.
 
-- Store a bounded, versioned checkpoint separately from JSONL traces. Current
-  traces truncate values and arrays and cannot reconstruct complete state;
-  neither old nor new traces become executable resume inputs. Freeze the
-  checkpoint's schema, size limits, status transitions, and compatibility rules
-  before integrating execution. Unsupported versions must fail explicitly.
-- Preserve the original task, bounded approved context and its provenance,
-  repository identity, instruction/validation metadata, frozen provider/model,
-  worker selection and network permission, consumed budgets, and failure
-  history. Keep transport objects, credentials, raw environment values,
-  AbortSignal, and executable approval objects out of the format. Record only
-  non-secret configuration identity; reload credentials from the operator's
-  environment and reject provider/account or permission changes during resume.
-- Use an operator-owned application state directory outside worker-writable
-  repositories, with restricted access, bounded reads, and atomic checkpoint
-  replacement. Define integrity and sequence checks against an authoritative
-  local attempt ledger. Validate persisted content as untrusted input; a
-  checksum by itself is not authorization. Reject malformed, truncated,
-  altered, or stale checkpoints instead of repairing counters or flags.
-- Record iteration consumption before evaluation and reserve worker allowance
-  durably before dispatch. Record outcomes without charging the same attempt
-  twice. An uncertain reserved attempt stays charged and is reported as
-  uncertain, without inventing a successful execution or an approval. If a
-  required durable write fails, start no further evaluation or execution;
-  drain any active cleanup and explain the last trustworthy checkpoint.
-- Acquire exclusive ownership of the saved run and prevent another app-managed
-  run from using the same worktree concurrently. An unresolved active owner or
-  stale lock blocks execution; never kill a process based only on a saved PID.
-  The design must account for process cleanup before a run becomes resumable.
-- Refresh repository state before continuation. A different worktree, changed
-  HEAD, unavailable repository, or unbounded/ambiguous identity check blocks
-  resume. Show any working-tree drift, retain historical evidence as historical,
-  and use the existing clarification/preparation gates when task context needs
-  review. Changed instruction files require new bounded reads and approval.
-  Do not restore Git state, replace files, or revert operator edits.
-- Start a fresh validation generation on resume; prior passing checks remain
-  history and cannot authorize completion. Rebuild candidates from current
-  state and require new approvals, including acceptance review for `FINISH`.
-  Resume of an evaluation failure retains its explicit recovery requirement.
-  A saved proposal, old approval, or worker test claim grants no authority.
-- Retain the eight-iteration and two-calls-per-adapter ceilings across every
-  process segment. Selection and permission flags remain immutable; fresh
-  validation also consumes the remaining budget. Insufficient budget must
-  produce the existing bounded stop rather than silently extend the run.
-  Link segment traces and summaries by run identity while keeping metrics
-  outside authorization state. Measure active time with each process's local
-  monotonic clock; time between sessions is not active work or prompt wait.
+| Last condition | Proposed continuation behavior |
+| --- | --- |
+| Typed stop or EOF, with durable state and completed cleanup | Eligible after repository/configuration review. |
+| Evaluation failure stopped by the operator | Eligible with explicit recovery and budget remaining. |
+| SIGINT/SIGTERM, including during a worker, with recorded outcome and completed cleanup | Eligible after refresh; partial edits and charged attempts remain. |
+| Abrupt exit, unresolved attempt/owner, or incomplete required write | Blocked; show the last trustworthy evidence and uncertainty. |
+| Finished or iteration limit reached | Inspection only; resume cannot extend the run. |
+| Unknown schema, altered/stale record, wrong worktree, changed HEAD, or unverifiable identity | Blocked; never repair the record or relocate the task implicitly. |
 
-### Implementation order
+### State and durability requirements
 
-1. [ ] Define the checkpoint schema, attempt ledger, storage bounds, and
-   lifecycle. Document exactly which fields are restored, revalidated, or
-   historical, and how integrity, write ordering, locks, and compatibility are
-   enforced. Add offline fixtures for clean stops, exhausted limits, incomplete
-   writes, altered counters/permissions, stale checkpoints, and unresolved
-   executions. No execution path may accept a saved record until this contract
-   is validated.
-2. [ ] Add opt-in persistence to the existing orchestration lifecycle. Persist
-   budget reservations before dispatch and completed transitions afterward;
-   preserve existing signal cleanup and trace behavior. Test failures before
-   and after each durable boundary so restarting cannot duplicate execution,
-   reset budgets, or lose an in-flight attempt from the record.
-3. [ ] Add local run listing and inspection with the plain and styled CLI
-   presentation. Show task/repository identity, last status, remaining budgets,
-   pending validation, failure/interruption, and a specific resume blocker.
-   These commands must not call a provider, invoke a worker, or change the
-   selected repository. Keep context bounded and credentials redacted.
-4. [ ] Add explicit resume for eligible saved runs. Resolve the same repository
-   and immutable configuration, obtain exclusive ownership, refresh evidence,
-   invalidate validation, and enter the loop at the next unconsumed iteration.
-   Retain approved clarification provenance and failure history; require the
-   existing action, recovery, and completion decisions. Incompatible or
-   incomplete records remain inspectable without being executable.
-5. [ ] Verify and prepare v0.6.0. Exercise stop/restart/resume through mocked
-   provider/process boundaries for both workers and all supported routes, plus
-   an operator-authorized live stop/resume walkthrough for each worker. Cover
-   cancellation, EOF, changed worktrees/instructions, missing credentials,
-   storage failures, concurrent resumes, and exhausted budgets. Run focused
-   tests, typecheck, the full suite, build, schema validation, and installed
-   package checks; document migration, local storage, and known limits. Record
-   release source and archive evidence, give advance npm authentication notice,
-   and verify publication through a separate registry installation.
+Use a dedicated versioned saved-run format, separate from diagnostic JSONL
+traces. The current traces deliberately truncate data; they cannot supply
+resume state. Parse saved records as untrusted input. Integrity checks do not
+turn stored repository or issue text into authoritative instructions. The
+first contract must classify each saved field:
 
-### Release gate
+| Treatment | Data |
+| --- | --- |
+| Restore after strict validation | Original task; bounded approved clarification/issue context and provenance; failure history; consumed budgets and original ceiling; immutable provider/model, mock/live, worker selection, and network permission. |
+| Refresh or revalidate | Canonical repository/Git worktree identity and HEAD; working-tree changes; instruction fingerprints; validation scripts, coverage, and all original required checks. |
+| Retain only as history | Earlier test outcomes, worker summaries, proposals/approval receipts, interruptions, and segment metrics. |
+| Never persist | Credentials, raw environment values, transport instances, AbortSignal, raw rejected provider responses, or an executable approved candidate. |
 
-- [ ] A cleanly stopped saved run resumes in a new CLI process, preserves task
-  context and remaining limits, and finishes only after fresh validation and
-  explicit acceptance approval. Both worker adapters are covered.
-- [ ] Old approvals, changed permissions, wrong repository identity, tampered
-  or incompatible state, unresolved attempts, and concurrent owners cannot
-  cause execution. Exhausted budgets cannot be reset through resume.
-- [ ] Failure-injection tests establish durable write ordering and conservative
-  attempt accounting. Trace compatibility, credential exclusion, cleanup, and
-  preservation of operator edits pass their regressions.
-- [ ] History and both presentation modes clearly distinguish resumable,
-  blocked, finished, and budget-exhausted runs. The exact installed package and
-  recorded live walkthroughs pass before release.
+Required context must fit the schema without lossy truncation of acceptance
+criteria or validation requirements. Apply bounded, credential-aware text
+handling; if required context cannot be represented safely, stop the saved run and
+explain the blocker instead of silently making a resumable record. Opt-in
+storage can contain task text and source excerpts; document that local data
+and its retention without claiming encryption or perfect secret detection.
+
+The store belongs to the operator and must be outside worker-writable
+repositories. PR 1 must settle platform paths, restricted access, link/path
+rejection, explicit byte/event/record limits, atomic replacement, flush/write
+ordering, and schema compatibility. A checksum alone cannot make a checkpoint
+authoritative. Bind it to an integrity-checked, sequenced local attempt ledger
+and reject mismatched or older records. No schema migration or trace import is
+required for v0.6; incompatible records remain non-executable.
+
+State the trust boundary honestly: protecting records from repository text,
+restricted workers, corruption, and checkpoint-only rollback does not establish
+protection from a compromised operator account or rollback of the entire local
+store. The contract must explain which authority is protected and prove the
+claimed behavior on POSIX and Windows before persistence enters the loop.
+
+Consume an iteration durably before evaluation. After a fresh action approval,
+record the dispatch boundary before every tool/worker execution and reserve a
+worker allowance before starting that worker. Commit outcomes without charging
+twice. An uncertain reservation stays charged and blocks continuation; never
+invent an approval or replay an uncertain action. Required persistence or trace
+write failure stops further evaluation/execution and drains active cleanup.
+
+Acquire exclusive run ownership and a canonical-worktree lock. Every
+app-managed orchestration invocation, including an unsaved one, must participate
+in the same ownership protocol so the order of startup cannot bypass the lock.
+Coordination metadata does not opt an unsaved run into task persistence. A
+stale/unresolved owner blocks execution; a saved PID alone cannot authorize lock
+removal or process killing. External editors and older CLI versions do not
+participate in this protocol; repository refresh must still detect drift.
+Mark a stop resumable only after the action outcome, repository refresh, process
+cleanup, and final durable transition are known.
+
+Freeze non-secret configuration identity and reload credentials from the
+operator's environment. Explicit provider/model or Cloudflare account changes
+block continuation. The present configuration has no non-secret account ID for
+the other providers; PR 1 must decide and document credential-continuity rules
+before enabling resume. A variable name cannot prove account identity, and
+credential values must not be stored to fill that gap. Preserve the selected
+model identifier; a provider alias such as `jev-latest` does not guarantee the
+same underlying served version on a later day.
+
+### Continuation and policy requirements
+
+Reinspect the same canonical worktree and unchanged HEAD. Compare bounded
+working-tree fingerprints, including untracked changes relevant to the task;
+status filenames alone do not prove unchanged contents. Show drift for review,
+invalidate stale reads, and require new approved reads for changed instruction
+files. An unavailable or ambiguous comparison blocks continuation. Never reset
+Git, restore files, discard partial edits, or attribute operator edits to a
+worker. Retain exact linked-issue identity and clarification provenance; any
+new issue fetch still uses the existing approved read boundary.
+
+Start a fresh validation generation on resume. Keep original required checks,
+including those named by the task, issue, and clarifications; a removed script
+cannot silently remove its requirement. Prior passing checks and worker claims
+cannot establish completion. A prior failure cannot establish current-generation
+repair eligibility: rerun the relevant independent check before another repair
+when policy requires it. Rebuild every candidate from current state and obtain
+a new action approval, including acceptance review for `FINISH`.
+
+The original eight-iteration maximum, two calls per adapter, 95% automatic
+completion threshold, preparation gates, repeated-failure rules, and fixed
+worker/network selection span every process segment. Preserve a lower original
+iteration ceiling if one was used. Never reset or transfer budgets, redirect an
+excluded route, relax probability validation, or silently switch providers.
+
+Link each segment's traces and summaries to the saved-run ID. Preserve trace
+compatibility and keep reporting metrics outside AgentState and authorization.
+Use a fresh local monotonic clock per segment; time between processes is neither
+active work nor prompt wait. Show cumulative attempt counts from durable records
+without double-counting recovery rows or treating metrics as permission.
+
+### Six proposed implementation PRs
+
+Each PR has a reviewable result and focused tests. Add the contract and failure
+fixtures before wiring saved data into execution; use the current small typed
+modules rather than introducing a workflow framework.
+
+1. [ ] **Saved-run contract and storage foundation.** Define schema version 1,
+   field bounds, lifecycle/stop reasons, ledger ordering, repository identity,
+   configuration/credential continuity, integrity, and ownership. Implement the
+   bounded store and offline fixtures without an executable resume route.
+   Demonstrate clean read/write, malformed/incompatible input rejection,
+   altered counters/permissions, stale snapshots, partial writes, and lock
+   contention. Record POSIX/Windows guarantees and limits. This is the next
+   implementation task; unresolved durability or identity decisions block PR 2.
+2. [ ] **Opt-in saving throughout the loop.** Add `--save-run`, create the run
+   before its first evaluation, and persist reservations and outcomes at the
+   established boundaries. Integrate worktree ownership for saved and unsaved
+   runs. Preserve signal cleanup, prompts, trace writes, unsaved task behavior,
+   and existing exit codes; document ownership conflicts. Print the saved
+   ID/status. Inject failures before and after evaluation, approval, dispatch,
+   outcome, and clean stop;
+   assert no unrecorded execution, double charge, or false resumable status.
+3. [ ] **Local run history.** Add `--list-runs` and `--show-run` with bounded
+   listing and a way to inspect an older known ID. Display status, task/repo,
+   budgets, selections, pending validation, last failure, and precise blockers.
+   Cover empty/corrupt stores, unavailable repositories, terminal sanitization,
+   and plain/styled output. Prove these commands work without credentials,
+   provider calls, worker launches, or repository mutations.
+4. [ ] **Explicit resume.** Add CLI compatibility checks, exclusive ownership,
+   preflight/review, fresh evaluator binding, repository/context refresh,
+   validation invalidation, and entry at the next unused iteration. Add a
+   two-process happy path for each worker selection and explicit recovery
+   continuation. Prove old approvals never execute, budgets span restarts, and
+   all current policy/candidate/final-approval guards still apply.
+5. [ ] **Restart and platform verification.** Extend deterministic integration
+   coverage across all six supported evaluation routes and both workers.
+   Exercise repeated restarts, exhausted budgets, missing/conflicting config,
+   changed HEAD/worktree/content/instructions/scripts, concurrent owners,
+   storage errors, EOF, signals, and unresolved execution. Extend the compiled
+   and installed PTY/Windows ConPTY matrix on supported Node versions. Keep
+   existing decision-only, unsaved orchestration, and JSON behavior covered.
+6. [ ] **Live pilot and v0.6.0 release.** Freeze a candidate archive and bounded
+   protocol, obtain operator authorization for live calls, then run the pilot
+   below before any publication. Fix failures in a separately identified
+   candidate with retained observations. Record package/source provenance,
+   migration/storage guidance, limitations, and release acceptance. Give
+   advance npm authentication notice before timed login/publication; verify
+   the published archive and a fresh registry installation afterward.
+
+### Verification and release acceptance
+
+The live pilot is a release requirement, planned from the outset. It uses the
+exact installed candidate, actual default TypeSafe/Jev evaluation, and actual
+workers with separate action approvals. Freeze tasks, fixtures, stop points,
+maximum launches/time/spend, acceptance oracles, and candidate/tool versions
+before calls. Planning this pilot does not authorize spending or publication.
+
+| Required live scenario | Evidence needed |
+| --- | --- |
+| Codex task stopped after implementation, then resumed in a new process | Same run/task, preserved patch and consumed call, fresh independent validation, and explicit accepted completion within the original limits. |
+| Claude task stopped after implementation, then resumed in a new process | The same evidence, using the other presentation mode and unchanged restricted-worker tools. |
+| Clean signal interruption of an active worker, then continuation | Observed partial work, process-tree cleanup, charged attempt, recorded interruption, fresh validation, and a valid next approved action. Freeze the selected worker and fixture before launch. |
+
+Use deterministic fault injection for repeated malformed evaluations, storage
+failures, and exact crash windows; label that evidence separately from live
+observations. Retain every live provider failure, routing detour, exhausted run,
+and protocol deviation. No replacement runs or hidden budget increases; new
+collection requires a recorded amendment. Natural invalid responses keep their
+explicit recovery gate. A small successful pilot establishes the exercised
+workflow, not a statistical routing-reliability or performance claim.
+
+- [ ] Storage, ownership, configuration identity, and attempt-ordering decisions
+  are documented and proven by focused failure tests; no contract questions
+  remain that could authorize duplicate execution or reset a budget.
+- [ ] Clean stops resume in a new process for both workers. Exhausted, finished,
+  uncertain, incompatible, tampered, and concurrently owned runs cannot execute.
+  Partial edits and original acceptance/validation requirements survive.
+- [ ] Fresh current-generation validation and separate task acceptance are
+  enforced after resume, including through manual alternatives and repair.
+- [ ] History, plain/styled prompts, signals/EOF, traces, secret exclusion, and
+  metrics pass their regressions. Earlier diagnostic traces remain diagnostic.
+- [ ] Focused tests, `pnpm check`, `pnpm test`, `pnpm build`, and
+  `pnpm env:check:schema` pass. Fresh installed-package checks and POSIX/Windows
+  terminal matrices pass against the release candidate.
+- [ ] The live scenarios have recorded outcomes and the operator has accepted
+  any remaining limitations before publication. If a required scenario fails,
+  fix and reverify it or explicitly revise scope; offline tests alone cannot
+  silently substitute for the live gate.
+- [ ] README/help, changelog, storage/compatibility instructions, release
+  evidence, archive checksums, npm/GitHub publication, and independent registry
+  installation verification are complete.
 
 ## v0.3.0 release: multiple decision models
 
