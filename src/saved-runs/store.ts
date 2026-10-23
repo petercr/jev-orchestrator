@@ -1,6 +1,6 @@
 import { createHash, randomUUID } from 'node:crypto';
 import { constants as fsConstants } from 'node:fs';
-import { chmod, lstat, mkdir, open, readdir, realpath, rename, rm, unlink } from 'node:fs/promises';
+import { chmod, lstat, mkdir, open, opendir, readdir, realpath, rename, rm, unlink } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { hasPassedValidation } from '../repo/validation.js';
@@ -381,9 +381,15 @@ function isWithin(parent: string, child: string): boolean {
 async function boundedRead(file: string, maximumBytes: number): Promise<string> {
   let handle;
   try {
+    const entry = await lstat(file);
+    if (!entry.isFile() || entry.isSymbolicLink()) {
+      fail('invalid_record', 'Saved run file is not regular.');
+    }
+    if (entry.nlink !== 1) fail('limit_reached', 'Saved run file is not regular or exceeds its size limit.');
     handle = await open(file, fsConstants.O_RDONLY | NOFOLLOW);
     const details = await handle.stat();
-    if (!details.isFile() || details.nlink !== 1 || details.size > maximumBytes) {
+    if (!details.isFile() || details.nlink !== 1 || details.size > maximumBytes ||
+        details.dev !== entry.dev || details.ino !== entry.ino) {
       fail('limit_reached', 'Saved run file is not regular or exceeds its size limit.');
     }
     const buffer = Buffer.alloc(maximumBytes + 1);
@@ -598,6 +604,84 @@ export class SavedRunStore {
       if (error instanceof SavedRunStoreError) throw error;
       throw new SavedRunStoreError('storage_failure', 'Unable to open saved run storage.');
     }
+  }
+
+  /** Inspection never initializes storage, changes permissions, or acquires ownership. */
+  static async openForInspection(directory: string = defaultSavedRunDirectory()): Promise<SavedRunStore | undefined> {
+    try {
+      let root;
+      try { root = await lstat(directory); } catch (error) {
+        if (hasErrorCode(error, 'ENOENT')) return undefined;
+        throw error;
+      }
+      if (!root.isDirectory() || root.isSymbolicLink()) {
+        fail('storage_failure', 'Saved run storage is not a regular directory.');
+      }
+      const canonical = await realpath(directory);
+      for (const name of ['runs', 'locks']) {
+        const child = path.join(canonical, name);
+        const details = await lstat(child);
+        if (!details.isDirectory() || details.isSymbolicLink() || await realpath(child) !== child) {
+          fail('storage_failure', 'Saved run storage contains an invalid directory.');
+        }
+      }
+      return new SavedRunStore(canonical);
+    } catch (error) {
+      if (error instanceof SavedRunStoreError) throw error;
+      throw new SavedRunStoreError('storage_failure', 'Unable to inspect saved run storage.');
+    }
+  }
+
+  async listIdsForInspection(): Promise<{ runIds: string[]; ignoredEntries: number }> {
+    const runIds: string[] = [];
+    let scanned = 0;
+    let ignoredEntries = 0;
+    try {
+      const directory = await opendir(this.runsDirectory);
+      for await (const entry of directory) {
+        scanned += 1;
+        if (scanned > SAVED_RUN_COUNT_LIMIT) fail('limit_reached', 'Saved run store exceeds its entry limit. Inspect a known run ID directly.');
+        if (isSavedRunId(entry.name)) runIds.push(entry.name);
+        else ignoredEntries += 1;
+      }
+      return { runIds: runIds.sort(), ignoredEntries };
+    } catch (error) {
+      if (error instanceof SavedRunStoreError) throw error;
+      throw new SavedRunStoreError('storage_failure', 'Unable to list saved run storage.');
+    }
+  }
+
+  async readForInspection(runId: string): Promise<{
+    checkpoint: SavedRunCheckpointV1;
+    events: SavedRunEvent[];
+    ownership: { run: boolean; worktree: boolean };
+  }> {
+    if (!isSavedRunId(runId)) fail('invalid_input', 'Saved run ID is invalid.');
+    const exists = async (name: string): Promise<boolean> => {
+      try { await lstat(lockPath(this.directory, name)); return true; } catch (error) {
+        if (hasErrorCode(error, 'ENOENT')) return false;
+        fail('storage_failure', 'Saved run ownership could not be inspected.');
+      }
+    };
+    const requireStableRead = async (): Promise<void> => {
+      if (await exists(`update-${runId}`)) {
+        fail('busy', 'Saved run is being updated or has unresolved update ownership.');
+      }
+    };
+    await requireStableRead();
+    // A concurrent write may yield an integrity error. Never repair or guess at
+    // partially committed evidence, and never use this snapshot to authorize work.
+    const record = await this.readUnlocked(runId);
+    await requireStableRead();
+    const root = record.checkpoint.repository.root;
+    const key = sha256(process.platform === 'win32' ? root.toLowerCase() : root);
+    return {
+      ...record,
+      ownership: {
+        run: await exists(`run-${runId}`),
+        worktree: await exists(`worktree-${key}`),
+      },
+    };
   }
 
   async acquireRunOwnership(runId: string): Promise<SavedRunOwnership> {
