@@ -266,7 +266,7 @@ export async function selectCandidate(
   if (preparation.nextAction !== null && requiresTaskPreparation(action)) {
     return {
       action: 'ASK_USER', tool: null, input: null,
-      reason: 'The linked issue and known repository instructions must be read before testing, delegation, or completion.',
+      reason: 'Required task context and repository instructions must be read before testing, delegation, or completion.',
     };
   }
   switch (action) {

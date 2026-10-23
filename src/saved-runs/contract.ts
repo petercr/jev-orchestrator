@@ -120,6 +120,8 @@ function isEvidence(value: unknown): boolean {
         (!Array.isArray(value.worker.reportedEnvironmentLimitations) ||
           !value.worker.reportedEnvironmentLimitations.every((item) => item === 'loopback_bind_denied'))))) return false;
   if (value.repoRefreshRequired !== undefined && typeof value.repoRefreshRequired !== 'boolean') return false;
+  if (value.requiredInstructionFiles !== undefined && (!isStringArray(value.requiredInstructionFiles, 3, 32) ||
+      !value.requiredInstructionFiles.every((file) => ['AGENTS.md', 'CLAUDE.md', 'CONTRIBUTING.md'].includes(file)))) return false;
   return isJsonTree(value);
 }
 
@@ -285,9 +287,10 @@ export function isSavedRunEventData(value: unknown): value is import('./types.js
         typeof value.attemptId === 'string' && isSavedRunId(value.attemptId) &&
         ['succeeded', 'failed', 'cancelled', 'uncertain'].includes(String(value.outcome));
     case 'run_stopped':
-      return hasOnlyKeys(value, ['type', 'reason', 'resumable']) &&
+      return hasOnlyKeys(value, ['type', 'reason', 'resumable', 'repositorySnapshotHash']) &&
         ['user', 'signal', 'evaluation_failure', 'storage_error'].includes(String(value.reason)) &&
-        typeof value.resumable === 'boolean';
+        typeof value.resumable === 'boolean' && (value.repositorySnapshotHash === undefined ||
+          (typeof value.repositorySnapshotHash === 'string' && HASH_PATTERN.test(value.repositorySnapshotHash)));
     case 'run_blocked':
       return hasOnlyKeys(value, ['type', 'reason']) &&
         ['checkpoint_invalid', 'repository_changed', 'configuration_changed', 'attempt_unresolved', 'lock_stale', 'storage_failure'].includes(String(value.reason));

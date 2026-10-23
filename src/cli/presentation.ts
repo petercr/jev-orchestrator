@@ -101,7 +101,7 @@ export function formatApprovalLines(context: ApprovalContext): string[] {
   lines.push(`Safe candidate: ${proposal.action}`, `Tool: ${proposal.tool ?? 'none'}`, `Parameters: ${parameters(proposal.input)}`);
   if ('reason' in proposal) lines.push(`Candidate reason: ${text(proposal.reason)}`);
   lines.push('', 'Current evidence and limits', ...formatProgressLines(state));
-  if (review) lines.push(`Interaction totals: ${review.counts.approvals} action approvals; ${review.counts.alternatives} manual alternatives; ${review.counts.evaluationRecoveries} explicit evaluation recoveries.`);
+  if (review) lines.push(`Interaction totals in this process: ${review.counts.approvals} action approvals; ${review.counts.alternatives} manual alternatives; ${review.counts.evaluationRecoveries} explicit evaluation recoveries.`);
   lines.push('', 'Operator choices', `Allowed alternatives: ${context.allowedAlternatives.join(', ') || 'none'}`);
   if (proposal.action === 'ASK_USER') {
     if (context.allowedAlternatives.includes('FINISH')) {
@@ -148,7 +148,9 @@ export function formatOutcomeLines(result: OrchestrationResult): string[] {
   if (result.status !== 'finished') {
     lines.push(...formatProgressLines(result.state));
     if (hasPassedValidation(result.state)) lines.push('Passing validation is supporting evidence; the task outcome still needs acceptance review.');
-    lines.push('Next: review the saved changes, required checks, and trace. A new invocation starts a separate run with its own approvals; the trace is diagnostic data.');
+    lines.push(result.savedRunId
+      ? `Next: inspect dev-agent --show-run ${result.savedRunId}; use --resume ${result.savedRunId} only if the recorded stop is eligible. The trace is diagnostic data.`
+      : 'Next: review the saved changes, required checks, and trace. A new invocation starts a separate run with its own approvals; the trace is diagnostic data.');
   }
   return lines;
 }

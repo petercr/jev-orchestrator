@@ -61,6 +61,8 @@ context, or traces. Keep CLI explanation formatting read-only.
 - `src/saved-runs/contract.ts`: versioned saved-run schema, strict state/configuration checks, and repository identity.
 - `src/saved-runs/store.ts`: bounded local checkpoint/event store, integrity checks, and process ownership locks; not an execution authority.
 - `src/saved-runs/history.ts`: read-only local inspection, ledger-derived budgets, and continuation-blocker reporting; never authorizes resume.
+- `src/saved-runs/snapshot.ts`: bounded content hashes outside secret/generated paths, bound to a durable clean-stop event.
+- `src/saved-runs/resume.ts`: immutable configuration checks and conservative state refresh; CLI continuation review approves no action.
 - `src/agents/context.ts`: bounded evidence for approved worker requests.
 - `src/agents/claude-tools.ts`: private bounded stdio rename tool for Claude.
 - `src/agents/rename.ts`: deterministic repository file-rename constraints.

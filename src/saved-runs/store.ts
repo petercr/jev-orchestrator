@@ -4,6 +4,7 @@ import { chmod, lstat, mkdir, open, opendir, readdir, realpath, rename, rm, unli
 import os from 'node:os';
 import path from 'node:path';
 import { hasPassedValidation } from '../repo/validation.js';
+import { isRepositorySnapshot, snapshotHash, SNAPSHOT_RECORD_BYTES, type RepositorySnapshot } from './snapshot.js';
 import {
   isSavedAgentState,
   isSavedRunConfiguration,
@@ -782,6 +783,7 @@ export class SavedRunStore {
     runId: string,
     eventData: SavedRunEventInput,
     nextState: SavedRunCheckpointV1['state'],
+    repositorySnapshot?: RepositorySnapshot,
   ): Promise<SavedRunCheckpointV1> {
     if (!isSavedRunId(runId) || !isSavedRunEventData(eventData) || eventData.type === 'run_created') {
       fail('invalid_input', 'Saved run event input is invalid.');
@@ -790,6 +792,12 @@ export class SavedRunStore {
     const updateLock = await acquireFileLock(this.directory, `update-${runId}`, 'run', runId);
     try {
       const { checkpoint: previous, events } = await this.readUnlocked(runId);
+      if (repositorySnapshot !== undefined) {
+        if (eventData.type !== 'run_stopped' || !isRepositorySnapshot(repositorySnapshot)) {
+          fail('invalid_input', 'Repository snapshots belong only to a stopped run.');
+        }
+        eventData = { ...eventData, repositorySnapshotHash: snapshotHash(repositorySnapshot) };
+      }
       if (['finished', 'iteration_limit', 'blocked'].includes(previous.status)) {
         fail('invalid_input', 'Saved run is terminal and cannot accept new events.');
       }
@@ -831,6 +839,9 @@ export class SavedRunStore {
         state,
       }, event);
       validateEventSequence([...events, event], checkpoint);
+      if (repositorySnapshot) {
+        await atomicWrite(path.join(this.runsDirectory, runId, 'repository.json'), JSON.stringify(repositorySnapshot), SNAPSHOT_RECORD_BYTES);
+      }
       await appendDurably(eventFilePath(this.directory, runId), `${JSON.stringify(event)}\n`, eventTotalLimit());
       await atomicWrite(checkpointFilePath(this.directory, runId), `${JSON.stringify(checkpoint)}\n`, SAVED_RUN_CHECKPOINT_LIMIT_BYTES);
       return checkpoint;
@@ -840,6 +851,16 @@ export class SavedRunStore {
     } finally {
       await updateLock.release();
     }
+  }
+
+  async readRepositorySnapshot(runId: string, expectedHash: string): Promise<RepositorySnapshot> {
+    if (!isSavedRunId(runId) || !HASH_PATTERN.test(expectedHash)) fail('invalid_input', 'Repository snapshot identity is invalid.');
+    const raw = await boundedRead(path.join(this.runsDirectory, runId, 'repository.json'), SNAPSHOT_RECORD_BYTES);
+    let parsed: unknown;
+    try { parsed = parseSavedRunJson(raw); } catch { fail('invalid_record', 'Saved repository snapshot is malformed.'); }
+    if (!isRepositorySnapshot(parsed)) fail('invalid_record', 'Saved repository snapshot exceeds its contract.');
+    if (snapshotHash(parsed) !== expectedHash) fail('integrity_failure', 'Saved repository snapshot does not match the stop ledger.');
+    return parsed;
   }
 
   private async readUnlocked(runId: string): Promise<{ checkpoint: SavedRunCheckpointV1; events: SavedRunEvent[] }> {

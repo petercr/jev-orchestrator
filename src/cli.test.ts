@@ -80,9 +80,22 @@ describe('parseArgs', () => {
     expect(parseArgs(['--plain', '--list-runs'])).toEqual({ kind: 'list-runs', plain: true });
     expect(parseArgs(['--show-run', runId, '--plain'])).toEqual({ kind: 'show-run', runId, plain: true });
     expect(parseArgs([`--show-run=${runId}`])).toEqual({ kind: 'show-run', runId });
+    expect(parseArgs(['--resume', runId, '--plain'])).toEqual({ kind: 'resume', runId, plain: true });
+    expect(parseArgs([`--resume=${runId}`])).toEqual({ kind: 'resume', runId });
     expect(parseArgs(['/repo', 'Document', '--', '--list-runs', '--show-run', runId])).toMatchObject({
       kind: 'run', options: { task: `Document --list-runs --show-run ${runId}` },
     });
+  });
+
+  it.each([
+    ['--resume'], ['--resume=../record'], ['--resume', runId, '--list-runs'],
+    ['--resume', runId, '--show-run', runId], ['--resume', runId, '--resume', runId],
+    ['--resume', runId, '/repo', 'New task'], ['--resume', runId, '--mock'],
+    ['--resume', runId, '--worker=claude'], ['--resume', runId, '--codex-network'],
+    ['--resume', runId, '--orchestrate'], ['--resume', runId, '--save-run'],
+    ['--resume', runId, '--json'], ['--resume', runId, '--no-trace'],
+  ])('rejects unsafe resume command combinations: %s', (...flags) => {
+    expect(() => parseArgs(flags)).toThrow(CliUsageError);
   });
 
   it.each([

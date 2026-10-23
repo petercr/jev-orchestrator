@@ -73,6 +73,7 @@ export type OrchestrationResult = {
   savedRunId?: string;
   savedRunStatus?: SavedRunStatus;
   savedRunStatusUnavailable?: true;
+  savedRunTotals?: { iterations: number; codexCalls: number; claudeCalls: number; segments: number };
   persistenceFailure?: string;
 };
 
@@ -97,6 +98,11 @@ export type OrchestrationOptions = {
   signal?: AbortSignal;
   initialPhase?: 'inspection';
   initialInspectionMs?: number;
+  resumeReviewWaitMs?: number;
+  startIteration?: number;
+  segment?: number;
+  savedRunId?: string;
+  initialEvaluationRecoveryApproved?: true;
   persistence?: {
     record: (event: SavedRunEventInput, state: AgentState) => Promise<unknown>;
   };
@@ -636,13 +642,22 @@ export async function runOrchestration(
     throw new Error(`Iteration limit must be between 1 and ${MAX_ORCHESTRATION_ITERATIONS}.`);
   }
 
-  const metrics = createRunMetrics(options.initialInspectionMs);
-  const trace = await createOrchestrationTrace(initialState.repo.root);
+  const startIteration = options.startIteration ?? 1;
+  if (!Number.isInteger(startIteration) || startIteration < 1 || startIteration > maxIterations ||
+      (startIteration > 1 && initialState.iteration !== startIteration - 1)) {
+    throw new Error('The initial iteration does not match the preserved run budget.');
+  }
+  const metrics = createRunMetrics(options.initialInspectionMs, options.resumeReviewWaitMs);
+  if (options.initialEvaluationRecoveryApproved) metrics.counts.evaluationRecoveries = 1;
+  const trace: { path: string; runId: string; savedRunId?: string; segment?: number } = {
+    ...await createOrchestrationTrace(initialState.repo.root),
+    ...(options.savedRunId ? { savedRunId: options.savedRunId, segment: options.segment ?? 1 } : {}),
+  };
   const execute = dependencies.execute ?? executeCandidate;
   const inspect = dependencies.inspect ?? inspectRepo;
   let state = initialState;
   let lastSummary = metrics.summary(state);
-  let segment = 1;
+  let segment = options.segment ?? 1;
   let evaluationFailurePending = false;
   let searchResults: string[] = [];
   let phase: InterruptionPhase = options.initialPhase ?? 'evaluation';
@@ -657,7 +672,7 @@ export async function runOrchestration(
   let interruptedInput: unknown = null;
   let interruptedResult: ToolResult | null = null;
   let interruptedWorkerRequest: unknown;
-  let interruptedIteration = 0;
+  let interruptedIteration = startIteration - 1;
   const executionOptions: ExecutionOptions = options.signal ? { signal: options.signal } : {};
   const record = async (event: SavedRunEventInput, nextState: AgentState): Promise<void> => {
     if (!options.persistence) return;
@@ -674,11 +689,6 @@ export async function runOrchestration(
       observations: [...state.observations, reason === 'signal' ? 'Run interrupted by a signal.' : `Run stopped: ${reason}.`],
     };
     const resumable = interruptedIteration < maxIterations;
-    await record({
-      type: 'run_stopped',
-      reason: evaluationFailurePending ? 'evaluation_failure' : reason === 'signal' ? 'signal' : 'user',
-      resumable,
-    }, state);
     const summary = metrics.summary(state);
     await appendOrchestrationTrace(trace, {
       iteration: interruptedIteration,
@@ -697,6 +707,11 @@ export async function runOrchestration(
       metrics: { timings: summary.timings, counts: summary.counts },
       summary,
     });
+    await record({
+      type: 'run_stopped',
+      reason: evaluationFailurePending ? 'evaluation_failure' : reason === 'signal' ? 'signal' : 'user',
+      resumable,
+    }, state);
     return { status: 'stopped', state, tracePath: trace.path, iterations: interruptedIteration, summary,
       ...(reason === 'signal' ? {} : { exitCode: 1 }) };
   };
@@ -735,7 +750,7 @@ export async function runOrchestration(
   try {
     throwIfInterrupted(options.signal);
 
-    for (let iteration = 1; iteration <= maxIterations; iteration += 1) {
+    for (let iteration = startIteration; iteration <= maxIterations; iteration += 1) {
       throwIfInterrupted(options.signal);
       state = { ...state, iteration };
       if (workerSelection === undefined) delete state.workerSelection;
@@ -837,6 +852,7 @@ export async function runOrchestration(
           type: 'run_resumed', segment: segment + 1, evaluationRecoveryApproved: true,
         }, state);
         segment += 1;
+        if (options.savedRunId) trace.segment = segment;
         evaluationFailurePending = false;
         throwIfInterrupted(options.signal);
         continue;
@@ -1062,13 +1078,6 @@ export async function runOrchestration(
       if (proposal.action === 'ASK_USER' && decision.kind === 'approve') {
         await record({ type: 'clarification_recorded', iteration }, nextState);
       }
-      if (terminalStatus === 'finished') {
-        await record({ type: 'run_finished' }, nextState);
-      } else if (terminalStatus === 'stopped') {
-        await record({ type: 'run_stopped', reason: 'user', resumable: iteration < maxIterations }, nextState);
-      } else if (reachedLimit) {
-        await record({ type: 'iteration_limit' }, nextState);
-      }
 
       phase = 'trace';
       const summary = metrics.summary(nextState);
@@ -1089,6 +1098,13 @@ export async function runOrchestration(
           workerRequest: workerTraceRequest(proposal, stateBefore, decision),
         } : {}),
       });
+      if (terminalStatus === 'finished') {
+        await record({ type: 'run_finished' }, nextState);
+      } else if (terminalStatus === 'stopped') {
+        await record({ type: 'run_stopped', reason: 'user', resumable: iteration < maxIterations }, nextState);
+      } else if (reachedLimit) {
+        await record({ type: 'iteration_limit' }, nextState);
+      }
       state = nextState;
       if (!options.persistence || (terminalStatus === undefined && !reachedLimit)) throwIfInterrupted(options.signal);
 

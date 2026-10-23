@@ -43,7 +43,7 @@ export type SavedRunEventData =
   | { type: 'execution_reserved'; iteration: number; attemptId: string; action: Action }
   | { type: 'execution_outcome'; attemptId: string; outcome: 'succeeded' | 'failed' | 'cancelled' | 'uncertain' }
   | { type: 'clarification_recorded'; iteration: number }
-  | { type: 'run_stopped'; reason: 'user' | 'signal' | 'evaluation_failure' | 'storage_error'; resumable: boolean }
+  | { type: 'run_stopped'; reason: 'user' | 'signal' | 'evaluation_failure' | 'storage_error'; resumable: boolean; repositorySnapshotHash?: string }
   | { type: 'run_finished' }
   | { type: 'iteration_limit' }
   | { type: 'run_blocked'; reason: 'checkpoint_invalid' | 'repository_changed' | 'configuration_changed' | 'attempt_unresolved' | 'lock_stale' | 'storage_failure' };

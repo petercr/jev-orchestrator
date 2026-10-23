@@ -263,13 +263,14 @@ export async function createOrchestrationTrace(root: string): Promise<{
 }
 
 export async function appendOrchestrationTrace(
-  trace: { path: string; runId: string },
+  trace: { path: string; runId: string; savedRunId?: string; segment?: number },
   payload: OrchestrationTracePayload,
 ): Promise<void> {
   const secretValues = configuredSecretValues();
   const record = {
     schemaVersion: ORCHESTRATION_TRACE_SCHEMA_VERSION,
     runId: trace.runId,
+    ...(trace.savedRunId ? { savedRunId: trace.savedRunId, segment: trace.segment } : {}),
     timestamp: new Date().toISOString(),
     iteration: payload.iteration,
     stateBefore: sanitizeTraceValue(payload.stateBefore, secretValues),

@@ -11,14 +11,15 @@ export type TaskPreparation = {
 
 export function taskPreparation(state: AgentState): TaskPreparation {
   const issue = parseGitHubIssue(state.task);
-  if (!issue) return { issue: 'not_linked', unreadInstructions: [], nextAction: null };
+  const resumedInstructions = state.evidence?.requiredInstructionFiles ?? [];
+  const unreadInstructions = REPOSITORY_INSTRUCTION_FILES.filter((file) =>
+    (resumedInstructions.includes(file) || (issue !== undefined && state.repo.topLevelFiles.includes(file))) && !state.filesRead.includes(file));
+  if (!issue) return { issue: 'not_linked', unreadInstructions, nextAction: unreadInstructions.length ? 'READ_FILE' : null };
 
   const issueRead = isIssueContext(state.evidence?.issue) && state.evidence.issue.url === issue.url;
   const failedReadIteration = state.evidence?.failures.find((failure) => failure.action === 'READ_ISSUE')?.iteration;
   const contextProvided = failedReadIteration !== undefined && Boolean(state.evidence?.clarifications.some((item) =>
     item.iteration > failedReadIteration && item.text.trim().length > 0));
-  const unreadInstructions = REPOSITORY_INSTRUCTION_FILES.filter((file) =>
-    state.repo.topLevelFiles.includes(file) && !state.filesRead.includes(file));
   let nextAction: TaskPreparation['nextAction'] = null;
   if (!issueRead && !contextProvided) nextAction = failedReadIteration === undefined ? 'READ_ISSUE' : 'ASK_USER';
   else if (unreadInstructions.length > 0) nextAction = 'READ_FILE';

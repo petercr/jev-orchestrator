@@ -113,7 +113,7 @@ export function applyPolicy(
     if (!clearRouting || requested === 'ASK_USER') {
       return {
         requested, selected: 'ASK_USER', override: requested !== 'ASK_USER',
-        reason: 'Linked-task context is still pending, but routing requires clarification before a preparatory read.',
+        reason: 'Task context is still pending, but routing requires clarification before a preparatory read.',
       };
     }
     return {
