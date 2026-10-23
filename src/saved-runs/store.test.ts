@@ -20,7 +20,7 @@ import {
 
 const roots: string[] = [];
 
-async function fixture(options: { workerSelection?: 'codex' | 'claude'; network?: boolean } = {}) {
+async function fixture(options: { workerSelection?: 'codex' | 'claude'; network?: boolean; iterationLimit?: number } = {}) {
   const parent = await mkdtemp(path.join(os.tmpdir(), 'jev-saved-run-'));
   roots.push(parent);
   const repositoryRoot = path.join(parent, 'project with spaces');
@@ -46,7 +46,7 @@ async function fixture(options: { workerSelection?: 'codex' | 'claude'; network?
   const store = await openSavedRunStore(storeRoot);
   const checkpoint = await store.create({
     runId: randomUUID(),
-    iterationLimit: 8,
+    iterationLimit: options.iterationLimit ?? 8,
     repository: identity,
     configuration,
     state,
@@ -79,6 +79,31 @@ describe('saved run contract', () => {
       mode: 'live', provider: 'typesafe', model: 'jev-latest', workerSelection: 'claude',
       codexNetworkAccess: true,
     })).toBe(false);
+  });
+
+  it('retains explicit Codex networking for mock evaluation runs', () => {
+    const configuration = createSavedRunConfiguration('mock', undefined, 'codex', true);
+    expect(configuration).toMatchObject({
+      mode: 'mock', provider: 'mock', model: 'mock', workerSelection: 'codex', codexNetworkAccess: true,
+    });
+    expect(isSavedRunConfiguration(configuration)).toBe(true);
+    expect(() => createSavedRunConfiguration('mock', undefined, 'claude', true)).toThrow();
+  });
+
+  it('records an exhausted final evaluation as an iteration limit', async () => {
+    const context = await fixture({ iterationLimit: 1 });
+    const id = context.checkpoint.runId;
+    const state = {
+      ...context.state,
+      currentGoal: 'Ask the user how to continue after the iteration limit.',
+      observations: ['Evaluation failed; iteration budget is exhausted.'],
+    };
+    await context.store.append(id, { type: 'iteration_reserved', iteration: 1 }, context.state);
+    await context.store.append(id, {
+      type: 'evaluation_failed', iteration: 1, code: 'invalid_response', stage: 'answers', category: 'shape',
+    }, { ...context.state, currentGoal: 'Evaluation failed; explicit continuation is required.' });
+    await context.store.append(id, { type: 'iteration_limit' }, state);
+    expect((await context.store.read(id)).checkpoint.status).toBe('iteration_limit');
   });
 
   it('selects user-owned state paths without consulting local value files', async () => {

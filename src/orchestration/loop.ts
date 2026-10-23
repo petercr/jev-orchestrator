@@ -1,4 +1,5 @@
 import { interruptible, throwIfInterrupted, RunInterruptedError, PromptStoppedError, type PromptStopReason, type ExecutionOptions } from '../cancellation.js';
+import { randomUUID } from 'node:crypto';
 import {
   appendOrchestrationTrace,
   createOrchestrationTrace,
@@ -32,6 +33,7 @@ import {
 } from './candidate.js';
 import { executeCandidate, type ToolResult } from './execute.js';
 import { createRunMetrics, executionTimingPhase, type RunCounts, type RunMetricsCollector, type RunSummary } from './summary.js';
+import type { SavedRunEventInput, SavedRunStatus } from '../saved-runs/types.js';
 
 export const MAX_ORCHESTRATION_ITERATIONS = 8;
 export const MAX_APPROVAL_ALTERNATIVES = 2;
@@ -68,6 +70,10 @@ export type OrchestrationResult = {
   summary: RunSummary;
   exitCode?: number;
   failure?: EvaluationFailure;
+  savedRunId?: string;
+  savedRunStatus?: SavedRunStatus;
+  savedRunStatusUnavailable?: true;
+  persistenceFailure?: string;
 };
 
 export type EvaluationRecoveryContext = {
@@ -91,7 +97,17 @@ export type OrchestrationOptions = {
   signal?: AbortSignal;
   initialPhase?: 'inspection';
   initialInspectionMs?: number;
+  persistence?: {
+    record: (event: SavedRunEventInput, state: AgentState) => Promise<unknown>;
+  };
 };
+
+class OrchestrationPersistenceFailure extends Error {
+  constructor(readonly eventType: SavedRunEventInput['type']) {
+    super('Saved run persistence failed.');
+    this.name = 'OrchestrationPersistenceFailure';
+  }
+}
 
 export function createInitialState(repo: RepoSnapshot, task: string, workerSelection?: WorkerSelection, codexNetworkAccess?: true): AgentState {
   return {
@@ -371,6 +387,7 @@ function applyToolResult(
   result: ToolResult,
   refreshedRepo?: RepoSnapshot,
   refreshFailed: boolean = false,
+  workerCallReserved: boolean = false,
 ): AgentState {
   const signature = proposalSignature(proposal, state);
   const observations = [...state.observations];
@@ -445,8 +462,10 @@ function applyToolResult(
   }
 
   if (isCodingAgentProposal(proposal)) {
-    if (proposal.action === 'CALL_CODEX') codexCalls += 1;
-    else claudeCalls += 1;
+    if (!workerCallReserved) {
+      if (proposal.action === 'CALL_CODEX') codexCalls += 1;
+      else claudeCalls += 1;
+    }
     if (!result.ok) {
       const summary = truncateText(result.output, MAX_OBSERVATION_LENGTH);
       commandsRun = [...state.commandsRun, {
@@ -623,6 +642,8 @@ export async function runOrchestration(
   const inspect = dependencies.inspect ?? inspectRepo;
   let state = initialState;
   let lastSummary = metrics.summary(state);
+  let segment = 1;
+  let evaluationFailurePending = false;
   let searchResults: string[] = [];
   let phase: InterruptionPhase = options.initialPhase ?? 'evaluation';
   let interruptedPhase: InterruptionPhase | undefined;
@@ -638,12 +659,26 @@ export async function runOrchestration(
   let interruptedWorkerRequest: unknown;
   let interruptedIteration = 0;
   const executionOptions: ExecutionOptions = options.signal ? { signal: options.signal } : {};
+  const record = async (event: SavedRunEventInput, nextState: AgentState): Promise<void> => {
+    if (!options.persistence) return;
+    try {
+      await options.persistence.record(structuredClone(event), structuredClone(nextState));
+    } catch {
+      throw new OrchestrationPersistenceFailure(event.type);
+    }
+  };
   const stop = async (reason: 'signal' | PromptStopReason = 'signal'): Promise<OrchestrationResult> => {
     state = {
       ...state,
       currentGoal: 'Run interrupted without claiming completion.',
       observations: [...state.observations, reason === 'signal' ? 'Run interrupted by a signal.' : `Run stopped: ${reason}.`],
     };
+    const resumable = interruptedIteration < maxIterations;
+    await record({
+      type: 'run_stopped',
+      reason: evaluationFailurePending ? 'evaluation_failure' : reason === 'signal' ? 'signal' : 'user',
+      resumable,
+    }, state);
     const summary = metrics.summary(state);
     await appendOrchestrationTrace(trace, {
       iteration: interruptedIteration,
@@ -665,10 +700,43 @@ export async function runOrchestration(
     return { status: 'stopped', state, tracePath: trace.path, iterations: interruptedIteration, summary,
       ...(reason === 'signal' ? {} : { exitCode: 1 }) };
   };
+  const persistenceFailureResult = async (error: OrchestrationPersistenceFailure): Promise<OrchestrationResult> => {
+    const summary = metrics.summary(state);
+    lastSummary = summary;
+    try {
+      await appendOrchestrationTrace(trace, {
+        iteration: interruptedIteration,
+        stateBefore,
+        evaluation,
+        policy,
+        proposal: interruptedProposal,
+        approval: interruptedApproval,
+        toolInput: interruptedInput,
+        toolResult: interruptedResult,
+        stateAfter: state,
+        persistenceFailure: error.eventType,
+        metrics: { timings: summary.timings, counts: summary.counts },
+        summary,
+        ...(interruptedWorkerRequest === undefined ? {} : { workerRequest: interruptedWorkerRequest }),
+      });
+    } catch {
+      // A local trace failure cannot make an uncertain saved record safe to continue.
+    }
+    return {
+      status: 'stopped',
+      state,
+      tracePath: trace.path,
+      iterations: interruptedIteration,
+      exitCode: 1,
+      summary,
+      persistenceFailure: error.eventType,
+    };
+  };
   try {
     throwIfInterrupted(options.signal);
 
     for (let iteration = 1; iteration <= maxIterations; iteration += 1) {
+      throwIfInterrupted(options.signal);
       state = { ...state, iteration };
       if (workerSelection === undefined) delete state.workerSelection;
       else state.workerSelection = workerSelection;
@@ -684,6 +752,8 @@ export async function runOrchestration(
       interruptedResult = null;
       interruptedWorkerRequest = undefined;
       phase = 'evaluation';
+      await record({ type: 'iteration_reserved', iteration }, state);
+      throwIfInterrupted(options.signal);
       try {
         evaluation = await metrics.measure('evaluationMs', () => interruptible(() => {
           metrics.counts.evaluations += 1;
@@ -699,6 +769,14 @@ export async function runOrchestration(
           currentGoal: 'Evaluation failed; explicit continuation is required.',
           observations: [...state.observations, `Evaluation failed: ${failure.code} at ${failure.stage}/${failure.category}.`],
         };
+        evaluationFailurePending = true;
+        await record({
+          type: 'evaluation_failed',
+          iteration,
+          code: failure.code,
+          stage: failure.stage,
+          category: failure.category,
+        }, state);
         const recoverEvaluation = dependencies.recoverEvaluation;
         const available = iteration < maxIterations && recoverEvaluation !== undefined;
         const failurePayload = {
@@ -723,6 +801,12 @@ export async function runOrchestration(
           currentGoal: 'Reassess preserved task evidence after explicit evaluation recovery.',
           observations: [...state.observations, 'User explicitly continued after evaluation failure; existing budgets and evidence are retained.'],
         };
+        const exhaustedAfterFailure = decision === 'stop' && iteration === maxIterations;
+        if (exhaustedAfterFailure) state = {
+          ...state,
+          observations: [...state.observations, `Stopped at the ${maxIterations}-iteration limit.`],
+          currentGoal: 'Ask the user how to continue after the iteration limit.',
+        };
         phase = 'trace';
         const summary = metrics.summary(state);
         await appendOrchestrationTrace(trace, {
@@ -731,13 +815,35 @@ export async function runOrchestration(
           ...(decision === 'stop' ? { summary } : {}),
         });
         throwIfInterrupted(options.signal);
-        if (decision === 'stop') return {
-          status: 'evaluation_failed', state, tracePath: trace.path, iterations: iteration, exitCode: 1, failure, summary,
-        };
+        if (decision === 'stop') {
+          if (exhaustedAfterFailure) {
+            lastSummary = summary;
+            await record({ type: 'iteration_limit' }, state);
+            evaluationFailurePending = false;
+            return {
+              status: 'iteration_limit', state, tracePath: trace.path, iterations: iteration,
+              exitCode: 1, failure, summary,
+            };
+          }
+          await record({ type: 'run_stopped', reason: 'evaluation_failure', resumable: true }, state);
+          evaluationFailurePending = false;
+          return {
+            status: 'evaluation_failed', state, tracePath: trace.path, iterations: iteration, exitCode: 1, failure, summary,
+          };
+        }
         // This failed evaluation consumes an iteration. No candidate from it
         // exists, and call counts, generations, and failure history stay intact.
+        await record({
+          type: 'run_resumed', segment: segment + 1, evaluationRecoveryApproved: true,
+        }, state);
+        segment += 1;
+        evaluationFailurePending = false;
+        throwIfInterrupted(options.signal);
         continue;
       }
+      throwIfInterrupted(options.signal);
+      evaluationFailurePending = false;
+      await record({ type: 'evaluation_completed', iteration }, state);
       throwIfInterrupted(options.signal);
       const evaluatedPolicy = applyPolicy(state, evaluation.assessment);
       policy = evaluatedPolicy;
@@ -801,6 +907,15 @@ export async function runOrchestration(
           };
           approval.decisions.push(decision);
         }
+      }
+      if (decision.kind === 'approve') {
+        await record({
+          type: 'action_approved',
+          iteration,
+          action: proposal.action,
+          decision: approval.decisions.some((item) => item.kind === 'alternative') ? 'alternative' : 'approve',
+        }, state);
+        throwIfInterrupted(options.signal);
       }
       let toolResult: ToolResult | null = null;
       if (codexNetworkAccess === undefined) delete state.codexNetworkAccess;
@@ -879,6 +994,24 @@ export async function runOrchestration(
         throwIfInterrupted(options.signal);
         interruptedInput = proposal.input;
         if (isCodingAgentProposal(proposal)) interruptedWorkerRequest = workerTraceRequest(proposal, stateBefore, decision);
+        const attemptId = options.persistence ? randomUUID() : undefined;
+        let executionState = state;
+        if (isCodingAgentProposal(proposal) && options.persistence) {
+          executionState = {
+            ...state,
+            ...(proposal.action === 'CALL_CODEX'
+              ? { codexCalls: state.codexCalls + 1 }
+              : { claudeCalls: state.claudeCalls + 1 }),
+          };
+        }
+        if (attemptId) {
+          state = executionState;
+          await record({ type: 'execution_reserved', iteration, attemptId, action: proposal.action }, executionState);
+          if (options.signal?.aborted) {
+            await record({ type: 'execution_outcome', attemptId, outcome: 'cancelled' }, executionState);
+            throwIfInterrupted(options.signal);
+          }
+        }
         metrics.recordExecution(proposal.action);
         toolResult = await metrics.measure(executionTimingPhase(proposal.action), () => safelyExecute(proposal, execute, executionOptions));
         interruptedResult = toolResult;
@@ -900,8 +1033,16 @@ export async function runOrchestration(
         }
         if (options.signal?.aborted) toolResult = { ...toolResult, ok: false, cancelled: true };
         metrics.recordResult(toolResult);
-        nextState = applyToolResult(state, proposal, toolResult, refreshedRepo, refreshFailed);
+        nextState = applyToolResult(state, proposal, toolResult, refreshedRepo, refreshFailed, Boolean(attemptId));
         interruptedResult = toolResult;
+        state = nextState;
+        if (attemptId) {
+          await record({
+            type: 'execution_outcome',
+            attemptId,
+            outcome: toolResult.cancelled ? 'cancelled' : toolResult.ok ? 'succeeded' : 'failed',
+          }, nextState);
+        }
       }
 
       if (options.signal?.aborted) {
@@ -915,6 +1056,18 @@ export async function runOrchestration(
           observations: [...nextState.observations, `Stopped at the ${maxIterations}-iteration limit.`],
           currentGoal: 'Ask the user how to continue after the iteration limit.',
         };
+      }
+
+      state = nextState;
+      if (proposal.action === 'ASK_USER' && decision.kind === 'approve') {
+        await record({ type: 'clarification_recorded', iteration }, nextState);
+      }
+      if (terminalStatus === 'finished') {
+        await record({ type: 'run_finished' }, nextState);
+      } else if (terminalStatus === 'stopped') {
+        await record({ type: 'run_stopped', reason: 'user', resumable: iteration < maxIterations }, nextState);
+      } else if (reachedLimit) {
+        await record({ type: 'iteration_limit' }, nextState);
       }
 
       phase = 'trace';
@@ -937,7 +1090,7 @@ export async function runOrchestration(
         } : {}),
       });
       state = nextState;
-      throwIfInterrupted(options.signal);
+      if (!options.persistence || (terminalStatus === undefined && !reachedLimit)) throwIfInterrupted(options.signal);
 
       if (terminalStatus !== undefined) {
         return {
@@ -960,8 +1113,23 @@ export async function runOrchestration(
       summary: lastSummary,
     };
   } catch (error) {
-    if (error instanceof RunInterruptedError || options.signal?.aborted) return await stop();
-    if (error instanceof PromptStoppedError) return await stop(error.reason);
+    if (error instanceof OrchestrationPersistenceFailure) return await persistenceFailureResult(error);
+    if (error instanceof RunInterruptedError || options.signal?.aborted) {
+      try {
+        return await stop();
+      } catch (stopError) {
+        if (stopError instanceof OrchestrationPersistenceFailure) return await persistenceFailureResult(stopError);
+        throw stopError;
+      }
+    }
+    if (error instanceof PromptStoppedError) {
+      try {
+        return await stop(error.reason);
+      } catch (stopError) {
+        if (stopError instanceof OrchestrationPersistenceFailure) return await persistenceFailureResult(stopError);
+        throw stopError;
+      }
+    }
     throw error;
   } finally {
     options.signal?.removeEventListener('abort', latchPhase);

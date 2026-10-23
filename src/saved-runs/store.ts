@@ -258,7 +258,8 @@ function validateEventSequence(events: SavedRunEvent[], checkpoint: SavedRunChec
         fail('invalid_record', 'Saved run completion history is invalid.');
       }
     } else if (data.type === 'iteration_limit') {
-      if (status !== 'active' || lastIteration !== checkpoint.iterationLimit || !noUnresolvedExecution(events.slice(0, event.sequence - 1))) {
+      if ((status !== 'active' && status !== 'evaluation_failed') || lastIteration !== checkpoint.iterationLimit ||
+          !noUnresolvedExecution(events.slice(0, event.sequence - 1))) {
         fail('invalid_record', 'Saved run budget history is invalid.');
       }
     }
@@ -708,7 +709,8 @@ export class SavedRunStore {
       if (['finished', 'iteration_limit', 'blocked'].includes(previous.status)) {
         fail('invalid_input', 'Saved run is terminal and cannot accept new events.');
       }
-      if (previous.status !== 'active' && eventData.type !== 'run_resumed' && eventData.type !== 'run_blocked' && eventData.type !== 'run_stopped') {
+      if (previous.status !== 'active' && eventData.type !== 'run_resumed' && eventData.type !== 'run_blocked' &&
+          eventData.type !== 'run_stopped' && !(previous.status === 'evaluation_failed' && eventData.type === 'iteration_limit')) {
         fail('invalid_input', 'Saved run must be explicitly resumed before recording more work.');
       }
       if (eventData.type === 'run_resumed') {

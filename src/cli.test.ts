@@ -195,6 +195,16 @@ describe('parseArgs', () => {
       },
     });
   });
+
+  it('accepts --save-run only for traced orchestration', () => {
+    expect(parseArgs(['/repo', 'Inspect', '--mock', '--orchestrate', '--save-run'])).toMatchObject({
+      kind: 'run', options: { mock: true, orchestrate: true, saveRun: true },
+    });
+    expect(() => parseArgs(['/repo', 'Inspect', '--save-run'])).toThrow(CliUsageError);
+    expect(() => parseArgs(['/repo', 'Inspect', '--orchestrate', '--save-run', '--json'])).toThrow(CliUsageError);
+    expect(() => parseArgs(['/repo', 'Inspect', '--orchestrate', '--save-run', '--no-trace'])).toThrow(CliUsageError);
+    expect(() => parseArgs(['/repo', 'Inspect', '--orchestrate', '--save-run', '--save-run'])).toThrow(CliUsageError);
+  });
 });
 
 describe('worker selection reporting', () => {

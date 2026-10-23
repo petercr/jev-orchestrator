@@ -242,7 +242,7 @@ describe('orchestration recovery and issue progress', () => {
     const approve = vi.fn();
     const execute = vi.fn();
     const outcome = await runOrchestration(initial, { evaluate, recoverEvaluation, approve, execute, askForInformation: async () => '' });
-    expect(outcome).toMatchObject({ status: 'evaluation_failed', iterations: 8, state: {
+    expect(outcome).toMatchObject({ status: 'iteration_limit', iterations: 8, exitCode: 1, state: {
       codexCalls: 2, claudeCalls: 2, failedApproaches: ['unchanged-failed-approach'],
     } });
     expect(evaluate).toHaveBeenCalledTimes(8);

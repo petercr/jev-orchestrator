@@ -166,13 +166,15 @@ export function createSavedRunConfiguration(
   codexNetworkAccess = false,
 ): SavedRunConfiguration {
   if (mode === 'mock') {
-    if (codexNetworkAccess) throw new Error('Mock saved runs cannot enable Codex networking.');
+    if (workerSelection === 'claude' && codexNetworkAccess) {
+      throw new Error('Codex networking cannot be enabled for a Claude-only run.');
+    }
     return {
       mode,
       provider: 'mock',
       model: 'mock',
       ...(workerSelection === undefined ? {} : { workerSelection }),
-      codexNetworkAccess: false,
+      codexNetworkAccess,
     };
   }
   if (!configuration) throw new Error('Live saved runs require a selected provider configuration.');
@@ -202,7 +204,7 @@ export function isSavedRunConfiguration(value: unknown): value is SavedRunConfig
       (value.cloudflareAccountFingerprint !== undefined && !HASH_PATTERN.test(String(value.cloudflareAccountFingerprint))) ||
       (value.provider === 'cloudflare' ? value.cloudflareAccountFingerprint === undefined : value.cloudflareAccountFingerprint !== undefined) ||
       (value.codexNetworkAccess && value.workerSelection === 'claude') ||
-      (value.mode === 'mock' && (value.provider !== 'mock' || value.model !== 'mock' || value.codexNetworkAccess)) ||
+      (value.mode === 'mock' && (value.provider !== 'mock' || value.model !== 'mock')) ||
       (value.mode === 'live' && value.provider === 'mock')) return false;
   if (value.mode === 'live') {
     try {
