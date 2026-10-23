@@ -57,6 +57,8 @@ context, or traces. Keep CLI explanation formatting read-only.
 - `src/orchestration/execute.ts`: constrained search, read, and validation tools.
 - `src/orchestration/loop.ts`: approval, iteration bounds, state transitions, and loop traces.
 - `src/orchestration/summary.ts`: local phase timing, attempt counters, and run summaries.
+- `src/saved-runs/contract.ts`: versioned saved-run schema, strict state/configuration checks, and repository identity.
+- `src/saved-runs/store.ts`: bounded local checkpoint/event store, integrity checks, and process ownership locks; not an execution authority.
 - `src/agents/context.ts`: bounded evidence for approved worker requests.
 - `src/agents/claude-tools.ts`: private bounded stdio rename tool for Claude.
 - `src/agents/rename.ts`: deterministic repository file-rename constraints.

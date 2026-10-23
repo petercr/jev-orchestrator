@@ -403,9 +403,10 @@ dependency decision are recorded below.
 
 Originally drafted on 2026-10-17. Refined on 2026-10-22 after publication of
 v0.5.0 and merge of its publication record in
-[PR #64](https://github.com/petercr/jev-orchestrator/pull/64). This is the
-proposed v0.6 scope, ready for review. Implementation has not started; the
-published CLI has none of the saved-run options below.
+[PR #64](https://github.com/petercr/jev-orchestrator/pull/64). The v0.6 scope
+is approved for implementation. PR 1 is adding the storage contract and
+failure-tested local store; the published CLI still has none of the saved-run
+options below.
 
 **Release outcome:** an operator can stop an opted-in task, close the terminal,
 inspect its history, and continue it in a new CLI process without losing its
@@ -580,14 +581,22 @@ Each PR has a reviewable result and focused tests. Add the contract and failure
 fixtures before wiring saved data into execution; use the current small typed
 modules rather than introducing a workflow framework.
 
-1. [ ] **Saved-run contract and storage foundation.** Define schema version 1,
+1. [x] **Saved-run contract and storage foundation.** Define schema version 1,
    field bounds, lifecycle/stop reasons, ledger ordering, repository identity,
    configuration/credential continuity, integrity, and ownership. Implement the
    bounded store and offline fixtures without an executable resume route.
    Demonstrate clean read/write, malformed/incompatible input rejection,
    altered counters/permissions, stale snapshots, partial writes, and lock
-   contention. Record POSIX/Windows guarantees and limits. This is the next
-   implementation task; unresolved durability or identity decisions block PR 2.
+   contention. Record POSIX/Windows guarantees and limits. Delivered in the
+   [saved-run v1 storage contract](docs/saved-runs-v1.md), with 17 focused
+   tests. POSIX permissions, file flushes, atomic checkpoint replacement,
+   rejected partial writes, event/checkpoint integrity, stale approvals, and
+   lock ownership are covered. Windows inherits parent ACLs and skips directory
+   flush; native Windows verification remains in PR 5. Provider/model identity
+   is frozen, Cloudflare account identity is fingerprinted, and other provider
+   credential continuity is explicitly unverifiable; resume must disclose that
+   and require an operator decision. No CLI or executable resume route is part
+   of this PR.
 2. [ ] **Opt-in saving throughout the loop.** Add `--save-run`, create the run
    before its first evaluation, and persist reservations and outcomes at the
    established boundaries. Integrate worktree ownership for saved and unsaved

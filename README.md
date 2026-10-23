@@ -1028,9 +1028,12 @@ opt-in saved runs, local history, and continuation after a clean stop on the
 same machine and Git worktree. It preserves remaining budgets and requires
 fresh validation and action approvals. Six proposed PRs cover the storage
 contract, saving, history, resume, failure/platform verification, and a live
-pilot before release. Saved records would be separate from diagnostic traces;
-unresolved execution after a crash would block continuation. Implementation
-has not started, and these options are unavailable in the published CLI.
+pilot before release. Saved records remain separate from diagnostic traces;
+unresolved execution after a crash will block continuation. PR 1 is adding the
+versioned storage contract and local integrity-checked store, without CLI
+options or executable resume. The complete contract and current Windows limits
+are documented in [saved-run storage contract v1](docs/saved-runs-v1.md); the
+planned options remain unavailable in the published CLI.
 
 ## v0.3 decision-model release
 
