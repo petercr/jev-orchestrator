@@ -2,6 +2,7 @@
 import type { ExecutionOptions } from './cancellation.js';
 import { throwIfInterrupted } from './cancellation.js';
 import { readFile } from 'node:fs/promises';
+import { randomUUID } from 'node:crypto';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { createEvaluator } from './ai/evaluate.js';
@@ -25,7 +26,10 @@ import {
 } from './orchestration/loop.js';
 import { applyPolicy } from './policy.js';
 import type { RunSummary } from './orchestration/summary.js';
-import { inspectRepo } from './repo/inspect.js';
+import { inspectGitIdentity, inspectRepo } from './repo/inspect.js';
+import { createSavedRunConfiguration, createSavedRunRepository } from './saved-runs/contract.js';
+import { openSavedRunStore } from './saved-runs/store.js';
+import type { SavedRunEventInput, SavedRunOwnership, SavedRunStatus } from './saved-runs/types.js';
 import type {
   Action,
   AgentAssessment,
@@ -50,6 +54,7 @@ export type CliOptions = {
   noTrace: boolean;
   json: boolean;
   orchestrate: boolean;
+  saveRun?: true;
   workerSelection?: WorkerSelection;
   codexNetworkAccess?: true;
   plain?: true;
@@ -94,13 +99,14 @@ export class CliUsageError extends Error {
 }
 
 export function usage(): string {
-  return `dev-agent <repo-path> <task> [--mock] [--no-trace] [--json] [--orchestrate] [--worker codex|claude] [--codex-network] [--plain]
+  return `dev-agent <repo-path> <task> [--mock] [--no-trace] [--json] [--orchestrate] [--save-run] [--worker codex|claude] [--codex-network] [--plain]
 
 Options:
   --mock       Use the offline deterministic evaluation.
   --no-trace   Do not write a JSONL trace.
   --json       Write one machine-readable decision to stdout.
   --orchestrate  Enter the bounded, manually approved execution loop.
+  --save-run     Persist the bounded orchestration state and event history.
   --worker     Restrict coding work to codex or claude; otherwise the evaluator may choose either.
   --codex-network  Allow Codex command networking, including local sockets; keep its file sandbox.
   --plain      Use static plain orchestration output (also used for pipes, CI, NO_COLOR, or TERM=dumb).
@@ -154,6 +160,7 @@ export function parseArgs(argv: string[]): CliCommand {
   let noTrace = false;
   let json = false;
   let orchestrate = false;
+  let saveRun: true | undefined;
   let workerSelection: WorkerSelection | undefined;
   let codexNetworkAccess: true | undefined;
   let plain: true | undefined;
@@ -194,6 +201,10 @@ export function parseArgs(argv: string[]): CliCommand {
       case '--orchestrate':
         orchestrate = true;
         break;
+      case '--save-run':
+        if (saveRun) throw usageError('--save-run can only be specified once.');
+        saveRun = true;
+        break;
       case '--plain':
         plain = true;
         break;
@@ -227,7 +238,7 @@ export function parseArgs(argv: string[]): CliCommand {
     if (showHelp && showVersion) {
       throw usageError('Use either --help or --version, not both.');
     }
-    if (mock || noTrace || json || orchestrate || plain || workerSelection !== undefined || codexNetworkAccess !== undefined || positional.length > 0) {
+    if (mock || noTrace || json || orchestrate || saveRun || plain || workerSelection !== undefined || codexNetworkAccess !== undefined || positional.length > 0) {
       throw usageError('--help and --version cannot be combined with a decision request.');
     }
     return showHelp ? { kind: 'help' } : { kind: 'version' };
@@ -245,6 +256,9 @@ export function parseArgs(argv: string[]): CliCommand {
   if (orchestrate && noTrace) {
     throw usageError('--orchestrate requires its per-iteration safety trace.');
   }
+  if (saveRun && !orchestrate) {
+    throw usageError('--save-run requires --orchestrate.');
+  }
   if (codexNetworkAccess && workerSelection === 'claude') {
     throw usageError('--codex-network cannot be combined with --worker claude.');
   }
@@ -252,6 +266,7 @@ export function parseArgs(argv: string[]): CliCommand {
     kind: 'run',
     options: {
       repoPath, task, mock, noTrace, json, orchestrate,
+      ...(saveRun === undefined ? {} : { saveRun }),
       ...(workerSelection === undefined ? {} : { workerSelection }),
       ...(codexNetworkAccess === undefined ? {} : { codexNetworkAccess }),
       ...(plain === undefined ? {} : { plain }),
@@ -414,27 +429,64 @@ export async function runCliOrchestration(options: CliOptions): Promise<Orchestr
   process.on('SIGINT', sigint);
   process.on('SIGTERM', sigterm);
   let terminal: CliTerminal | undefined;
+  let worktreeOwnership: SavedRunOwnership | undefined;
+  let runOwnership: SavedRunOwnership | undefined;
+  let savedRunId: string | undefined;
+  let savedRunStore: Awaited<ReturnType<typeof openSavedRunStore>> | undefined;
   const executionOptions = { signal: controller.signal };
   try {
+    savedRunStore = await openSavedRunStore();
+    worktreeOwnership = await savedRunStore.acquireWorktreeOwnership(options.repoPath);
+    const savedEvaluationConfiguration = options.saveRun && !options.mock
+      ? resolveEvaluationConfiguration()
+      : undefined;
     // Inspection is read-only and already bounded. Drain it before returning;
     // an initial interruption never enters evaluation or approval.
     const inspectionStartedAt = performance.now();
-    const repo = await inspectRepo(options.repoPath);
+    let repo = await inspectRepo(options.repoPath);
+    let savedRepository: Awaited<ReturnType<typeof createSavedRunRepository>> | undefined;
+    if (options.saveRun) {
+      const identity = await inspectGitIdentity(repo.root);
+      if (identity.root !== repo.root) repo = await inspectRepo(identity.root);
+      savedRepository = await createSavedRunRepository(identity.root, identity.gitCommonDirectory, identity.head);
+    }
     const initialInspectionMs = performance.now() - inspectionStartedAt;
     const state = createInitialState(repo, options.task, options.workerSelection, options.codexNetworkAccess);
-    const configuration = options.mock || controller.signal.aborted ? undefined : resolveEvaluationConfiguration();
+    const configuration = options.mock
+      ? undefined
+      : controller.signal.aborted && !options.saveRun
+        ? undefined
+        : savedEvaluationConfiguration ?? resolveEvaluationConfiguration();
     const evaluate = configuration ? createEvaluator(configuration) : mockEvaluation;
     terminal = await createTerminal({
       ...(options.plain ? { plain: true } : {}), interrupt: sigint,
       writeLine: (line) => console.log(line),
     });
     const prompts = terminal;
+    if (options.saveRun && savedRepository) {
+      const runId = randomUUID();
+      runOwnership = await savedRunStore.acquireRunOwnership(runId);
+      await savedRunStore.create({
+        runId,
+        iterationLimit: 8,
+        repository: savedRepository,
+        configuration: createSavedRunConfiguration(
+          options.mock ? 'mock' : 'live',
+          configuration,
+          options.workerSelection,
+          options.codexNetworkAccess === true,
+        ),
+        state,
+      });
+      savedRunId = runId;
+    }
 
     const oneLine = (value: string): string => terminalText(value).replace(/\s+/gu, ' ').trim();
     prompts.header('Dev Orchestrator — approval-gated orchestration', [
       `Repo: ${oneLine(repo.root)}`, `Task: ${oneLine(options.task)}`,
       `Mode: ${options.mock ? 'mock' : `live (${configuration?.provider ?? 'interrupted'})`}`,
       ...(configuration ? [`Provider: ${configuration.provider}`, `Requested model: ${oneLine(configuration.model)}`] : []),
+      ...(savedRunId ? [`Saved run: ${savedRunId} (active)`] : []),
       `Worker selection: ${options.workerSelection ?? 'Codex or Claude'}`,
       ...(options.codexNetworkAccess ? ['Codex command network: enabled; workspace file sandbox retained.'] : []),
       'No repository action runs without approval.',
@@ -451,12 +503,45 @@ export async function runCliOrchestration(options: CliOptions): Promise<Orchestr
       signal: controller.signal,
       initialInspectionMs,
       ...(controller.signal.aborted ? { initialPhase: 'inspection' as const } : {}),
+      ...(savedRunId ? {
+        persistence: {
+          record: (event: SavedRunEventInput, currentState: AgentState) =>
+            savedRunStore!.append(savedRunId!, event, currentState),
+        },
+      } : {}),
     });
-    return { ...result, ...(exitCode === undefined ? {} : { exitCode }) };
+    let savedRunStatus: SavedRunStatus | undefined;
+    let savedRunStatusUnavailable: true | undefined;
+    if (savedRunId) {
+      try {
+        savedRunStatus = (await savedRunStore.read(savedRunId)).checkpoint.status;
+      } catch {
+        // A failed append can leave the checkpoint and ledger inconsistent.
+        savedRunStatusUnavailable = true;
+      }
+    }
+    const resultExitCode = exitCode ?? (
+      savedRunStatusUnavailable && result.exitCode === undefined ? EXIT_CODES.operationalError : result.exitCode
+    );
+    return {
+      ...result,
+      ...(savedRunId === undefined ? {} : { savedRunId }),
+      ...(savedRunStatus === undefined ? {} : { savedRunStatus }),
+      ...(savedRunStatusUnavailable === undefined ? {} : { savedRunStatusUnavailable }),
+      ...(resultExitCode === undefined ? {} : { exitCode: resultExitCode }),
+    };
   } finally {
-    terminal?.dispose();
-    process.removeListener('SIGINT', sigint);
-    process.removeListener('SIGTERM', sigterm);
+    try {
+      terminal?.dispose();
+    } finally {
+      process.removeListener('SIGINT', sigint);
+      process.removeListener('SIGTERM', sigterm);
+      try {
+        await runOwnership?.release();
+      } finally {
+        await worktreeOwnership?.release();
+      }
+    }
   }
 }
 
@@ -584,6 +669,14 @@ export async function main(argv: string[] = process.argv.slice(2)): Promise<void
     const view = await createPresentation({ ...(command.options.plain ? { plain: true } : {}), writeLine: (line) => console.log(line) });
     const outcome = [
       `\nLoop status: ${result.status}`, `Iterations: ${result.iterations}`,
+      ...(result.savedRunId ? [
+        `Saved run: ${result.savedRunId} (${result.persistenceFailure
+          ? `persistence failed at ${result.persistenceFailure}; status requires inspection`
+          : result.savedRunStatusUnavailable ? 'status unavailable; inspect the record' : result.savedRunStatus ?? result.status})`,
+      ] : []),
+      ...(result.persistenceFailure ? [
+        'The run stopped after a saved-state write failed; no later evaluation or execution was started.',
+      ] : []),
       `Trace: ${redactSensitiveText(path.relative(process.cwd(), result.tracePath))}`,
       ...(result.failure ? [`Failure: ${formatEvaluationFailure(result.failure)}.`] : []),
       ...(result.status === 'iteration_limit' ? ['Task completion was not approved before the iteration limit; edits and evidence are preserved. Exit code: 1.'] : []),

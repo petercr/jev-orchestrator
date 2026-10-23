@@ -66,6 +66,7 @@ export type OrchestrationTracePayload = {
   toolResult: unknown;
   stateAfter: AgentState;
   workerRequest?: unknown;
+  persistenceFailure?: string;
   failure?: EvaluationFailure;
   recovery?: { available: boolean; decision?: 'continue' | 'stop' };
   metrics?: RunMetrics;

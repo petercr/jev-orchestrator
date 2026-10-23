@@ -1023,17 +1023,25 @@ and installed CLIs on POSIX PTYs and native Windows ConPTY without live calls.
 The [verification record](docs/presentation/v0.5-verification.md) documents
 the completed matrix, the Windows EOF correction, and the scope limits.
 
-The [v0.6 release plan](PLAN.md#v06-draft-saved-runs-and-safe-resume) proposes
+The [v0.6 release plan](PLAN.md#v06-draft-saved-runs-and-safe-resume) adds
 opt-in saved runs, local history, and continuation after a clean stop on the
-same machine and Git worktree. It preserves remaining budgets and requires
-fresh validation and action approvals. Six proposed PRs cover the storage
-contract, saving, history, resume, failure/platform verification, and a live
-pilot before release. Saved records remain separate from diagnostic traces;
-unresolved execution after a crash will block continuation. PR 1 is adding the
-versioned storage contract and local integrity-checked store, without CLI
-options or executable resume. The complete contract and current Windows limits
-are documented in [saved-run storage contract v1](docs/saved-runs-v1.md); the
-planned options remain unavailable in the published CLI.
+same machine and Git worktree. In this source checkout, `--save-run` connects
+the bounded store to the orchestration loop; history and restart continuation
+are still planned. Try it with:
+
+```bash
+pnpm dev -- . "Inspect this repo and choose the safest useful first action" --mock --orchestrate --save-run
+```
+
+Saving requires a Git worktree with a committed HEAD. The CLI prints the run
+ID and final status. Store and worktree ownership conflicts stop before
+inspection, evaluation, or execution. Worktree locking also applies to
+unsaved orchestration; those runs still do not persist task state. Saved
+records remain separate from diagnostic traces, and an unresolved execution
+or storage failure cannot be treated as a clean continuation point. The
+published `0.5.0` CLI does not include this in-progress v0.6 feature. The
+versioned format, local integrity checks, and current Windows limits are
+documented in [saved-run storage contract v1](docs/saved-runs-v1.md).
 
 ## v0.3 decision-model release
 

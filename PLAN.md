@@ -403,10 +403,11 @@ dependency decision are recorded below.
 
 Originally drafted on 2026-10-17. Refined on 2026-10-22 after publication of
 v0.5.0 and merge of its publication record in
-[PR #64](https://github.com/petercr/jev-orchestrator/pull/64). The v0.6 scope
-is approved for implementation. PR 1 is adding the storage contract and
-failure-tested local store; the published CLI still has none of the saved-run
-options below.
+[PR #64](https://github.com/petercr/jev-orchestrator/pull/64). PR 1's storage
+contract merged in [PR #66](https://github.com/petercr/jev-orchestrator/pull/66)
+at `d102eec`. The v0.6 scope is approved for implementation. PR 2 now connects
+that store to the orchestration loop; this work remains unpublished until the
+v0.6 release.
 
 **Release outcome:** an operator can stop an opted-in task, close the terminal,
 inspect its history, and continue it in a new CLI process without losing its
@@ -601,10 +602,10 @@ modules rather than introducing a workflow framework.
    before its first evaluation, and persist reservations and outcomes at the
    established boundaries. Integrate worktree ownership for saved and unsaved
    runs. Preserve signal cleanup, prompts, trace writes, unsaved task behavior,
-   and existing exit codes; document ownership conflicts. Print the saved
-   ID/status. Inject failures before and after evaluation, approval, dispatch,
-   outcome, and clean stop;
-   assert no unrecorded execution, double charge, or false resumable status.
+   and existing exit codes; document ownership conflicts. Print the saved ID/status.
+   Inject failures before and after evaluation, approval, dispatch, outcome,
+   and clean stop; assert no unrecorded execution, double charge, or false
+   resumable status.
 3. [ ] **Local run history.** Add `--list-runs` and `--show-run` with bounded
    listing and a way to inspect an older known ID. Display status, task/repo,
    budgets, selections, pending validation, last failure, and precise blockers.

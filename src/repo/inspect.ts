@@ -1,4 +1,4 @@
-import { lstat, open, opendir, stat } from 'node:fs/promises';
+import { lstat, open, opendir, realpath, stat } from 'node:fs/promises';
 import path from 'node:path';
 import { spawn } from 'node:child_process';
 import type { RepoSnapshot } from '../types.js';
@@ -166,6 +166,46 @@ async function inspectGit(root: string): Promise<Pick<RepoSnapshot, 'gitBranch' 
         .slice(0, MAX_GIT_STATUS_ENTRIES)
         .map((line) => truncateText(line, MAX_GIT_LINE_LENGTH))
       : [],
+  };
+}
+
+export async function inspectGitIdentity(root: string): Promise<{
+  root: string;
+  gitCommonDirectory: string;
+  head: string;
+}> {
+  let canonicalRoot: string;
+  try {
+    canonicalRoot = await realpath(root);
+  } catch {
+    throw new Error('Saved runs require an available Git worktree.');
+  }
+  const [gitRoot, gitCommonDirectory, head] = await Promise.all([
+    git(canonicalRoot, ['rev-parse', '--show-toplevel']),
+    git(canonicalRoot, ['rev-parse', '--git-common-dir']),
+    git(canonicalRoot, ['rev-parse', '--verify', 'HEAD^{commit}']),
+  ]);
+  if (!gitRoot || !gitCommonDirectory || !/^[a-f0-9]{40}(?:[a-f0-9]{24})?$/iu.test(head)) {
+    throw new Error('Saved runs require a Git worktree with a committed HEAD.');
+  }
+  const reportedGitCommonDirectory = path.resolve(canonicalRoot, gitCommonDirectory);
+  let canonicalGitRoot: string;
+  let canonicalGitCommonDirectory: string;
+  try {
+    [canonicalGitRoot, canonicalGitCommonDirectory] = await Promise.all([
+      realpath(gitRoot), realpath(reportedGitCommonDirectory),
+    ]);
+  } catch {
+    throw new Error('Saved run Git identity is unavailable.');
+  }
+  const pathIdentity = (value: string): string => process.platform === 'win32' ? value.toLowerCase() : value;
+  if (pathIdentity(canonicalGitRoot) !== pathIdentity(canonicalRoot)) {
+    throw new Error('Saved run path does not resolve to the selected Git worktree.');
+  }
+  return {
+    root: canonicalRoot,
+    gitCommonDirectory: canonicalGitCommonDirectory,
+    head: head.toLowerCase(),
   };
 }
 

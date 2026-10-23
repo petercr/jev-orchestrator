@@ -8,6 +8,7 @@ import type { AgentAssessment, EvaluationResult, RepoSnapshot } from '../types.j
 import { createInitialState, runOrchestration, type ApprovalDecision } from './loop.js';
 import { MAX_CLAUDE_CALLS, MAX_CODEX_CALLS } from './candidate.js';
 import type { ToolResult } from './execute.js';
+import type { SavedRunEventInput } from '../saved-runs/types.js';
 
 const roots: string[] = [];
 
@@ -75,6 +76,117 @@ afterEach(async () => {
 });
 
 describe('approval-gated orchestration loop', () => {
+  it('persists approval and execution boundaries while reserving a worker call before dispatch', async () => {
+    const repo = await repository();
+    const initial = createInitialState(repo, 'Implement fixture authentication', 'codex', true);
+    const records: Array<{ event: SavedRunEventInput; state: typeof initial }> = [];
+    const execute = vi.fn().mockResolvedValue({
+      action: 'CALL_CODEX', ok: true, exitCode: 0, durationMs: 1, timedOut: false,
+      output: 'Implemented fixture authentication.', files: [], stdout: '', stderr: '',
+    } satisfies ToolResult);
+
+    const result = await runOrchestration(initial, {
+      evaluate: async () => clearAssessment('CALL_CODEX'),
+      approve,
+      askForInformation: async () => '',
+      execute,
+      inspect: async () => repo,
+    }, {
+      maxIterations: 1,
+      persistence: { record: async (event, state) => { records.push({ event, state }); } },
+    });
+
+    expect(records.map(({ event }) => event.type)).toEqual([
+      'iteration_reserved', 'evaluation_completed', 'action_approved',
+      'execution_reserved', 'execution_outcome', 'iteration_limit',
+    ]);
+    expect(records.find(({ event }) => event.type === 'execution_reserved')?.state)
+      .toMatchObject({ codexCalls: 1, codexNetworkAccess: true });
+    expect(records.find(({ event }) => event.type === 'execution_outcome')?.state.codexCalls).toBe(1);
+    expect(result).toMatchObject({ status: 'iteration_limit', state: { codexCalls: 1 } });
+    expect(execute).toHaveBeenCalledOnce();
+  });
+
+  it('stops before evaluation when the first saved boundary cannot be written', async () => {
+    const repo = await repository();
+    const evaluate = vi.fn(async () => clearAssessment('SEARCH_REPO'));
+    const execute = vi.fn();
+    const result = await runOrchestration(createInitialState(repo, 'Inspect fixture auth'), {
+      evaluate, approve, askForInformation: async () => '', execute,
+    }, {
+      persistence: { record: async (event) => {
+        if (event.type === 'iteration_reserved') throw new Error('disk failure');
+      } },
+    });
+
+    expect(result).toMatchObject({ status: 'stopped', exitCode: 1, persistenceFailure: 'iteration_reserved' });
+    expect(evaluate).not.toHaveBeenCalled();
+    expect(execute).not.toHaveBeenCalled();
+  });
+
+  it.each(['evaluation_completed', 'action_approved', 'execution_reserved'] as const)(
+    'halts at the %s boundary before any later work when persistence fails',
+    async (failedEvent) => {
+      const repo = await repository();
+      const evaluate = vi.fn(async () => clearAssessment('SEARCH_REPO'));
+      const approveSpy = vi.fn(async (): Promise<ApprovalDecision> => ({ kind: 'approve' }));
+      const execute = vi.fn().mockResolvedValue({
+        action: 'SEARCH_REPO', ok: true, exitCode: 0, durationMs: 1, timedOut: false,
+        output: 'README.md', files: ['README.md'],
+      } satisfies ToolResult);
+      const result = await runOrchestration(createInitialState(repo, 'Inspect fixture auth'), {
+        evaluate, approve: approveSpy, askForInformation: async () => '', execute,
+      }, {
+        persistence: { record: async (event) => {
+          if (event.type === failedEvent) throw new Error('disk failure');
+        } },
+      });
+
+      expect(result).toMatchObject({ status: 'stopped', exitCode: 1, persistenceFailure: failedEvent });
+      expect(evaluate).toHaveBeenCalledTimes(1);
+      expect(approveSpy).toHaveBeenCalledTimes(failedEvent === 'evaluation_completed' ? 0 : 1);
+      expect(execute).not.toHaveBeenCalled();
+    },
+  );
+
+  it('does not reevaluate after an execution outcome cannot be persisted', async () => {
+    const repo = await repository();
+    const evaluate = vi.fn(async () => clearAssessment('SEARCH_REPO'));
+    const execute = vi.fn().mockResolvedValue({
+      action: 'SEARCH_REPO', ok: true, exitCode: 0, durationMs: 1, timedOut: false,
+      output: 'README.md', files: ['README.md'],
+    } satisfies ToolResult);
+    const result = await runOrchestration(createInitialState(repo, 'Inspect fixture auth'), {
+      evaluate, approve, askForInformation: async () => '', execute,
+    }, {
+      maxIterations: 2,
+      persistence: { record: async (event) => {
+        if (event.type === 'execution_outcome') throw new Error('disk failure');
+      } },
+    });
+
+    expect(result).toMatchObject({ status: 'stopped', exitCode: 1, persistenceFailure: 'execution_outcome' });
+    expect(evaluate).toHaveBeenCalledOnce();
+    expect(execute).toHaveBeenCalledOnce();
+    expect(result.state.observations).toContain('Search completed: README.md');
+  });
+
+  it('does not claim a clean stop when its terminal event cannot be written', async () => {
+    const repo = await repository();
+    const result = await runOrchestration(createInitialState(repo, 'Inspect fixture auth'), {
+      evaluate: async () => clearAssessment('SEARCH_REPO'),
+      approve: async () => ({ kind: 'stop' }),
+      askForInformation: async () => '',
+      execute: vi.fn(),
+    }, {
+      persistence: { record: async (event) => {
+        if (event.type === 'run_stopped') throw new Error('disk failure');
+      } },
+    });
+
+    expect(result).toMatchObject({ status: 'stopped', exitCode: 1, persistenceFailure: 'run_stopped' });
+  });
+
   it('executes an approved search, read, validation, and finish sequence', async () => {
     const repo = await repository();
     const execute = vi.fn().mockImplementation(async (proposal): Promise<ToolResult> => {

@@ -1,5 +1,6 @@
 import { EventEmitter } from 'node:events';
-import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { mkdtemp, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
+import { execFileSync } from 'node:child_process';
 import os from 'node:os';
 import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -10,6 +11,7 @@ import { JevEvaluationError } from './ai/errors.js';
 import { mockEvaluation } from './mock.js';
 import { ACTIONS } from './types.js';
 import { formatRunSummary, main, runCliOrchestration, runDecision, type CliOptions } from './cli.js';
+import { openSavedRunStore } from './saved-runs/store.js';
 
 vi.mock('node:readline/promises', () => ({ createInterface: vi.fn() }));
 
@@ -42,13 +44,77 @@ afterEach(async () => {
 });
 
 async function options(): Promise<CliOptions> {
-  const root = await mkdtemp(path.join(os.tmpdir(), 'jev-cli-stop-'));
-  roots.push(root);
+  const parent = await mkdtemp(path.join(os.tmpdir(), 'jev-cli-stop-'));
+  roots.push(parent);
+  const root = path.join(parent, 'project');
+  await mkdir(root);
+  vi.stubEnv('XDG_STATE_HOME', path.join(parent, 'state'));
   await writeFile(path.join(root, 'README.md'), 'fixture');
   return { repoPath: root, task: 'Inspect fixture', mock: true, json: false, noTrace: false, orchestrate: true };
 }
 
 describe('CLI interruption lifecycle', () => {
+  it('persists an approved run, prints its ID, and releases both ownership locks', async () => {
+    const opts = await options();
+    execFileSync('git', ['init', '--quiet'], { cwd: opts.repoPath, stdio: 'ignore' });
+    execFileSync('git', ['-c', 'user.name=Fixture', '-c', 'user.email=fixture@example.invalid',
+      'commit', '--allow-empty', '-m', 'fixture'], { cwd: opts.repoPath, stdio: 'ignore' });
+    terminal.question.mockResolvedValueOnce('approve').mockResolvedValueOnce('stop');
+    await main([opts.repoPath, opts.task, '--mock', '--orchestrate', '--save-run', '--worker', 'codex', '--codex-network']);
+    const output = vi.mocked(console.log).mock.calls.flat().join('\n');
+    const runId = output.match(/Saved run: ([a-f0-9-]{36}) \(stopped\)/u)?.[1];
+    expect(runId).toBeDefined();
+    const stateHome = process.env.XDG_STATE_HOME ?? '';
+    const store = await openSavedRunStore(path.join(stateHome, 'dev-orchestrator', 'saved-runs'));
+    const saved = await store.read(runId!);
+    expect(saved.checkpoint).toMatchObject({
+      status: 'stopped',
+      configuration: { mode: 'mock', workerSelection: 'codex', codexNetworkAccess: true },
+    });
+    expect(saved.events.map((event) => event.type)).toEqual([
+      'run_created', 'iteration_reserved', 'evaluation_completed', 'action_approved',
+      'execution_reserved', 'execution_outcome', 'iteration_reserved', 'evaluation_completed', 'run_stopped',
+    ]);
+
+    const runOwnership = await store.acquireRunOwnership(runId!);
+    await runOwnership.release();
+    const ownership = await store.acquireWorktreeOwnership(opts.repoPath);
+    await ownership.release();
+  });
+
+  it('takes the worktree lock before inspecting an unsaved orchestration run', async () => {
+    const opts = await options();
+    const stateHome = process.env.XDG_STATE_HOME ?? '';
+    const store = await openSavedRunStore(path.join(stateHome, 'dev-orchestrator', 'saved-runs'));
+    const ownership = await store.acquireWorktreeOwnership(opts.repoPath);
+    const inspect = vi.spyOn(inspection, 'inspectRepo');
+    try {
+      await expect(runCliOrchestration(opts)).rejects.toMatchObject({ code: 'busy' });
+      expect(inspect).not.toHaveBeenCalled();
+    } finally {
+      await ownership.release();
+    }
+  });
+
+  it('records a signal stop without persisting an approval or dispatch', async () => {
+    const opts = await options();
+    execFileSync('git', ['init', '--quiet'], { cwd: opts.repoPath, stdio: 'ignore' });
+    execFileSync('git', ['-c', 'user.name=Fixture', '-c', 'user.email=fixture@example.invalid',
+      'commit', '--allow-empty', '-m', 'fixture'], { cwd: opts.repoPath, stdio: 'ignore' });
+    terminal.onQuestion = () => { process.emit('SIGTERM'); };
+
+    const result = await runCliOrchestration({ ...opts, saveRun: true });
+
+    expect(result).toMatchObject({ status: 'stopped', exitCode: 143, savedRunStatus: 'stopped' });
+    const stateHome = process.env.XDG_STATE_HOME ?? '';
+    const store = await openSavedRunStore(path.join(stateHome, 'dev-orchestrator', 'saved-runs'));
+    const saved = await store.read(result.savedRunId!);
+    expect(saved.events.map((event) => event.type)).toEqual([
+      'run_created', 'iteration_reserved', 'evaluation_completed', 'run_stopped',
+    ]);
+    expect(saved.events.some((event) => event.type === 'action_approved' || event.type === 'execution_reserved')).toBe(false);
+  });
+
   it('includes initial inspection and prints the stopped-run performance summary', async () => {
     const opts = await options();
     let now = 0;
