@@ -1,0 +1,34 @@
+{
+  "cli_version": "0.11.6-nightly.202610170622.9254299eb",
+  "checkpoint_id": "01M5P0KBJF3FMXEKZR24GVTXC5",
+  "session_id": "01a155d6-cabb-7712-be8d-5efffd522a09",
+  "strategy": "manual-commit",
+  "created_at": "2026-10-24T03:52:33.852510052Z",
+  "branch": "release/v0.6-live-pilot",
+  "checkpoints_count": 1,
+  "files_touched": [
+    "CHANGELOG.md",
+    "PLAN.md",
+    "README.md",
+    "docs/workflows/v0.6-live-protocol.md",
+    "package.json",
+    "src/cli.integration.test.ts"
+  ],
+  "agent": "Codex",
+  "model": "gpt-6.1-sol",
+  "turn_id": "8f5d79997950",
+  "checkpoint_transcript_start": 9253,
+  "transcript_lines_at_start": 9253,
+  "compact_transcript_start": 1113,
+  "token_usage": {
+    "input_tokens": 209515,
+    "cache_creation_tokens": 0,
+    "cache_read_tokens": 6135936,
+    "output_tokens": 31346,
+    "api_call_count": 35,
+    "subagent_tokens_complete": true
+  },
+  "session_metrics": {
+    "turn_count": 19
+  }
+}
