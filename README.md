@@ -1023,7 +1023,7 @@ and installed CLIs on POSIX PTYs and native Windows ConPTY without live calls.
 The [verification record](docs/presentation/v0.5-verification.md) documents
 the completed matrix, the Windows EOF correction, and the scope limits.
 
-The [v0.6 release plan](PLAN.md#v06-draft-saved-runs-and-safe-resume) adds
+The unpublished [v0.6 candidate](PLAN.md#v06-draft-saved-runs-and-safe-resume) adds
 opt-in saved runs, local history, and continuation after a clean stop on the
 same machine and Git worktree. In this source checkout, `--save-run` connects
 the bounded store to the orchestration loop, and `--list-runs` / `--show-run`
@@ -1107,7 +1107,8 @@ the CLI never restores files or resets Git. Older development records without
 content fingerprints remain inspectable; start a new saved run to use resume.
 The [offline restart verification record](docs/saved-runs-verification.md)
 covers the provider/worker matrix and compiled/installed terminal checks.
-The separately authorized live pilot remains required before the v0.6 release.
+The separately authorized [live pilot](docs/workflows/v0.6-live-protocol.md)
+remains required before the v0.6 release.
 
 ## v0.3 decision-model release
 

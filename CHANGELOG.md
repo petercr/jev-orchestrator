@@ -1,5 +1,31 @@
 # Release notes
 
+## dev-orchestrator 0.6.0 candidate — saved runs and safe resume
+
+Unpublished candidate. The live stop/resume pilot and operator acceptance remain
+required before release. The package remains `dev-orchestrator`, its executable
+remains `dev-agent`, and Node.js 22+ is required.
+
+- Add opt-in `--orchestrate --save-run`, bounded local checkpoints and attempt
+  history, and exclusive ownership for saved and unsaved orchestration.
+- Add credential-free `--list-runs` and `--show-run <run-id>`. Records report
+  remaining budgets, selections, validation, failures, and continuation blockers.
+- Add explicit `--resume <run-id> [--plain]` on the same canonical Git worktree
+  and unchanged HEAD. Review content drift and fixed selections, reread required
+  instructions, and independently validate again before task acceptance.
+- Preserve the original iteration ceiling, consumed worker calls, selected
+  provider/model/worker/network permissions, and separate action approvals.
+  Incomplete writes, unresolved execution or ownership, incompatible records,
+  and unverifiable repository identity block continuation.
+
+Saved data uses local, unencrypted schema-v1 records outside the worktree.
+There is no automatic migration, deletion, retention cleanup, crash replay, or
+cross-machine transfer. Older development stops without content fingerprints
+remain inspectable and cannot resume. Diagnostic traces are not resume files.
+See the [storage and housekeeping contract](docs/saved-runs-v1.md),
+[offline verification](docs/saved-runs-verification.md), and
+[live pilot protocol](docs/workflows/v0.6-live-protocol.md).
+
 ## dev-orchestrator 0.5.0 — terminal presentation
 
 Published on npm on 2026-10-22 as

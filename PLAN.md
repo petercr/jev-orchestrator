@@ -408,8 +408,10 @@ contract merged in [PR #66](https://github.com/petercr/jev-orchestrator/pull/66)
 at `d102eec`. PR 2's loop integration merged in
 [PR #67](https://github.com/petercr/jev-orchestrator/pull/67) at `4be904c`.
 Local history merged in [PR #68](https://github.com/petercr/jev-orchestrator/pull/68)
-at `7ac6cd9`. The v0.6 scope is approved for implementation. Explicit resume
-is the current milestone; this work remains unpublished until the v0.6 release.
+at `7ac6cd9`. Explicit resume merged in PR #69 at `88312e2`, followed by
+restart/platform verification in PR #70 at `1801d78`. The v0.6 scope is approved
+for implementation. The live pilot and release are the current milestone;
+this work remains unpublished until the v0.6 release.
 
 **Release outcome:** an operator can stop an opted-in task, close the terminal,
 inspect its history, and continue it in a new CLI process without losing its
@@ -633,7 +635,7 @@ modules rather than introducing a workflow framework.
    all 1,513 tests passing serially alongside type checking, build, and a
    compiled CLI smoke. The full provider/platform matrix and installed-package
    verification remain in PR 5.
-5. [ ] **Restart and platform verification.** Extend deterministic integration
+5. [x] **Restart and platform verification.** Extend deterministic integration
    coverage across all six supported evaluation routes and both workers.
    Exercise repeated restarts, exhausted budgets, missing/conflicting config,
    changed HEAD/worktree/content/instructions/scripts, concurrent owners,
@@ -642,7 +644,9 @@ modules rather than introducing a workflow framework.
    existing decision-only, unsaved orchestration, and JSON behavior covered.
    The [offline verification record](docs/saved-runs-verification.md) documents
    the three-segment provider/worker matrix, preflight failure checks, and
-   compiled/installed terminal evidence. The live pilot remains separate.
+   compiled/installed terminal evidence. Delivered in PR #70, with 1,551 tests,
+   local compiled/installed matrices, and all six Ubuntu/Windows Node 22/24/26
+   CI jobs passing. The live pilot remains separate.
 6. [ ] **Live pilot and v0.6.0 release.** Freeze a candidate archive and bounded
    protocol, obtain operator authorization for live calls, then run the pilot
    below before any publication. Fix failures in a separately identified
@@ -650,6 +654,8 @@ modules rather than introducing a workflow framework.
    migration/storage guidance, limitations, and release acceptance. Give
    advance npm authentication notice before timed login/publication; verify
    the published archive and a fresh registry installation afterward.
+   Preparation uses the [bounded live pilot protocol](docs/workflows/v0.6-live-protocol.md).
+   Preparing the candidate and fixtures does not authorize live calls or publication.
 
 ### Verification and release acceptance
 
