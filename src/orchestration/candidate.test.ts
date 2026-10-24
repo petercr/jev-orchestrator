@@ -121,6 +121,33 @@ describe('candidate selection', () => {
     await expect(selectCandidate('READ_FILE', initial, ['source.ts'])).resolves.toMatchObject({ input: { path: 'source.ts' } });
   });
 
+  it('reviews known task files before generic metadata after fresh instruction reads', async () => {
+    const root = await temporaryRoot();
+    const files = ['AGENTS.md', 'README.md', 'package.json', '.gitignore', 'package-lock.json', 'tags.mjs', 'tags.test.mjs'];
+    for (const file of files) await writeFile(path.join(root, file), 'fixture');
+    const current = state(root, { task: 'Implement parsing in ./tags.mjs. Add regression cases to tags.test.mjs.' });
+    current.repo.topLevelFiles = files;
+    expect(await selectCandidate('READ_FILE', current)).toMatchObject({ input: { path: 'AGENTS.md' } });
+    current.filesRead = ['AGENTS.md'];
+    expect(await selectCandidate('READ_FILE', current)).toMatchObject({ input: { path: 'tags.mjs' } });
+    current.filesRead.push('tags.mjs');
+    expect(await selectCandidate('READ_FILE', current)).toMatchObject({ input: { path: 'tags.test.mjs' } });
+    current.filesRead.push('tags.test.mjs');
+    expect(await selectCandidate('READ_FILE', current)).toMatchObject({ input: { path: 'README.md' } });
+  });
+
+  it('keeps path safety and searched evidence ahead of task-name read preferences', async () => {
+    const root = await temporaryRoot();
+    await writeFile(path.join(root, 'secrets.txt'), 'fixture');
+    await writeFile(path.join(root, 'README.md'), 'safe');
+    await writeFile(path.join(root, 'source.ts'), 'source');
+    const current = state(root, { task: 'Inspect secrets.txt before source.ts.' });
+    current.repo.topLevelFiles = ['secrets.txt', 'source.ts', 'README.md'];
+    expect(await selectCandidate('READ_FILE', current, ['README.md'])).toMatchObject({ input: { path: 'README.md' } });
+    current.filesRead = ['README.md'];
+    expect(await selectCandidate('READ_FILE', current)).toMatchObject({ input: { path: 'source.ts' } });
+  });
+
   it.each(['RUN_TESTS', 'CALL_CODEX', 'CALL_CLAUDE', 'FINISH'] as const)(
     'does not resolve %s before linked-task preparation', async (action) => {
       const initial = state(await temporaryRoot(), { task: 'https://github.com/owner/repo/issues/80' });

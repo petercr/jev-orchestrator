@@ -1,6 +1,6 @@
 {
   "name": "dev-orchestrator",
-  "version": "0.5.0",
+  "version": "0.6.0",
   "description": "A small coding-agent orchestrator with selectable decision models.",
   "license": "MIT",
   "repository": {

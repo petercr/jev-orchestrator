@@ -30,12 +30,12 @@ afterEach(async () => {
 });
 
 describe('offline CLI integration', () => {
-  it('prints the v0.5 package version', async () => {
+  it('prints the v0.6 package version', async () => {
     const log = vi.spyOn(console, 'log').mockImplementation(() => undefined);
 
     await main(['--version']);
 
-    expect(log).toHaveBeenCalledExactlyOnceWith('0.5.0');
+    expect(log).toHaveBeenCalledExactlyOnceWith('0.6.0');
   });
 
   it('inspects a temporary repository and emits one JSON decision in mock mode', async () => {

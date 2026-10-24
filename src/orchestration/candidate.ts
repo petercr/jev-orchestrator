@@ -224,8 +224,13 @@ function preferredReadCandidates(state: AgentState, searchResults: string[]): st
     .filter((candidate) => !searchedSet.has(candidate))
     .filter((candidate) => !state.filesRead.includes(candidate));
   const preferences = [...REPOSITORY_INSTRUCTION_FILES, 'README.md', 'package.json', 'PLAN.md'];
+  const taskPaths = new Set((state.task.match(SEARCH_TOKEN) ?? [])
+    .map((token) => token.replace(/^\.\//u, '').replace(/[.:]+$/u, '')));
 
   const sortedKnownPaths = knownPaths.sort((left, right) => {
+    const leftNamed = taskPaths.has(left);
+    const rightNamed = taskPaths.has(right);
+    if (leftNamed !== rightNamed) return leftNamed ? -1 : 1;
     const leftIndex = preferences.indexOf(left);
     const rightIndex = preferences.indexOf(right);
     const leftRank = leftIndex === -1 ? preferences.length : leftIndex;
