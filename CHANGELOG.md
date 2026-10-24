@@ -17,6 +17,14 @@ remains `dev-agent`, and Node.js 22+ is required.
   provider/model/worker/network permissions, and separate action approvals.
   Incomplete writes, unresolved execution or ownership, incompatible records,
   and unverifiable repository identity block continuation.
+- Retain the actual historical worker process outcome after resume while
+  invalidating earlier validation. Prefer known task files during approved
+  reads after instructions and search evidence, ahead of generic metadata.
+
+The original live candidate preserved its patch and passed fresh validation,
+but exhausted its iteration budget before completion acceptance. Its failure
+is retained in the [live results](docs/workflows/v0.6-live-results.md); the
+context fixes require a separately authorized fresh pilot before release.
 
 Saved data uses local, unencrypted schema-v1 records outside the worktree.
 There is no automatic migration, deletion, retention cleanup, crash replay, or

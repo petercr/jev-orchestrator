@@ -656,6 +656,12 @@ modules rather than introducing a workflow framework.
    the published archive and a fresh registry installation afterward.
    Preparation uses the [bounded live pilot protocol](docs/workflows/v0.6-live-protocol.md).
    Preparing the candidate and fixtures does not authorize live calls or publication.
+   The first authorized candidate failed its required Codex scenario after
+   passing fresh validation but exhausting eight iterations before acceptance.
+   Preserve its [results](docs/workflows/v0.6-live-results.md). Resume context
+   and task-file read preferences are corrected offline; the
+   [retest amendment](docs/workflows/v0.6-live-retest-amendment.md) requires
+   separate collection authorization. The live release gate remains blocked.
 
 ### Verification and release acceptance
 

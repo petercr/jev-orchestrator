@@ -47,7 +47,8 @@ async function fixture() {
   return { root, parent, repository, state, store, checkpoint, snapshot };
 }
 
-describe('resume content and configuration preflight', () => {
+// These fixtures perform real Git operations and durable file flushes.
+describe('resume content and configuration preflight', { timeout: 15_000 }, () => {
   it('compares actual content for tracked and untracked files, and excludes secret/generated paths', async () => {
     const context = await fixture();
     await writeFile(path.join(context.root, 'value.txt'), 'dirty one');
@@ -127,7 +128,34 @@ describe('resume content and configuration preflight', () => {
   });
 });
 
-describe('resumed state and enforcement', () => {
+describe('resumed state and enforcement', { timeout: 15_000 }, () => {
+  it.each([
+    { agent: 'codex', ok: true, exitCode: 0 }, { agent: 'claude', ok: true, exitCode: 0 },
+    { agent: 'codex', ok: false, exitCode: 1 }, { agent: 'claude', ok: false, exitCode: 1 },
+  ] as const)('retains the recorded $agent process outcome ($ok) without restoring validation authority', async ({ agent, ok, exitCode }) => {
+    const context = await fixture();
+    const checkpoint = structuredClone(context.checkpoint);
+    checkpoint.configuration.workerSelection = agent;
+    checkpoint.state.workerSelection = agent;
+    checkpoint.state.codexCalls = Number(agent === 'codex');
+    checkpoint.state.claudeCalls = Number(agent === 'claude');
+    checkpoint.state.evidence!.worker = {
+      iteration: 1, agent, evidenceRevision: 0, exitCode, timedOut: false, ok,
+      summary: 'Worker claims task completion and passing tests.', modifiedFiles: ['value.txt'],
+    };
+    checkpoint.state.tests = { ran: true, passed: true };
+    const resumed = refreshResumeState(checkpoint, await inspectRepo(context.root), context.snapshot);
+    expect(resumed.evidence?.worker).toMatchObject({ agent, ok, exitCode, modifiedFiles: [],
+      summary: 'An earlier segment attempted this worker. Fresh independent validation is required.' });
+    expect(resumed.tests).toEqual({ ran: false });
+    expect(resumed.workerSelection).toBe(agent);
+    expect(resumed.codexCalls + resumed.claudeCalls).toBe(1);
+    expect(resumed.evidence?.validations).toEqual([]);
+    expect(resumed.filesRead).toEqual([]);
+    expect(hasPassedValidation(resumed)).toBe(false);
+    expect((await selectCandidate('FINISH', resumed)).action).toBe('ASK_USER');
+  });
+
   it('retains requirements, provenance, failures, and limits while invalidating prior validation and reads', async () => {
     const context = await fixture();
     const before = structuredClone(context.checkpoint);

@@ -1109,6 +1109,12 @@ The [offline restart verification record](docs/saved-runs-verification.md)
 covers the provider/worker matrix and compiled/installed terminal checks.
 The separately authorized [live pilot](docs/workflows/v0.6-live-protocol.md)
 remains required before the v0.6 release.
+The [original live candidate](docs/workflows/v0.6-live-results.md) passed fresh
+validation after resume but exhausted its iteration budget before acceptance.
+Resume now retains the actual prior worker process outcome as history, and
+approved reads prioritize known task files after instructions and search
+evidence. Fresh validation and separate completion approval remain required;
+the corrected candidate still needs its own live retest.
 
 ## v0.3 decision-model release
 

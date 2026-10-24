@@ -76,8 +76,9 @@ export function refreshResumeState(checkpoint: SavedRunCheckpointV1, repo: RepoS
       findings: [],
       validations: [],
       requiredInstructionFiles: instructionFiles,
+      // Prior process success is historical evidence, not fresh validation.
       ...(worker ? { worker: {
-        ...worker, ok: false, modifiedFiles: [],
+        ...worker, modifiedFiles: [],
         summary: 'An earlier segment attempted this worker. Fresh independent validation is required.',
       } } : {}),
     },
