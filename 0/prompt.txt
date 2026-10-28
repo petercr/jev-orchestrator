@@ -1,0 +1,13 @@
+ok we good. we merged the last pr
+
+---
+
+what next on our list/plan
+
+---
+
+ok start 1 now
+
+---
+
+lets also add total tokens used in the run by claude or codex to the stats were tracking

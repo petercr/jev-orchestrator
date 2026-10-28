@@ -1,0 +1,52 @@
+{
+  "cli_version": "0.11.6-nightly.202610170622.9254299eb",
+  "checkpoint_id": "01M61M3Z7MPC76DTM6YT77E6FV",
+  "strategy": "manual-commit",
+  "branch": "feat/worker-token-stats",
+  "checkpoints_count": 2,
+  "files_touched": [
+    "CHANGELOG.md",
+    "README.md",
+    "docs/saved-runs-v1.md",
+    "scripts/presentation/fixtures.ts",
+    "src/agents/claude.ts",
+    "src/agents/codex.ts",
+    "src/agents/output.test.ts",
+    "src/agents/output.ts",
+    "src/agents/types.ts",
+    "src/agents/usage.ts",
+    "src/cli.ts",
+    "src/cli/history.ts",
+    "src/cli/usage.test.ts",
+    "src/cli/usage.ts",
+    "src/orchestration/execute.test.ts",
+    "src/orchestration/execute.ts",
+    "src/orchestration/loop.ts",
+    "src/orchestration/summary.test.ts",
+    "src/orchestration/summary.ts",
+    "src/process.ts",
+    "src/saved-runs/contract.ts",
+    "src/saved-runs/history.test.ts",
+    "src/saved-runs/history.ts",
+    "src/saved-runs/restart.test.ts",
+    "src/saved-runs/store.test.ts",
+    "src/saved-runs/store.ts",
+    "src/saved-runs/types.ts"
+  ],
+  "sessions": [
+    {
+      "metadata": "/0/metadata.json",
+      "transcript": "/0/full.jsonl",
+      "compact_transcript": "/0/transcript.jsonl",
+      "content_hash": "/0/content_hash.txt",
+      "prompt": "/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 393,
+    "cache_creation_tokens": 0,
+    "cache_read_tokens": 303872,
+    "output_tokens": 725,
+    "api_call_count": 1
+  }
+}
