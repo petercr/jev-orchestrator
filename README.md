@@ -547,7 +547,8 @@ Every returned `--orchestrate` run prints a performance summary after its loop
 status, including approved completion, typed stop, iteration limit, evaluation
 failure, and signal interruption. It reports elapsed time, active time excluding
 prompt waits, evaluation attempts and failures, explicit evaluation recoveries,
-approval responses, worker calls and retries, and validation outcomes.
+approval responses, worker calls and retries, reported worker token usage, and
+validation outcomes.
 
 Times use one local monotonic clock around each boundary, rather than adding
 provider latency or worker-reported durations. Preparation covers approved
@@ -577,6 +578,23 @@ evaluations, including failed/interrupted attempts; they do not count individual
 provider requests or internal transport retries. Token usage and cost are not
 inferred from elapsed time.
 
+Worker token counts come from [Codex's `--json` turn-completion event](https://learn.chatgpt.com/docs/non-interactive-mode#make-output-machine-readable)
+and [Claude's cumulative result usage](https://code.claude.com/docs/en/agent-sdk/cost-tracking#understand-token-usage)
+through `--output-format stream-json`, collected separately from the
+bounded output preview. The summary shows combined and per-worker totals,
+input/output counts, and how many attempts reported usage. Input includes
+cache reads and writes; Codex already includes those in its input count, while
+Claude reports them separately. Reasoning is part of output and is not added
+again. Failed or interrupted attempts retain any reported usage; missing,
+malformed, or oversized reports remain `unavailable`, and incomplete totals
+are labeled partial. No cost or subscription-quota consumption is inferred.
+
+These summary counts cover the current process segment. Saved runs also show
+`Saved task worker tokens` across all segments, derived from worker outcome
+events; `--show-run` and `--list-runs` display the same durable totals without
+credentials. Older records without usage stay inspectable and report those
+attempts as unavailable. Token counts never change worker or iteration budgets.
+
 Independent checks are reported as `passed`, `failed`, or `pending` for the
 current validation generation. Passing declared conjunctive workflows covers
 their constituent scripts, while a new worker attempt invalidates earlier
@@ -603,8 +621,9 @@ and the before/after state. A rejection records an observation and executes no
 repository tool. Alternative selections and their final confirmation are kept
 as an approval-history array so manual completion overrides remain auditable.
 
-New orchestration records include cumulative `metrics` with numeric `timings`
-and `counts`. The terminal record also contains the returned `summary`, adding
+New orchestration records include cumulative `metrics` with numeric `timings`,
+`counts`, and `workerUsage` totals and reporting coverage for each adapter.
+The terminal record also contains the returned `summary`, adding
 current-generation independent validation results. These are additive fields
 within schema version `2`; older traces may omit them. The summary uses the
 same bounded sanitization and credential redaction as other trace fields.
@@ -1113,8 +1132,13 @@ The [original live candidate](docs/workflows/v0.6-live-results.md) passed fresh
 validation after resume but exhausted its iteration budget before acceptance.
 Resume now retains the actual prior worker process outcome as history, and
 approved reads prioritize known task files after instructions and search
-evidence. Fresh validation and separate completion approval remain required;
-the corrected candidate still needs its own live retest.
+evidence. Fresh validation and separate completion approval remain required.
+The [2026-10-28 retest](docs/workflows/v0.6-live-retest-results-20261028.md)
+completed Codex stop/resume, but Claude exhausted its iteration budget after
+one explicit evaluation recovery despite passing fresh validation. The
+active-interruption scenario remains unlaunched and the live release gate
+remains blocked. Worker-token reporting was added after that frozen pilot;
+its offline tests do not establish live token reporting or release acceptance.
 
 ## v0.3 decision-model release
 

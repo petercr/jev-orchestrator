@@ -33,6 +33,7 @@ import {
 } from './candidate.js';
 import { executeCandidate, type ToolResult } from './execute.js';
 import { createRunMetrics, executionTimingPhase, type RunCounts, type RunMetricsCollector, type RunSummary } from './summary.js';
+import { isWorkerUsage, type WorkerUsageSummary } from '../agents/usage.js';
 import type { SavedRunEventInput, SavedRunStatus } from '../saved-runs/types.js';
 
 export const MAX_ORCHESTRATION_ITERATIONS = 8;
@@ -73,7 +74,7 @@ export type OrchestrationResult = {
   savedRunId?: string;
   savedRunStatus?: SavedRunStatus;
   savedRunStatusUnavailable?: true;
-  savedRunTotals?: { iterations: number; codexCalls: number; claudeCalls: number; segments: number };
+  savedRunTotals?: { iterations: number; codexCalls: number; claudeCalls: number; segments: number; workerUsage?: WorkerUsageSummary };
   persistenceFailure?: string;
 };
 
@@ -704,7 +705,7 @@ export async function runOrchestration(
         ? { interruption: { phase: interruptedPhase ?? phase, reason } }
         : { promptStop: { phase, reason } }),
       ...(interruptedWorkerRequest === undefined ? {} : { workerRequest: interruptedWorkerRequest }),
-      metrics: { timings: summary.timings, counts: summary.counts },
+      metrics: { timings: summary.timings, counts: summary.counts, workerUsage: summary.workerUsage },
       summary,
     });
     await record({
@@ -730,7 +731,7 @@ export async function runOrchestration(
         toolResult: interruptedResult,
         stateAfter: state,
         persistenceFailure: error.eventType,
-        metrics: { timings: summary.timings, counts: summary.counts },
+        metrics: { timings: summary.timings, counts: summary.counts, workerUsage: summary.workerUsage },
         summary,
         ...(interruptedWorkerRequest === undefined ? {} : { workerRequest: interruptedWorkerRequest }),
       });
@@ -826,7 +827,7 @@ export async function runOrchestration(
         const summary = metrics.summary(state);
         await appendOrchestrationTrace(trace, {
           ...failurePayload, stateAfter: state, recovery: { available, decision },
-          metrics: { timings: summary.timings, counts: summary.counts },
+          metrics: { timings: summary.timings, counts: summary.counts, workerUsage: summary.workerUsage },
           ...(decision === 'stop' ? { summary } : {}),
         });
         throwIfInterrupted(options.signal);
@@ -1057,6 +1058,7 @@ export async function runOrchestration(
             type: 'execution_outcome',
             attemptId,
             outcome: toolResult.cancelled ? 'cancelled' : toolResult.ok ? 'succeeded' : 'failed',
+            ...(isCodingAgentProposal(proposal) && isWorkerUsage(toolResult.usage) ? { usage: toolResult.usage } : {}),
           }, nextState);
         }
       }
@@ -1092,7 +1094,7 @@ export async function runOrchestration(
         toolInput: decision.kind === 'stop' ? null : proposal.input,
         toolResult,
         stateAfter: nextState,
-        metrics: { timings: summary.timings, counts: summary.counts },
+        metrics: { timings: summary.timings, counts: summary.counts, workerUsage: summary.workerUsage },
         ...(terminalStatus !== undefined || reachedLimit ? { summary } : {}),
         ...(isCodingAgentProposal(proposal) ? {
           workerRequest: workerTraceRequest(proposal, stateBefore, decision),

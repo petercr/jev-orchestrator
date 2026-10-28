@@ -7,6 +7,7 @@ import type { Action, EvaluationResult, RepoSnapshot } from '../types.js';
 import { createInitialState, runOrchestration, type ApprovalDecision } from './loop.js';
 import type { CandidateProposal } from './candidate.js';
 import type { ToolResult } from './execute.js';
+import { createRunMetrics } from './summary.js';
 
 const roots: string[] = [];
 
@@ -58,6 +59,24 @@ afterEach(async () => {
 });
 
 describe('orchestration run summary', () => {
+  it('totals reported usage separately by worker and preserves unavailable attempts', () => {
+    const metrics = createRunMetrics();
+    const base: ToolResult = { action: 'CALL_CODEX', ok: false, exitCode: 1, durationMs: 1, timedOut: false, output: 'Partial work.', files: [] };
+    metrics.recordResult({ ...base, usage: { input: 100, output: 20, total: 120 } });
+    metrics.recordResult({ ...base, cancelled: true });
+    metrics.recordResult({ ...base, action: 'CALL_CLAUDE', usage: { input: 200, output: 30, total: 230 } });
+    // Validation output and malformed usage cannot fabricate worker consumption.
+    metrics.recordResult({ ...base, action: 'RUN_TESTS', usage: { input: 900, output: 1, total: 901 } });
+    metrics.recordResult({ ...base, action: 'CALL_CLAUDE', usage: { input: 1, output: 2, total: 999 } });
+    const snapshot = metrics.snapshot();
+    expect(snapshot.workerUsage).toEqual({
+      codex: { input: 100, output: 20, total: 120, reportedCalls: 1, unavailableCalls: 1 },
+      claude: { input: 200, output: 30, total: 230, reportedCalls: 1, unavailableCalls: 1 },
+    });
+    snapshot.workerUsage.codex.total = 999;
+    expect(metrics.snapshot().workerUsage.codex.total).toBe(120);
+  });
+
   it('separates local phase times and reports conjunctive validation in the terminal trace', async () => {
     const repo = await repository();
     repo.scripts = repo.validationScripts = ['verify', 'test', 'typecheck', 'build'];
@@ -72,7 +91,7 @@ describe('orchestration run summary', () => {
       execute: async (proposal) => {
         advance(proposal.action === 'CALL_CODEX' ? 1_000 : proposal.action === 'SEARCH_REPO' ? 20
           : proposal.action === 'READ_FILE' ? 30 : proposal.action === 'RUN_TESTS' && proposal.input.script === 'verify' ? 70 : 80);
-        return result(proposal);
+        return result(proposal, proposal.action === 'CALL_CODEX' ? { usage: { input: 100, output: 20, total: 120 } } : {});
       },
       inspect: async () => { advance(20); return repo; },
     }, { initialInspectionMs: 40 });
@@ -95,7 +114,10 @@ describe('orchestration run summary', () => {
     expect(trace).toHaveLength(6);
     expect(trace[0]).not.toHaveProperty('summary');
     expect(trace.at(-1).summary).toEqual(outcome.summary);
-    expect(trace.at(-1).metrics).toEqual({ timings: outcome.summary.timings, counts: outcome.summary.counts });
+    expect(trace.at(-1).metrics).toEqual({ timings: outcome.summary.timings, counts: outcome.summary.counts, workerUsage: outcome.summary.workerUsage });
+    expect(trace.at(-1).metrics.workerUsage.codex.total).toBe(120);
+    expect(trace[2].toolResult.usage).toEqual({ input: 100, output: 20, total: 120 });
+    expect(JSON.stringify(outcome.state)).not.toContain('"usage"');
   });
 
   it('counts alternative prompts once and excludes their waits from active time at the limit', async () => {

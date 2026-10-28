@@ -2,11 +2,23 @@ import { realpath, stat } from 'node:fs/promises';
 import { validationChecks, hasOmittedValidationRequirements } from '../repo/validation.js';
 import { SavedRunStore, SavedRunStoreError, type SavedRunStoreErrorCode } from './store.js';
 import type { SavedRunCheckpointV1, SavedRunEvent } from './types.js';
+import { addWorkerUsage, emptyWorkerUsage, type WorkerUsageSummary } from '../agents/usage.js';
 
 export const SAVED_RUN_LIST_LIMIT = 20;
 export const SAVED_RUN_TIMELINE_LIMIT = 12;
 
 type SavedRecord = Awaited<ReturnType<SavedRunStore['readForInspection']>>;
+
+/** Ledger-derived reporting only; absent and unresolved usage stays unavailable. */
+export function savedWorkerUsage(events: SavedRunEvent[]): WorkerUsageSummary {
+  const summary = emptyWorkerUsage();
+  for (const attempt of events) {
+    if (attempt.type !== 'execution_reserved' || (attempt.action !== 'CALL_CODEX' && attempt.action !== 'CALL_CLAUDE')) continue;
+    const outcome = events.find((event) => event.type === 'execution_outcome' && event.attemptId === attempt.attemptId);
+    addWorkerUsage(summary, attempt.action === 'CALL_CODEX' ? 'codex' : 'claude', outcome?.type === 'execution_outcome' ? outcome.usage : undefined);
+  }
+  return summary;
+}
 
 /** Reporting data only; continuation must perform its own preflight and approvals. */
 export type SavedRunDetail = {

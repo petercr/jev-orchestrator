@@ -4,6 +4,7 @@ import path from 'node:path';
 import { createCodexAdapter } from '../agents/codex.js';
 import { createClaudeAdapter } from '../agents/claude.js';
 import type { CodingAgentResult } from '../agents/types.js';
+import type { WorkerUsage } from '../agents/usage.js';
 import {
   FORCE_KILL_GRACE_MS,
   MAX_PROCESS_OUTPUT_BYTES,
@@ -46,6 +47,7 @@ export type ToolResult = {
   stdout?: string;
   stderr?: string;
   issue?: IssueContext;
+  usage?: WorkerUsage;
 };
 
 export class ToolExecutionError extends Error {
@@ -82,6 +84,7 @@ function codingAgentToolResult(
     files: [],
     stdout: result.stdout,
     stderr: result.stderr,
+    ...(result.usage ? { usage: result.usage } : {}),
   };
 }
 

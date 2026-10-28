@@ -275,8 +275,8 @@ describe('constrained execution', () => {
     expect(runner).toHaveBeenCalledWith(expect.objectContaining({
       command: 'codex',
       cwd: root,
-      args: expect.arrayContaining(['exec', '--sandbox', 'workspace-write']),
-    }));
+      args: expect.arrayContaining(['exec', '--sandbox', 'workspace-write', '--json']),
+    }), { onStdout: expect.any(Function) });
   });
 
   it('routes CALL_CLAUDE through the bounded typed adapter', async () => {
@@ -309,8 +309,8 @@ describe('constrained execution', () => {
     expect(runner).toHaveBeenCalledWith(expect.objectContaining({
       command: 'claude',
       cwd: root,
-      args: expect.arrayContaining(['--model', 'sonnet', '--effort', 'medium']),
-    }));
+      args: expect.arrayContaining(['--model', 'sonnet', '--effort', 'medium', '--output-format', 'stream-json']),
+    }), { onStdout: expect.any(Function) });
   });
 
   it('rejects malformed process results and non-tool actions', async () => {

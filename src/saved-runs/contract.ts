@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto';
 import { realpath, stat } from 'node:fs/promises';
 import path from 'node:path';
+import { isWorkerUsage } from '../agents/usage.js';
 import { validateCloudflareAccountId, validateEvaluationModel, type EvaluationConfiguration } from '../config.js';
 import { redactSensitiveText } from '../logging/trace.js';
 import { MAX_TASK_LENGTH } from '../limits.js';
@@ -283,9 +284,10 @@ export function isSavedRunEventData(value: unknown): value is import('./types.js
         ACTIONS.includes(value.action as (typeof ACTIONS)[number]) &&
         !['ASK_USER', 'FINISH'].includes(String(value.action));
     case 'execution_outcome':
-      return hasOnlyKeys(value, ['type', 'attemptId', 'outcome']) &&
+      return hasOnlyKeys(value, ['type', 'attemptId', 'outcome', 'usage']) &&
         typeof value.attemptId === 'string' && isSavedRunId(value.attemptId) &&
-        ['succeeded', 'failed', 'cancelled', 'uncertain'].includes(String(value.outcome));
+        ['succeeded', 'failed', 'cancelled', 'uncertain'].includes(String(value.outcome)) &&
+        (value.usage === undefined || isWorkerUsage(value.usage));
     case 'run_stopped':
       return hasOnlyKeys(value, ['type', 'reason', 'resumable', 'repositorySnapshotHash']) &&
         ['user', 'signal', 'evaluation_failure', 'storage_error'].includes(String(value.reason)) &&

@@ -74,7 +74,13 @@ const fs = require('node:fs');
 fs.writeFileSync('value.txt', 'patched');
 fs.writeFileSync('worker-args.json', JSON.stringify(process.argv.slice(2)));
 fs.writeFileSync('worker-count', '1');
-console.log('Fixture patch ready; independent validation was not run by this worker.');
+const message = 'Fixture patch ready; independent validation was not run by this worker.';
+if (${JSON.stringify(worker)} === 'codex') {
+  console.log(JSON.stringify({ type: 'item.completed', item: { type: 'agent_message', text: message } }));
+  console.log(JSON.stringify({ type: 'turn.completed', usage: { input_tokens: 120, cached_input_tokens: 100, output_tokens: 20 } }));
+} else {
+  console.log(JSON.stringify({ type: 'result', result: message, usage: { input_tokens: 10, cache_read_input_tokens: 100, cache_creation_input_tokens: 10, output_tokens: 20 } }));
+}
 `, { mode: 0o755 });
     execFileSync('git', ['init', '--quiet'], { cwd: root });
     execFileSync('git', ['add', '.'], { cwd: root });
@@ -89,11 +95,15 @@ console.log('Fixture patch ready; independent validation was not run by this wor
       { prompt: choose, answer: worker }, { prompt: choose, answer: 'approve' }, { prompt: choose, answer: 'stop' },
     ]);
     expect(first.code, first.error + first.output).toBe(0);
+    expect(first.output).toContain('Worker tokens: 140 total');
+    expect(first.output).toContain('Saved task worker tokens: 140 total');
     const runId = first.output.match(/Saved run: ([a-f0-9-]{36}) \(stopped\)/u)?.[1];
     expect(runId).toBeDefined();
     const store = await openSavedRunStore(path.join(parent, 'state', 'dev-orchestrator', 'saved-runs'));
     const stopped = await store.read(runId!);
     expect(stopped.checkpoint.state[worker === 'codex' ? 'codexCalls' : 'claudeCalls']).toBe(1);
+    expect(stopped.events.find((event) => event.type === 'execution_outcome' && event.usage)).toMatchObject({ usage: { input: 120, output: 20, total: 140 } });
+    expect(stopped.checkpoint.state).not.toHaveProperty('usage');
     expect(await readFile(path.join(root, 'value.txt'), 'utf8')).toBe('patched');
     expect(await readdir(root)).not.toContain('validation-count');
     const declined = await invoke(['--resume', runId!, '--plain'], parent, environment, [
@@ -110,6 +120,8 @@ console.log('Fixture patch ready; independent validation was not run by this wor
     expect(resumed.code, resumed.error + resumed.output).toBe(0);
     expect(resumed.output).toContain('Next iteration: 3/8');
     expect(resumed.output).toContain('Loop status: finished');
+    expect(resumed.output).toContain('Saved task worker tokens: 140 total');
+    expect(resumed.output).toContain('Worker tokens: no worker calls.');
     const finished = await store.read(runId!);
     expect(finished.checkpoint).toMatchObject({
       status: 'finished', iterationLimit: 8, configuration: { workerSelection: worker, codexNetworkAccess: false },

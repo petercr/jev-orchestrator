@@ -9,6 +9,7 @@ import {
   createSavedRunConfiguration,
   createSavedRunRepository,
   isSavedRunConfiguration,
+  isSavedRunEventData,
   parseSavedRunJson,
 } from './contract.js';
 import { openSavedRunStore, SavedRunStoreError } from './store.js';
@@ -64,6 +65,17 @@ afterEach(async () => {
 });
 
 describe('saved run contract', () => {
+  it('allows only bounded numeric worker usage in execution outcomes', () => {
+    const event = { type: 'execution_outcome', attemptId: randomUUID(), outcome: 'failed' };
+    expect(isSavedRunEventData({ ...event, usage: { input: 100, output: 20, total: 120 } })).toBe(true);
+    expect(isSavedRunEventData(event)).toBe(true); // Older records remain inspectable.
+    for (const usage of [
+      { input: -1, output: 20, total: 19 }, { input: 100, output: 20, total: 999 },
+      { input: '100', output: 20, total: 120 }, { input: 100, output: 20, total: 120, token: 'untrusted' },
+      { input: 100, output: 20, total: 120, cachedInput: 101 },
+    ]) expect(isSavedRunEventData({ ...event, usage })).toBe(false);
+  });
+
   it('requires valid provider identity and forbids conflicting worker/network settings', () => {
     expect(isSavedRunConfiguration({
       mode: 'live', provider: 'cloudflare', model: 'clef', codexNetworkAccess: false,
@@ -175,17 +187,34 @@ describe('saved run contract', () => {
     }, state);
     const attemptId = (await context.store.read(id)).events.find((event) => event.type === 'execution_reserved');
     if (!attemptId || attemptId.type !== 'execution_reserved') throw new Error('Missing execution reservation fixture.');
-    await context.store.append(id, { type: 'execution_outcome', attemptId: attemptId.attemptId, outcome: 'succeeded' }, state);
+    await context.store.append(id, { type: 'execution_outcome', attemptId: attemptId.attemptId, outcome: 'succeeded', usage: { input: 100, output: 20, total: 120 } }, state);
     await context.store.append(id, { type: 'run_stopped', reason: 'user', resumable: true }, state);
     await context.store.append(id, { type: 'run_resumed', segment: 2 }, state);
     state = { ...state, iteration: 2 };
     const resumed = await context.store.append(id, { type: 'iteration_reserved', iteration: 2 }, state);
     const loaded = await context.store.read(id);
+    expect(loaded.events.find((event) => event.type === 'execution_outcome')).toMatchObject({ usage: { input: 100, output: 20, total: 120 } });
+    expect(loaded.checkpoint.state).not.toHaveProperty('usage');
     expect(resumed.status).toBe('active');
     expect(loaded.checkpoint.iterationLimit).toBe(8);
     expect(loaded.checkpoint.state.codexCalls).toBe(1);
     expect(loaded.checkpoint.state.iteration).toBe(2);
     expect(loaded.events.map((event) => event.sequence)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9]);
+  });
+
+  it('refuses usage on a nonworker outcome without advancing the saved ledger', async () => {
+    const { store, state, checkpoint } = await fixture();
+    const id = checkpoint.runId;
+    await store.append(id, { type: 'iteration_reserved', iteration: 1 }, state);
+    await store.append(id, { type: 'evaluation_completed', iteration: 1 }, state);
+    await store.append(id, { type: 'action_approved', iteration: 1, action: 'RUN_COMMAND', decision: 'approve' }, state);
+    const attemptId = randomUUID();
+    await store.append(id, { type: 'execution_reserved', iteration: 1, action: 'RUN_COMMAND', attemptId }, state);
+    const before = await store.read(id);
+    await expectStoreError(store.append(id, {
+      type: 'execution_outcome', attemptId, outcome: 'succeeded', usage: { input: 100, output: 20, total: 120 },
+    }, state), 'invalid_record');
+    expect(await store.read(id)).toEqual(before);
   });
 
   it('requires a fresh explicit recovery decision after a recorded evaluation failure', async () => {

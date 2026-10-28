@@ -64,12 +64,13 @@ describe('Codex adapter', () => {
         '--ignore-rules',
         '--color',
         'never',
+        '--json',
         '--',
         buildCodexPrompt('--dangerously-bypass-approvals-and-sandbox', context),
       ],
       cwd: '/repo',
       timeoutMs: CODEX_TIMEOUT_MS,
-    });
+    }, { onStdout: expect.any(Function) });
     const prompt = runner.mock.calls[0]?.[0].args.at(-1);
     expect(prompt).toContain('implementation only');
     expect(prompt).toContain('Do not run tests, typechecks, lint, builds, verification scripts, dependency installation');

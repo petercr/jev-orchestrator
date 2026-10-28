@@ -8,6 +8,7 @@ import { requireBoundedTask } from '../limits.js';
 import { redactSensitiveText } from '../logging/trace.js';
 import { MAX_WORKER_PROMPT_LENGTH, renderWorkerEvidence, type WorkerContext } from './context.js';
 import type { CodingAgentAdapter } from './types.js';
+import { createWorkerOutput } from './output.js';
 
 export const CODEX_TIMEOUT_MS = 15 * 60 * 1_000;
 export const CODEX_MODEL = 'gpt-5.6-terra';
@@ -57,14 +58,17 @@ export function createCodexAdapter(
         '--ignore-rules',
         '--color',
         'never',
+        '--json',
         '--',
         prompt,
       ],
       cwd: root,
       timeoutMs: CODEX_TIMEOUT_MS,
     };
-    const result = await (options.signal ? runner(request, options) : runner(request));
+    const output = createWorkerOutput('codex');
+    const result = await runner(request, { ...options, onStdout: output.write });
     validateProcessResult(result);
+    const normalized = output.finish(result.stdout);
 
     return {
       agent: 'codex',
@@ -73,8 +77,9 @@ export function createCodexAdapter(
       durationMs: Math.round(performance.now() - startedAt),
       timedOut: result.timedOut,
       ...(result.cancelled === undefined ? {} : { cancelled: result.cancelled }),
-      stdout: result.stdout,
+      stdout: normalized.stdout,
       stderr: result.stderr,
+      ...(normalized.usage ? { usage: normalized.usage } : {}),
     };
   };
 }

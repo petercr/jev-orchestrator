@@ -15,6 +15,7 @@ import { evaluationAttribution, redactSensitiveText } from './logging/trace.js';
 import { mockEvaluation } from './mock.js';
 import { formatApprovalLines, formatOutcomeLines, formatRecoveryLines } from './cli/presentation.js';
 import { formatSavedRunLines, formatSavedRunListingLines } from './cli/history.js';
+import { formatWorkerUsage } from './cli/usage.js';
 import { createPresentation, createTerminal, terminalText, type CliTerminal } from './cli/terminal.js';
 import { executeCandidate } from './orchestration/execute.js';
 import {
@@ -29,7 +30,7 @@ import { applyPolicy } from './policy.js';
 import type { RunSummary } from './orchestration/summary.js';
 import { inspectGitIdentity, inspectRepo, orchestrationWorktreeRoot } from './repo/inspect.js';
 import { createSavedRunConfiguration, createSavedRunRepository, isSavedRunId } from './saved-runs/contract.js';
-import { inspectSavedRun, listSavedRuns } from './saved-runs/history.js';
+import { inspectSavedRun, listSavedRuns, savedWorkerUsage } from './saved-runs/history.js';
 import { openSavedRunStore, SavedRunStore } from './saved-runs/store.js';
 import type { SavedRunEventInput, SavedRunOwnership, SavedRunStatus } from './saved-runs/types.js';
 import { captureRepositorySnapshot, snapshotHash, type RepositorySnapshot } from './saved-runs/snapshot.js';
@@ -662,6 +663,7 @@ export async function runCliOrchestration(request: CliOptions | ResumeRequest): 
           iterations: stored.events.filter((event) => event.type === 'iteration_reserved').length,
           codexCalls: stored.checkpoint.state.codexCalls, claudeCalls: stored.checkpoint.state.claudeCalls,
           segments: 1 + stored.events.filter((event) => event.type === 'run_resumed').length,
+          workerUsage: savedWorkerUsage(stored.events),
         };
       } catch {
         // A failed append can leave the checkpoint and ledger inconsistent.
@@ -747,6 +749,7 @@ export function formatRunSummary(summary: RunSummary): string {
     `Evaluations: ${counts.evaluations}; failures: ${counts.evaluationFailures}; explicit recoveries: ${counts.evaluationRecoveries}`,
     `Approval requests: ${counts.approvalRequests}; approvals: ${counts.approvals}; rejections: ${counts.rejections}; manual alternatives: ${counts.alternatives}`,
     `Worker calls: Codex ${counts.codexCalls}, Claude ${counts.claudeCalls}; retries: ${counts.workerRetries}`,
+    formatWorkerUsage(summary.workerUsage),
     `Validation runs: ${counts.validationRuns}; failed: ${counts.validationFailures}`,
     `Failed executions: ${counts.failedExecutions}; timed out: ${counts.timedOutExecutions}; cancelled: ${counts.cancelledExecutions}`,
     `Independent checks (generation ${validation.generation}): ${validationStatus}. ${checks || 'No required checks detected.'}`,
@@ -863,6 +866,7 @@ export async function main(argv: string[] = process.argv.slice(2)): Promise<void
       ] : []),
       ...(result.savedRunTotals ? [
         `Durable totals: ${result.savedRunTotals.iterations} iterations; Codex ${result.savedRunTotals.codexCalls}/2, Claude ${result.savedRunTotals.claudeCalls}/2; ${result.savedRunTotals.segments} segments.`,
+        ...(result.savedRunTotals.workerUsage ? [formatWorkerUsage(result.savedRunTotals.workerUsage, 'Saved task worker tokens')] : []),
         'Phase durations and interaction counts below describe this process segment; time between processes is excluded.',
       ] : []),
       `Trace: ${redactSensitiveText(path.relative(process.cwd(), result.tracePath))}`,
