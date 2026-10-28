@@ -1,4 +1,5 @@
 import { buildWorkerContext } from '../../src/agents/context.js';
+import { emptyWorkerUsage } from '../../src/agents/usage.js';
 import { applyPolicy } from '../../src/policy.js';
 import type { ApprovalContext, OrchestrationResult } from '../../src/orchestration/loop.js';
 import type { AgentState, EvaluationResult } from '../../src/types.js';
@@ -85,6 +86,7 @@ export function createFixtures(): {
     status: 'finished', state: finished, iterations: 6,
     tracePath: '(synthetic; no trace written)',
     summary: {
+      workerUsage: { ...emptyWorkerUsage(), codex: { ...emptyWorkerUsage().codex, unavailableCalls: 1 } },
       timings: {
         elapsedMs: 54_300, activeMs: 34_300, evaluationMs: 1_600,
         preparationMs: 200, workerMs: 24_000, validationMs: 7_000,

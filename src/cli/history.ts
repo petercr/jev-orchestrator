@@ -1,8 +1,9 @@
 import {
-  describeSavedEvent, inspectionErrorText, SAVED_RUN_TIMELINE_LIMIT,
+  describeSavedEvent, inspectionErrorText, SAVED_RUN_TIMELINE_LIMIT, savedWorkerUsage,
   type SavedRunInspection, type SavedRunListing,
 } from '../saved-runs/history.js';
 import { terminalText } from './terminal.js';
+import { formatWorkerUsage } from './usage.js';
 
 function text(value: string, limit = 4_096): string {
   const safe = terminalText(value).replace(/\s+/gu, ' ').trim();
@@ -30,6 +31,7 @@ export function formatSavedRunLines(run: SavedRunInspection, detail = true): str
     `Iterations: ${run.iterationsUsed}/${checkpoint.iterationLimit} consumed; ${run.iterationsRemaining} remaining`,
     `Codex calls: ${budget(state.codexCalls, configuration.workerSelection !== 'claude')}`,
     `Claude calls: ${budget(state.claudeCalls, configuration.workerSelection !== 'codex')}`,
+    formatWorkerUsage(savedWorkerUsage(run.events), 'Saved task worker tokens'),
     `Selection: ${configuration.mode}; ${configuration.provider}/${text(configuration.model)}; worker: ${configuration.workerSelection ?? 'Codex or Claude'}; Codex command network: ${configuration.codexNetworkAccess ? 'enabled' : 'disabled'}`,
     `Pending validation (saved generation ${state.evidence?.validationGeneration ?? 0}): ${pending.map((check) => `${text(check.script)} (${check.status})`).join(', ') || (checks.length ? 'none' : 'no required checks recorded')}`,
     `Last failure: ${run.lastFailure ? text(run.lastFailure, detail ? 1_200 : 300) : 'none recorded'}`,

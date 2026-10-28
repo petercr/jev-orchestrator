@@ -19,7 +19,9 @@ export type ProcessResult = {
   cancelled?: boolean;
 };
 
-export type ProcessRunner = (request: ProcessRequest, options?: ExecutionOptions) => Promise<ProcessResult>;
+export type ProcessOptions = ExecutionOptions & { onStdout?: (chunk: Buffer) => void };
+
+export type ProcessRunner = (request: ProcessRequest, options?: ProcessOptions) => Promise<ProcessResult>;
 
 export class ProcessExecutionError extends Error {
   constructor(message: string) {
@@ -107,7 +109,11 @@ export const runProcess: ProcessRunner = async (request, options = {}) => new Pr
   options.signal?.addEventListener('abort', abort, { once: true });
   if (options.signal?.aborted) abort();
 
-  child.stdout.on('data', (chunk: Buffer) => appendBounded(stdout, chunk, stdoutBytes));
+  child.stdout.on('data', (chunk: Buffer) => {
+    appendBounded(stdout, chunk, stdoutBytes);
+    // Reporting must neither interrupt execution nor bypass process cleanup.
+    try { options.onStdout?.(chunk); } catch { /* Ignore an unavailable reporting observer. */ }
+  });
   child.stderr.on('data', (chunk: Buffer) => appendBounded(stderr, chunk, stderrBytes));
   child.on('error', (error) => {
     if (settled) return;

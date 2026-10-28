@@ -55,7 +55,8 @@ describe('Claude adapter', () => {
         '--effort',
         CLAUDE_EFFORT,
         '--output-format',
-        'text',
+        'stream-json',
+        '--verbose',
         '--permission-mode',
         'acceptEdits',
         '--permission-prompts',
@@ -82,7 +83,7 @@ describe('Claude adapter', () => {
       ],
       cwd: '/repo',
       timeoutMs: CLAUDE_TIMEOUT_MS,
-    });
+    }, { onStdout: expect.any(Function) });
     expect(buildClaudePrompt('Fix the bug', context)).toContain('Expected 401, received 200');
     expect(buildClaudePrompt('Rename the config')).toContain('mcp__jev_files__rename_file');
     expect(buildClaudePrompt('Rename the config')).toContain('Do not copy a file to simulate a rename');

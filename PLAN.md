@@ -661,7 +661,13 @@ modules rather than introducing a workflow framework.
    Preserve its [results](docs/workflows/v0.6-live-results.md). Resume context
    and task-file read preferences are corrected offline; the
    [retest amendment](docs/workflows/v0.6-live-retest-amendment.md) requires
-   separate collection authorization. The live release gate remains blocked.
+   separate collection authorization. The separately approved
+   [2026-10-28 retest](docs/workflows/v0.6-live-retest-results-20261028.md)
+   completed Codex stop/resume, but Claude reached `iteration_limit` after an
+   evaluation recovery despite a valid patch and fresh validation. Four
+   launches, sixteen evaluations, and two worker attempts are retained; the
+   active-interruption slots were not launched. Worker-token reporting added
+   afterward has offline evidence only. The live release gate remains blocked.
 
 ### Verification and release acceptance
 

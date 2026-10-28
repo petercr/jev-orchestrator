@@ -10,6 +10,7 @@ import {
   type ProcessRunner,
 } from '../process.js';
 import type { CodingAgentAdapter } from './types.js';
+import { createWorkerOutput } from './output.js';
 
 export const CLAUDE_TIMEOUT_MS = 15 * 60 * 1_000;
 export const CLAUDE_MAX_TURNS = 12;
@@ -62,7 +63,8 @@ export function createClaudeAdapter(
         '--effort',
         CLAUDE_EFFORT,
         '--output-format',
-        'text',
+        'stream-json',
+        '--verbose',
         '--permission-mode',
         'acceptEdits',
         '--permission-prompts',
@@ -90,8 +92,10 @@ export function createClaudeAdapter(
       cwd: root,
       timeoutMs: CLAUDE_TIMEOUT_MS,
     };
-    const result = await (options.signal ? runner(request, options) : runner(request));
+    const output = createWorkerOutput('claude');
+    const result = await runner(request, { ...options, onStdout: output.write });
     validateProcessResult(result);
+    const normalized = output.finish(result.stdout);
 
     return {
       agent: 'claude',
@@ -100,8 +104,9 @@ export function createClaudeAdapter(
       durationMs: Math.round(performance.now() - startedAt),
       timedOut: result.timedOut,
       ...(result.cancelled === undefined ? {} : { cancelled: result.cancelled }),
-      stdout: result.stdout,
+      stdout: normalized.stdout,
       stderr: result.stderr,
+      ...(normalized.usage ? { usage: normalized.usage } : {}),
     };
   };
 }

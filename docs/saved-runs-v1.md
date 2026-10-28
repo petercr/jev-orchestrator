@@ -95,6 +95,20 @@ execution prevents a resumable stop. These checks validate stored history; they
 do not replace the orchestration policy or independently establish that task
 acceptance criteria were met.
 
+Coding-worker `execution_outcome` events may include a reporting-only `usage`
+object: numeric `input`, `output`, and `total`, with optional `cachedInput` and
+`cacheWriteInput`. Counts must be nonnegative safe integers no greater than
+one trillion, `total` must equal input plus output, and cache components cannot
+exceed input. Unknown fields are rejected. The outcome must match a coding
+worker reservation. No raw worker event, cost, credential, or model metadata
+is saved here, and usage never enters `AgentState` or approved candidates.
+
+History and the CLI's saved-task totals sum this usage once per reserved
+worker attempt across all process segments. Missing outcomes or older events
+without usage count as unavailable, rather than zero. The optional field does
+not alter schema version 1, attempt ordering, budgets, or continuation checks;
+older development readers that reject this field require the newer CLI.
+
 New clean-stop events include `repositorySnapshotHash`, the SHA-256 of a
 version-1 `repository.json` manifest. The manifest contains bounded relative
 paths and content hashes (or null for missing tracked/root context files),

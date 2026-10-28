@@ -238,6 +238,10 @@ function validateEventSequence(events: SavedRunEvent[], checkpoint: SavedRunChec
       if (status !== 'active' || !reservedAttempts.has(data.attemptId) || finishedAttempts.has(data.attemptId)) {
         fail('invalid_record', 'Saved run execution outcome has no matching reservation.');
       }
+      if (data.usage !== undefined && !events.some((attempt) => attempt.type === 'execution_reserved' &&
+          attempt.attemptId === data.attemptId && (attempt.action === 'CALL_CODEX' || attempt.action === 'CALL_CLAUDE'))) {
+        fail('invalid_record', 'Worker usage requires a coding-worker reservation.');
+      }
       finishedAttempts.add(data.attemptId);
     } else if (data.type === 'clarification_recorded') {
       if (status !== 'active' || data.iteration !== lastIteration || lastApproved?.action !== 'ASK_USER') {

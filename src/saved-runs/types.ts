@@ -1,4 +1,5 @@
 import type { EvaluationProvider, AgentState, Action, WorkerSelection } from '../types.js';
+import type { WorkerUsage } from '../agents/usage.js';
 
 export const SAVED_RUN_SCHEMA_VERSION = 1 as const;
 export const SAVED_RUN_CHECKPOINT_LIMIT_BYTES = 1_048_576;
@@ -41,7 +42,7 @@ export type SavedRunEventData =
   | { type: 'evaluation_failed'; iteration: number; code: string; stage: string; category: string }
   | { type: 'action_approved'; iteration: number; action: Action; decision: 'approve' | 'alternative' }
   | { type: 'execution_reserved'; iteration: number; attemptId: string; action: Action }
-  | { type: 'execution_outcome'; attemptId: string; outcome: 'succeeded' | 'failed' | 'cancelled' | 'uncertain' }
+  | { type: 'execution_outcome'; attemptId: string; outcome: 'succeeded' | 'failed' | 'cancelled' | 'uncertain'; usage?: WorkerUsage }
   | { type: 'clarification_recorded'; iteration: number }
   | { type: 'run_stopped'; reason: 'user' | 'signal' | 'evaluation_failure' | 'storage_error'; resumable: boolean; repositorySnapshotHash?: string }
   | { type: 'run_finished' }

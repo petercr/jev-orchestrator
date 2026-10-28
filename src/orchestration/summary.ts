@@ -8,6 +8,7 @@ import {
 import type { ApprovalDecision } from './loop.js';
 import type { ExecutableAction } from './candidate.js';
 import type { ToolResult } from './execute.js';
+import { addWorkerUsage, emptyWorkerUsage, type WorkerUsageSummary } from '../agents/usage.js';
 
 const TIMING_PHASES = [
   'evaluationMs', 'preparationMs', 'workerMs', 'validationMs',
@@ -40,7 +41,7 @@ export type RunCounts = {
   cancelledExecutions: number;
 };
 
-export type RunMetrics = { timings: RunTimings; counts: RunCounts };
+export type RunMetrics = { timings: RunTimings; counts: RunCounts; workerUsage: WorkerUsageSummary };
 
 export type RunSummary = RunMetrics & {
   validation: {
@@ -78,6 +79,7 @@ export function createRunMetrics(initialInspectionMs: number = 0, resumeReviewWa
     validationRuns: 0, validationFailures: 0, failedExecutions: 0,
     timedOutExecutions: 0, cancelledExecutions: 0,
   };
+  const workerUsage = emptyWorkerUsage();
   const snapshot = (): RunMetrics => {
     const phases = { ...durations };
     for (const phase of TIMING_PHASES) phases[phase] = Math.floor(phases[phase]);
@@ -91,6 +93,7 @@ export function createRunMetrics(initialInspectionMs: number = 0, resumeReviewWa
         otherMs: Math.max(0, elapsedMs - TIMING_PHASES.reduce((sum, phase) => sum + phases[phase], 0)),
       },
       counts: { ...counts },
+      workerUsage: structuredClone(workerUsage),
     };
   };
   return {
@@ -117,6 +120,9 @@ export function createRunMetrics(initialInspectionMs: number = 0, resumeReviewWa
       if (action === 'RUN_TESTS') counts.validationRuns += 1;
     },
     recordResult(result: ToolResult): void {
+      if (result.action === 'CALL_CODEX' || result.action === 'CALL_CLAUDE') {
+        addWorkerUsage(workerUsage, result.action === 'CALL_CODEX' ? 'codex' : 'claude', result.usage);
+      }
       if (!result.ok) counts.failedExecutions += 1;
       if (result.action === 'RUN_TESTS' && !result.ok) counts.validationFailures += 1;
       if (result.timedOut) counts.timedOutExecutions += 1;

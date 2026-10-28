@@ -137,6 +137,7 @@ describe('read-only saved run history', () => {
     const lines = formatSavedRunLines(detail).join('\n');
     expect(lines).toContain('Codex calls: 1/2 used; 1 available');
     expect(lines).toContain('Claude calls: 0/2 used; 0 available (worker excluded)');
+    expect(lines).toContain('Saved task worker tokens: unavailable; Codex unavailable; Claude no calls.');
     expect(lines).toContain('build (failed), lint (pending)');
     expect(lines).toContain('earlier passes cannot approve completion after restart');
   });
@@ -168,6 +169,7 @@ describe('read-only saved run history', () => {
     expect(output).toContain('No durable clean stop');
     expect(output).toContain('1 reserved execution attempt(s) have no outcome');
     expect(output).toContain(`${worker === 'codex' ? 'Codex' : 'Claude'} calls: 1/2 used; 1 available`);
+    expect(output).toContain('Usage reported for 0/1 attempts; 1 unavailable.');
   });
 
   it('distinguishes an uncertain execution outcome from a resumable stop', async () => {

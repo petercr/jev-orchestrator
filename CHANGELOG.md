@@ -20,11 +20,21 @@ remains `dev-agent`, and Node.js 22+ is required.
 - Retain the actual historical worker process outcome after resume while
   invalidating earlier validation. Prefer known task files during approved
   reads after instructions and search evidence, ahead of generic metadata.
+- Report worker input/output/total tokens from bounded structured Codex and
+  Claude usage events. Show per-worker totals and reporting coverage, retain
+  available failed/interrupted-attempt usage, and label missing usage explicitly.
+  Saved outcome events retain numeric usage outside task state so history and
+  resumed tasks report cumulative totals without resetting budgets.
 
 The original live candidate preserved its patch and passed fresh validation,
 but exhausted its iteration budget before completion acceptance. Its failure
 is retained in the [live results](docs/workflows/v0.6-live-results.md); the
-context fixes require a separately authorized fresh pilot before release.
+context fixes were retested on 2026-10-28. Codex completed, but Claude reached
+the iteration limit after an evaluation recovery despite passing validation;
+the active-interruption scenario was not launched. The
+[retest report](docs/workflows/v0.6-live-retest-results-20261028.md) retains the
+failure. The live release gate remains blocked, and the later token-reporting
+change has offline verification only.
 
 Saved data uses local, unencrypted schema-v1 records outside the worktree.
 There is no automatic migration, deletion, retention cleanup, crash replay, or
