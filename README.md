@@ -698,7 +698,7 @@ argument list immediately before spawning the literal `git` executable, uses no
 shell, and enforces a 10-second deadline.
 
 Both coding agents use small typed adapters and literal executables with direct
-arguments, never a shell. Codex is pinned to `gpt-5.6-terra` with `high`
+arguments, never a shell. Codex is pinned to `gpt-6.1-terra` with `high`
 reasoning in a repository-rooted `workspace-write` sandbox. Command networking
 is explicitly disabled unless `--codex-network` is supplied. It ignores user
 configuration and execution rules, cannot request further approvals, and does
