@@ -1,0 +1,32 @@
+{
+  "cli_version": "0.12.3-nightly.202610300619.cea1b3cee",
+  "checkpoint_id": "01M69T1NPXX64HKTPW3G896QRD",
+  "session_id": "01a1934f-6c94-7703-bbaf-1b2b0278652e",
+  "strategy": "manual-commit",
+  "created_at": "2026-10-31T20:22:37.455230144Z",
+  "branch": "docs/v0.6-retest-after-quota",
+  "checkpoints_count": 1,
+  "files_touched": [
+    "docs/workflows/v0.6-live-retest-20261031b.md"
+  ],
+  "agent": "Codex",
+  "model": "gpt-6.1-sol",
+  "turn_id": "7d9efaadd175",
+  "checkpoint_transcript_start": 961,
+  "transcript_lines_at_start": 961,
+  "compact_transcript_start": 242,
+  "redaction": {
+    "replacements": 6,
+    "layers": {
+      "betterleaks": 3,
+      "connection_string": 0,
+      "credential_key": 0,
+      "credential_value": 2,
+      "credentialed_uri": 0,
+      "entropy": 2,
+      "key_context": 0,
+      "provider_token": 0,
+      "shell_stdin": 0
+    }
+  }
+}
