@@ -146,5 +146,5 @@ export type PolicyDecision = {
   override: boolean;
   reason: string;
   // Retain the v0.2 serialized label for trace compatibility across providers.
-  completionReview?: 'jev_finish' | 'validation_complete';
+  completionReview?: 'jev_finish' | 'validation_complete' | 'validated_inspection';
 };

@@ -105,6 +105,64 @@ describe('completion after independent validation', () => {
     expect(result.state.observations).toContain('User explicitly confirmed task acceptance after all required independent validation passed.');
   });
 
+  function recordValidatedWorker(initial: ReturnType<typeof createInitialState>): void {
+    initial.tests = { ran: true, passed: true };
+    initial.claudeCalls = 1;
+    initial.evidence!.validationGeneration = 1;
+    initial.evidence!.worker = { agent: 'claude', iteration: 1, evidenceRevision: 0, exitCode: 0, timedOut: false, ok: true, summary: '', modifiedFiles: [] };
+    initial.evidence!.validations = ['verify', 'build'].map((script) => ({ iteration: 2, generation: 1, script, exitCode: 0, timedOut: false, passed: true, summary: '' }));
+    initial.iteration = 2;
+  }
+
+  it('approving a validated inspection still executes only the read and exhausts the unchanged budget', async () => {
+    const repo = await repository();
+    const initial = preparedState(repo);
+    recordValidatedWorker(initial);
+    const execute = vi.fn<typeof executeCandidate>().mockImplementation((proposal) => executeCandidate(proposal));
+    const result = await runOrchestration(initial, {
+      evaluate: async () => evaluation('READ_FILE'),
+      approve: async ({ proposal, allowedAlternatives }) => {
+        expect(proposal.action).toBe('READ_FILE');
+        expect(allowedAlternatives).toContain('FINISH');
+        return { kind: 'approve' };
+      },
+      askForInformation: vi.fn(), execute,
+    }, { startIteration: 3, maxIterations: 3 });
+    expect(result).toMatchObject({ status: 'iteration_limit', exitCode: 1, iterations: 3, state: { claudeCalls: 1 } });
+    expect(execute).toHaveBeenCalledOnce();
+    expect(execute.mock.calls[0]![0].action).toBe('READ_FILE');
+    expect(result.state.observations).not.toContain('User explicitly confirmed task acceptance after all required independent validation passed.');
+  });
+
+  it.each(['reject', 'stop', 'interrupt', 'invalidate', 'remove_worker'] as const)('does not complete an inspection alternative after %s at final approval', async (condition) => {
+    const repo = await repository();
+    const initial = preparedState(repo);
+    recordValidatedWorker(initial);
+    const controller = new AbortController();
+    const execute = vi.fn();
+    const seen: string[] = [];
+    const result = await runOrchestration(initial, {
+      evaluate: async () => evaluation('READ_FILE'),
+      approve: async ({ proposal, state }) => {
+        seen.push(proposal.action);
+        if (proposal.action === 'READ_FILE') return { kind: 'alternative', action: 'FINISH' };
+        if (condition === 'reject' || condition === 'stop') return { kind: condition };
+        if (condition === 'interrupt') controller.abort();
+        if (condition === 'invalidate') state.evidence!.validationGeneration += 1;
+        if (condition === 'remove_worker') delete state.evidence!.worker;
+        return { kind: 'approve' };
+      },
+      askForInformation: vi.fn(), execute,
+    }, { startIteration: 3, maxIterations: 3, signal: controller.signal });
+    expect(seen).toEqual(['READ_FILE', 'FINISH']);
+    expect(result.status).toBe(condition === 'stop' || condition === 'interrupt' ? 'stopped' : 'iteration_limit');
+    expect(result.state.currentGoal).not.toBe('Task complete.');
+    expect(execute).not.toHaveBeenCalled();
+    const record = JSON.parse((await readFile(result.tracePath, 'utf8')).trim());
+    expect(record).toMatchObject({ policy: { selected: 'READ_FILE', completionReview: 'validated_inspection' }, toolInput: null, toolResult: null });
+    if (condition === 'interrupt') expect(record.approval.history).toEqual([{ kind: 'alternative', action: 'FINISH' }]);
+  });
+
   it.each(['reject', 'stop'] as const)('does not complete a validation review on %s', async (kind) => {
     const repo = await repository();
     const initial = preparedState(repo);
@@ -153,17 +211,18 @@ describe('completion after independent validation', () => {
     expect(record.approval.history).toEqual([{ kind: 'alternative', action: 'FINISH' }]);
   });
 
-  it.each(['pending', 'failed', 'new_generation', 'refresh', 'omitted_requirements', 'missing_information', 'stuck', 'ambiguous'] as const)('withholds completion on %s evidence', async (condition) => {
+  it.each((['RUN_TESTS', 'READ_FILE'] as const).flatMap((route) =>
+    (['pending', 'failed', 'new_generation', 'refresh', 'omitted_requirements', 'missing_information', 'stuck', 'ambiguous'] as const)
+      .map((condition) => ({ route, condition }))))('withholds $route completion on $condition evidence', async ({ route, condition }) => {
     const repo = await repository();
     const initial = preparedState(repo);
-    initial.tests = { ran: true, passed: true };
-    initial.evidence!.validations = ['verify', 'build'].map((script) => ({ iteration: 0, generation: 0, script, exitCode: 0, timedOut: false, passed: true, summary: '' }));
-    if (condition === 'pending') initial.evidence!.validations.pop();
-    if (condition === 'failed') initial.evidence!.validations[0]!.passed = false;
+    recordValidatedWorker(initial);
+    if (condition === 'pending') initial.evidence!.validations!.pop();
+    if (condition === 'failed') initial.evidence!.validations![0]!.passed = false;
     if (condition === 'new_generation') initial.evidence!.validationGeneration += 1;
     if (condition === 'refresh') initial.evidence!.repoRefreshRequired = true;
     if (condition === 'omitted_requirements') initial.evidence!.issue = { url: issueUrl, title: 'Task', body: '', requestedValidationScripts: [], truncated: false, validationRequirementsTruncated: true };
-    const request = evaluation('RUN_TESTS');
+    const request = evaluation(route);
     if (condition === 'missing_information') request.assessment.needsMoreInformation.probability = 0.95;
     if (condition === 'stuck') request.assessment.stuck.probability = 0.95;
     if (condition === 'ambiguous') request.assessment.nextAction.confidence = 0.1;
@@ -172,7 +231,7 @@ describe('completion after independent validation', () => {
       evaluate: async () => request,
       approve: async ({ allowedAlternatives }) => { alternatives.push(allowedAlternatives); return { kind: 'stop' }; },
       askForInformation: vi.fn(), execute: vi.fn(),
-    });
+    }, { startIteration: 3 });
     expect(alternatives[0]).not.toContain('FINISH');
     expect(result.status).toBe('stopped');
   });

@@ -390,8 +390,16 @@ manually even when the separate task-completion probability remains below the
 required checks already passed, policy selects `ASK_USER` for completion review
 and makes the same manual path available. Review the original task acceptance
 criteria, enter `FINISH`, review the resolved candidate, then enter `approve`.
+After a worker attempt, a clear `READ_FILE` route also offers this alternative
+when every required independent check passed after that attempt in the current
+generation. The file read remains the proposed action: approving it performs
+only that read. Choose `FINISH` only after reviewing the saved changes against
+the original task yourself; its resolved candidate still requires separate
+approval. Baseline checks without a worker attempt do not enable this inspection
+alternative, and it does not depend on the number of iterations remaining.
 The trace records whether policy offered review for a Jev finish request or
-completed validation, along with both approval decisions. Missing, failed, or
+completed validation, or alongside a validated inspection, along with both
+approval decisions. Missing, failed, or
 stale checks, omitted issue requirements, unresolved repository inspection,
 ambiguous routing, and high missing-information/stuck assessments prevent
 this manual completion path. Passing baseline tests alone does not establish

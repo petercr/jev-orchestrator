@@ -19,6 +19,21 @@ export const DEFAULT_THRESHOLDS: PolicyThresholds = {
   minChoiceConfidence: 0.35,
 };
 
+/** Independent checks must follow the attempt, including after resume. */
+export function hasValidatedWorkerAttempt(state: AgentState): boolean {
+  const evidence = state.evidence;
+  if (!evidence?.worker || !hasPassedValidation(state)) return false;
+  const worker = evidence.worker;
+  const checks = evidence.validations ?? (evidence.validation ? [evidence.validation] : []);
+  return hasPassedValidation({
+    ...state,
+    evidence: {
+      ...evidence,
+      validations: checks.filter((check) => check.iteration > worker.iteration && check.iteration < state.iteration),
+    },
+  });
+}
+
 function hasWorkerRepairEvidence(state: AgentState, requested: PolicyDecision['requested']): boolean {
   const evidence = state.evidence;
   if (!evidence?.worker) return false;
@@ -194,6 +209,16 @@ export function applyPolicy(
       override: true,
       reason: 'All required independent checks passed for the current generation; review whether the original task acceptance criteria are satisfied.',
       completionReview: 'validation_complete',
+    };
+  }
+
+  if (requested === 'READ_FILE' && hasValidatedWorkerAttempt(state)) {
+    return {
+      requested,
+      selected: requested,
+      override: false,
+      reason: 'The clear file-read recommendation remains available. Independent validation passed after a worker attempt; the operator may instead review the original task acceptance criteria for explicit completion.',
+      completionReview: 'validated_inspection',
     };
   }
 

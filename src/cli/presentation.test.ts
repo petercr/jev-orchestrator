@@ -174,6 +174,24 @@ describe('operator explanations from policy and candidate evidence', () => {
     expect(output).not.toContain('Enter approve to run only the displayed RUN_TESTS');
   });
 
+  it('explains optional completion review while preserving the proposed file read', async () => {
+    const initial = state(); pass(initial);
+    await writeFile(path.join(root, 'label.mjs'), 'export const label = "fixed";');
+    initial.repo.topLevelFiles.push('label.mjs');
+    initial.iteration = 6;
+    initial.codexCalls = 1;
+    initial.evidence!.worker = { agent: 'codex', iteration: 3, evidenceRevision: 0, exitCode: 0, timedOut: false, ok: true, summary: '', modifiedFiles: [] };
+    const view = await context(initial, evaluation('READ_FILE'), ['READ_FILE', 'FINISH']);
+    const before = structuredClone(view);
+    const output = formatApprovalLines(view).join('\n');
+    expect(view.policy.completionReview).toBe('validated_inspection');
+    expect(output).toContain('Policy selected: READ_FILE');
+    expect(output).toContain('Safe candidate: READ_FILE');
+    expect(output).toContain('Enter approve to run only the displayed READ_FILE candidate.');
+    expect(output).toContain('Completion review is available. Select FINISH, review its resolved candidate');
+    expect(view).toEqual(before);
+  });
+
   it('shows a sub-threshold completion probability exactly', async () => {
     const initial = state(); pass(initial);
     const output = formatApprovalLines(await context(initial, evaluation('FINISH', 0.99, 0.949), ['ASK_USER', 'FINISH'])).join('\n');

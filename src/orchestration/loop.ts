@@ -5,7 +5,7 @@ import {
   createOrchestrationTrace,
   type InterruptionPhase,
 } from '../logging/trace.js';
-import { applyPolicy } from '../policy.js';
+import { applyPolicy, hasValidatedWorkerAttempt } from '../policy.js';
 import { requiresTaskPreparation, taskPreparation } from '../repo/preparation.js';
 import { truncateText } from '../limits.js';
 import { inspectRepo } from '../repo/inspect.js';
@@ -268,6 +268,12 @@ function withToolEvidence(
   return evidence;
 }
 
+function completionAllowed(state: AgentState, policy: PolicyDecision): boolean {
+  return hasPassedValidation(state) && (policy.selected === 'FINISH' ||
+    (policy.selected === 'ASK_USER' && policy.completionReview !== undefined) ||
+    (policy.selected === 'READ_FILE' && policy.completionReview === 'validated_inspection' && hasValidatedWorkerAttempt(state)));
+}
+
 function allowedAlternatives(
   state: AgentState,
   policy: PolicyDecision,
@@ -278,8 +284,7 @@ function allowedAlternatives(
     if (!isWorkerActionAllowed(action, state.workerSelection)) return false;
     if (preparation.nextAction !== null && requiresTaskPreparation(action)) return false;
     if (action === 'FINISH') {
-      return hasPassedValidation(state) && (policy.selected === 'FINISH' ||
-        (policy.selected === 'ASK_USER' && policy.completionReview !== undefined));
+      return completionAllowed(state, policy);
     }
     if (action === 'RUN_TESTS') return selectPendingValidation(state) !== undefined;
     if (action === 'READ_ISSUE') {
@@ -896,10 +901,8 @@ export async function runOrchestration(
         const blockedRepeat = state.failedApproaches.includes(proposalSignature(proposal, state));
         const exhaustedCodex = proposal.action === 'CALL_CODEX' && state.codexCalls >= MAX_CODEX_CALLS;
         const exhaustedClaude = proposal.action === 'CALL_CLAUDE' && state.claudeCalls >= MAX_CLAUDE_CALLS;
-        const completionAllowed = policy.selected === 'FINISH' ||
-          (policy.selected === 'ASK_USER' && policy.completionReview !== undefined);
         const blockedCompletion = proposal.action === 'FINISH' &&
-          (!hasPassedValidation(state) || !completionAllowed);
+          !completionAllowed(state, policy);
         const blockedValidation = proposal.action === 'RUN_TESTS' && selectPendingValidation(state) === undefined;
         const blockedPreparation = requiresTaskPreparation(proposal.action) && taskPreparation(state).nextAction !== null;
         const blockedWorker = !isWorkerActionAllowed(proposal.action, workerSelection) ||
@@ -998,7 +1001,7 @@ export async function runOrchestration(
         terminalStatus = 'finished';
         const completionObservation = policy.selected === 'FINISH'
           ? 'User approved completion.'
-          : policy.completionReview === 'validation_complete'
+          : policy.completionReview === 'validation_complete' || policy.completionReview === 'validated_inspection'
             ? 'User explicitly confirmed task acceptance after all required independent validation passed.'
             : 'User explicitly overrode completion confidence after passing validation.';
         nextState = {

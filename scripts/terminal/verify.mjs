@@ -40,6 +40,8 @@ const scenarios = [
   { name: 'ci', mode: 'complete', environment: { CI: 'true' } },
   { name: 'dumb', mode: 'complete', environment: { TERM: 'dumb' } },
   { name: 'claude', mode: 'complete', worker: 'claude' },
+  { name: 'inspection-styled', mode: 'inspection' },
+  { name: 'inspection-plain', mode: 'inspection', worker: 'claude', plain: true },
   { name: 'network', mode: 'complete', network: true },
   { name: 'repair', mode: 'repair' },
   { name: 'recovery', mode: 'recovery' },
@@ -181,7 +183,9 @@ async function walkthrough(scenario) {
         else if (prompt.kind === 'recovery') answer = responses.length === 0 ? 'approve\r' : 'continue\r';
         else {
           const actions = [...contents.matchAll(/Safe candidate:\s*(\w+)/gu)];
-          answer = actions.at(-1)?.[1] === 'ASK_USER' && !mode.startsWith('information') ? 'FINISH\r' : 'approve\r';
+          const candidate = actions.at(-1)?.[1];
+          answer = (candidate === 'ASK_USER' || (mode === 'inspection' && candidate === 'READ_FILE')) &&
+            !mode.startsWith('information') ? 'FINISH\r' : 'approve\r';
         }
         responses.push(answer.replace(/\r$/u, ''));
         send(answer);
@@ -247,13 +251,22 @@ async function walkthrough(scenario) {
       assert.equal(counts[worker === 'codex' ? 'codexCalls' : 'claudeCalls'], 0);
       assert.deepEqual(last.approval.history, [{ kind: 'alternative', action: 'FINISH' }, { kind: 'approve' }]);
       assert.equal(last.iteration, 7);
-    } else if (['complete', 'repair', 'recovery'].includes(mode)) {
+    } else if (['complete', 'repair', 'recovery', 'inspection'].includes(mode)) {
       assert.equal(last.summary.validation.passed, true);
       assert.equal(last.stateAfter.evidence.validationGeneration, mode === 'repair' ? 2 : 1);
       assert.equal(counts[worker === 'codex' ? 'codexCalls' : 'claudeCalls'], mode === 'repair' ? 2 : 1);
       assert.deepEqual(last.approval.history, [{ kind: 'alternative', action: 'FINISH' }, { kind: 'approve' }]);
       assert.equal(counts.evaluationRecoveries, Number(mode === 'recovery'));
       assert.equal(readFileSync(path.join(root, 'value.mjs'), 'utf8'), 'export const value = 2;\n');
+      if (mode === 'inspection') {
+        assert.equal(last.policy.selected, 'READ_FILE');
+        assert.equal(last.policy.override, false);
+        assert.equal(last.policy.completionReview, 'validated_inspection');
+        assert.deepEqual(last.proposal.considered.map((proposal) => proposal.action), ['READ_FILE', 'FINISH']);
+        assert.equal(last.toolResult, null);
+        assert.ok(receipt.applicationOutput.includes('Enter approve to run only the displayed READ_FILE candidate.'));
+        assert.ok(receipt.applicationOutput.includes('Completion review is available. Select FINISH'));
+      }
     } else if (mode.startsWith('active')) {
       assert.equal(last.interruption.phase, 'execution');
       assert.equal(counts.cancelledExecutions, 1);

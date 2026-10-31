@@ -574,4 +574,74 @@ describe('applyPolicy', () => {
     expect(applyPolicy(validated, assessment({ taskComplete: { probability: 0.949 }, nextAction: route })).selected).toBe('ASK_USER');
     expect(applyPolicy(validated, assessment({ taskComplete: { probability: 0.95 }, nextAction: route })).selected).toBe('FINISH');
   });
+
+  function validatedWorkerState(worker: 'codex' | 'claude' = 'claude'): AgentState {
+    return {
+      ...state, workerSelection: worker, iteration: 8, tests: { ran: true, passed: true },
+      codexCalls: Number(worker === 'codex'), claudeCalls: Number(worker === 'claude'),
+      evidence: {
+        revision: 2, validationGeneration: 2, clarifications: [], findings: [], failures: [],
+        worker: { agent: worker, iteration: 2, evidenceRevision: 1, exitCode: 0, timedOut: false, ok: true, summary: 'Untrusted claim.', modifiedFiles: [] },
+        validations: [{ iteration: 6, generation: 2, script: 'test', passed: true, exitCode: 0, timedOut: false, summary: 'Independent pass.' }],
+      },
+    };
+  }
+
+  const inspection = assessment({
+    taskComplete: { probability: 0.28 },
+    nextAction: { choice: 'READ_FILE', probabilities: { READ_FILE: 0.78 }, confidence: 0.75 },
+  });
+
+  it.each(['codex', 'claude'] as const)('keeps clear inspection as the default while offering explicit acceptance after a validated %s attempt', (worker) => {
+    const initial = validatedWorkerState(worker);
+    const before = structuredClone(initial);
+    expect(applyPolicy(initial, inspection)).toMatchObject({
+      requested: 'READ_FILE', selected: 'READ_FILE', override: false, completionReview: 'validated_inspection',
+    });
+    expect(initial).toEqual(before);
+    expect(applyPolicy({ ...initial, iteration: 7 }, inspection).completionReview).toBe('validated_inspection');
+    expect(applyPolicy(initial, { ...inspection, taskComplete: { probability: 0.95 } }).selected).toBe('FINISH');
+  });
+
+  it.each([
+    'no_worker', 'worker_claim', 'stale', 'failed', 'timed_out', 'pending', 'before_worker', 'future_check',
+    'omitted_requirements', 'refresh', 'unread_instructions', 'unread_issue', 'missing_information', 'stuck', 'ambiguous', 'low_confidence',
+  ] as const)('withholds inspection completion review for %s', (condition) => {
+    const initial = validatedWorkerState();
+    const request = structuredClone(inspection);
+    const evidence = initial.evidence!;
+    const check = evidence.validations![0]!;
+    if (condition === 'no_worker') delete evidence.worker;
+    if (condition === 'worker_claim') evidence.validations = [];
+    if (condition === 'stale') check.generation = 1;
+    if (condition === 'failed') check.exitCode = 1;
+    if (condition === 'timed_out') check.timedOut = true;
+    if (condition === 'pending') initial.repo = { ...initial.repo, requiredValidationScripts: ['test', 'lint'] };
+    if (condition === 'before_worker') check.iteration = 2;
+    if (condition === 'future_check') check.iteration = 8;
+    if (condition === 'omitted_requirements') evidence.issue = { url: 'https://github.com/owner/repo/issues/80', title: '', body: '', requestedValidationScripts: [], truncated: false, validationRequirementsTruncated: true };
+    if (condition === 'refresh') evidence.repoRefreshRequired = true;
+    if (condition === 'unread_instructions') evidence.requiredInstructionFiles = ['AGENTS.md'];
+    if (condition === 'unread_issue') initial.task = 'https://github.com/owner/repo/issues/80';
+    if (condition === 'missing_information') request.needsMoreInformation.probability = 0.9;
+    if (condition === 'stuck') request.stuck.probability = 0.9;
+    if (condition === 'ambiguous') request.nextAction.probabilities.READ_FILE = 0.54;
+    if (condition === 'low_confidence') request.nextAction.confidence = 0.34;
+    expect(applyPolicy(initial, request)).not.toHaveProperty('completionReview');
+  });
+
+  it.each(['CALL_CODEX', 'CALL_CLAUDE', 'ASK_USER', 'SEARCH_REPO', 'RUN_COMMAND'] as const)('does not extend inspection completion review to %s', (choice) => {
+    expect(applyPolicy(validatedWorkerState(), assessment({
+      nextAction: { choice, probabilities: { [choice]: 0.9 }, confidence: 0.8 },
+    }))).not.toHaveProperty('completionReview');
+  });
+
+  it('requires every covered check to pass after the worker attempt', () => {
+    const initial = validatedWorkerState();
+    initial.repo = { ...initial.repo, requiredValidationScripts: ['test', 'lint'], validationScriptCoverage: { verify: ['test', 'lint'] } };
+    initial.evidence!.validations!.push({ ...initial.evidence!.validations![0]!, script: 'lint', iteration: 1 });
+    expect(applyPolicy(initial, inspection)).not.toHaveProperty('completionReview');
+    initial.evidence!.validations = [{ ...initial.evidence!.validations![0]!, script: 'verify' }];
+    expect(applyPolicy(initial, inspection).completionReview).toBe('validated_inspection');
+  });
 });

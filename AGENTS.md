@@ -20,6 +20,15 @@ For linked-issue tasks, confident routing gathers the exact issue and known root
 
 Do not schedule validation when no required checks remain pending. A confident redundant `RUN_TESTS` request becomes a policy-owned `ASK_USER` completion review. Selecting `FINISH` and then approving the resolved candidate confirms the original task acceptance criteria; passing validation alone is insufficient for automatic completion. Preserve the 95% automatic completion threshold and missing-information, stuck, ambiguity, and current-generation validation guards. An exhausted iteration budget returns `iteration_limit` with exit code 1 and preserves edits and evidence.
 
+A clear `READ_FILE` recommendation after a worker attempt may offer a manual
+`FINISH` alternative only when all required current-generation independent
+checks passed after that attempt. Keep the read as the proposed action;
+approving it authorizes only the read. Selecting `FINISH` and then separately
+approving it confirms the original acceptance criteria. Baseline tests and
+worker claims cannot enable this alternative. Retain preparation, ambiguity,
+missing-information/stuck, final approval, and iteration/call guards; remaining
+iterations cannot grant completion permission.
+
 A high testing assessment may still accompany a clear repair recommendation.
 Allow that route back to the same available worker only with a failed
 current-generation independent check recorded after its attempt. Worker claims,

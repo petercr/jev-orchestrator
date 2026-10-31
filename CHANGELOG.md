@@ -25,6 +25,11 @@ remains `dev-agent`, and Node.js 22+ is required.
   available failed/interrupted-attempt usage, and label missing usage explicitly.
   Saved outcome events retain numeric usage outside task state so history and
   resumed tasks report cumulative totals without resetting budgets.
+- Offer an explicit completion alternative alongside a clear file-read route
+  after a worker attempt and fresh passing independent checks. Keep the read
+  as the default and require separate selection and approval of task acceptance.
+  Baseline-only checks, missing preparation, ambiguous routing, and stale or
+  incomplete checks cannot enable this alternative; budgets remain unchanged.
 
 The original live candidate preserved its patch and passed fresh validation,
 but exhausted its iteration budget before completion acceptance. Its failure
