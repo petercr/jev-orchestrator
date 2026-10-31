@@ -28,6 +28,10 @@ remains `dev-agent`, and Node.js 22+ is required.
 - Offer an explicit completion alternative alongside a clear file-read route
   after a worker attempt and fresh passing independent checks. Keep the read
   as the default and require separate selection and approval of task acceptance.
+- Pin the Codex worker to `gpt-6.1-terra` with unchanged high reasoning,
+  `workspace-write` sandbox, disabled command networking by default, and
+  implementation-only prompting. Earlier benchmark and pilot records keep the
+  `gpt-5.6-terra` model they actually used.
   Baseline-only checks, missing preparation, ambiguous routing, and stale or
   incomplete checks cannot enable this alternative; budgets remain unchanged.
 

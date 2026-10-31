@@ -92,7 +92,8 @@ describe('Codex adapter', () => {
     expect(flags.slice(flags.indexOf('--sandbox'), flags.indexOf('--sandbox') + 2)).toEqual(['--sandbox', 'workspace-write']);
     expect(flags).not.toContain('--dangerously-bypass-approvals-and-sandbox');
     expect(flags).not.toContain('danger-full-access');
-    expect(flags).toContain(CODEX_MODEL);
+    expect(flags.slice(flags.indexOf('--model'), flags.indexOf('--model') + 2)).toEqual(['--model', 'gpt-6.1-terra']);
+    expect(flags).toContain('model_reasoning_effort="high"');
     expect(flags).toContain('--ignore-user-config');
   });
 
