@@ -112,6 +112,9 @@ export function formatApprovalLines(context: ApprovalContext): string[] {
     lines.push('Approve FINISH only after reviewing the original task acceptance criteria and saved changes; passing checks alone does not establish acceptance.');
   } else {
     lines.push(`Enter approve to run only the displayed ${proposal.action} candidate.`);
+    if (context.allowedAlternatives.includes('FINISH')) {
+      lines.push('Completion review is available. Select FINISH, review its resolved candidate, then approve only if the original task acceptance criteria are met.');
+    }
   }
   lines.push('To choose another action, enter a listed action name and review its resolved candidate before approval.');
   lines.push('Enter reject to skip this candidate and reevaluate, or stop to end the run without claiming completion; edits and evidence are kept.');

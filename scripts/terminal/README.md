@@ -50,6 +50,11 @@ include active SIGTERM and a TERM-resistant descendant. Windows substitutes an
 extra plain Ctrl+D/Enter case; plain Ctrl+Z/Enter is also checked. Both modes
 preserve separate completion acceptance and fresh independent checks.
 
+Two additional scenarios, `inspection-styled` and `inspection-plain`, keep a
+clear file read as the proposed action after a worker attempt and fresh checks.
+They select `FINISH`, separately approve its resolved candidate, and verify
+the `validated_inspection` provenance and that no read runs on acceptance.
+
 Another 14 terminal scenarios exercise saved runs with both workers, styled
 and plain reviews, immutable Codex networking, and two process restarts per
 task. Stop, EOF, Ctrl+C, and timeout during the continuation review preserve

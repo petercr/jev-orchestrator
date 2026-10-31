@@ -668,6 +668,13 @@ modules rather than introducing a workflow framework.
    launches, sixteen evaluations, and two worker attempts are retained; the
    active-interruption slots were not launched. Worker-token reporting added
    afterward has offline evidence only. The live release gate remains blocked.
+   A follow-up adds optional explicit task acceptance alongside a clear
+   file-read route after a worker attempt and fresh passing validation. The
+   read remains the default; acceptance still requires selecting `FINISH`
+   and approving its resolved candidate. The
+   [offline correction record](docs/workflows/v0.6-completion-review-fix.md)
+   retains the live failure and describes its deterministic reproduction.
+   Further live collection requires a frozen amendment and authorization.
 
 ### Verification and release acceptance
 
