@@ -1,10 +1,12 @@
 # Release notes
 
-## dev-orchestrator 0.6.0 candidate — saved runs and safe resume
+## dev-orchestrator 0.6.0 — saved runs and safe resume
 
-Unpublished candidate. The live stop/resume pilot and operator acceptance remain
-required before release. The package remains `dev-orchestrator`, its executable
-remains `dev-agent`, and Node.js 22+ is required.
+Published on npm on 2026-11-01 as
+[dev-orchestrator@0.6.0](https://www.npmjs.com/package/dev-orchestrator/v/0.6.0).
+The package remains `dev-orchestrator`, its executable remains `dev-agent`, and
+Node.js 22+ is required. See the
+[publication record](docs/releases/dev-orchestrator-0.6.0.md).
 
 - Add opt-in `--orchestrate --save-run`, bounded local checkpoints and attempt
   history, and exclusive ownership for saved and unsaved orchestration.
@@ -28,12 +30,12 @@ remains `dev-agent`, and Node.js 22+ is required.
 - Offer an explicit completion alternative alongside a clear file-read route
   after a worker attempt and fresh passing independent checks. Keep the read
   as the default and require separate selection and approval of task acceptance.
+  Baseline-only checks, missing preparation, ambiguous routing, and stale or
+  incomplete checks cannot enable this alternative; budgets remain unchanged.
 - Pin the Codex worker to `gpt-6.1-terra` with unchanged high reasoning,
   `workspace-write` sandbox, disabled command networking by default, and
   implementation-only prompting. Earlier benchmark and pilot records keep the
   `gpt-5.6-terra` model they actually used.
-  Baseline-only checks, missing preparation, ambiguous routing, and stale or
-  incomplete checks cannot enable this alternative; budgets remain unchanged.
 
 The original live candidate preserved its patch and passed fresh validation,
 but exhausted its iteration budget before completion acceptance. Its failure
@@ -42,8 +44,12 @@ context fixes were retested on 2026-10-28. Codex completed, but Claude reached
 the iteration limit after an evaluation recovery despite passing validation;
 the active-interruption scenario was not launched. The
 [retest report](docs/workflows/v0.6-live-retest-results-20261028.md) retains the
-failure. The live release gate remains blocked, and the later token-reporting
-change has offline verification only.
+failure. After the completion-review correction, worker-token reporting, and
+the Codex model update, the
+[2026-10-31 retest](docs/workflows/v0.6-live-retest-results-20261031.md)
+passed all three required scenarios (Codex and Claude stop/resume and active
+Codex interruption), each with explicit acceptance on iteration 6. An earlier
+attempt that day stopped on a Codex account usage limit and remains recorded.
 
 Saved data uses local, unencrypted schema-v1 records outside the worktree.
 There is no automatic migration, deletion, retention cleanup, crash replay, or
