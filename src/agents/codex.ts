@@ -11,7 +11,7 @@ import type { CodingAgentAdapter } from './types.js';
 import { createWorkerOutput } from './output.js';
 
 export const CODEX_TIMEOUT_MS = 15 * 60 * 1_000;
-export const CODEX_MODEL = 'gpt-5.6-terra';
+export const CODEX_MODEL = 'gpt-6.1-terra';
 export const CODEX_REASONING_EFFORT = 'high';
 
 export function buildCodexPrompt(task: string, context?: WorkerContext): string {
