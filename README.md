@@ -10,10 +10,10 @@ v0.3.1 onward.
 The GitHub repository keeps its existing name. The original v0.3.0 GitHub
 archive is recorded separately under its historical `jev-orchestrator` name;
 that unscoped npm package belongs to another project.
-[dev-orchestrator@0.5.0](https://www.npmjs.com/package/dev-orchestrator/v/0.5.0)
-was published on 2026-10-22 with styled terminal interaction, plain fallbacks,
-and clearer evaluation-recovery guidance. See the [release notes](CHANGELOG.md)
-and [publication record](docs/releases/dev-orchestrator-0.5.0.md).
+[dev-orchestrator@0.6.0](https://www.npmjs.com/package/dev-orchestrator/v/0.6.0)
+was published on 2026-11-01 with opt-in saved runs, local history, and safe
+resume after a clean stop. See the [release notes](CHANGELOG.md) and
+[publication record](docs/releases/dev-orchestrator-0.6.0.md).
 
 The default mode remains **decision-only**: it inspects a repository, sends a
 compact state object to the selected decision model, applies deterministic
@@ -896,7 +896,7 @@ Then, from the other project, install that exact archive and run the installed
 binary against that project:
 
 ```bash
-pnpm add --save-dev /absolute/path/to/dev-orchestrator-0.5.0.tgz
+pnpm add --save-dev /absolute/path/to/dev-orchestrator-0.6.0.tgz
 pnpm exec dev-agent --version
 pnpm exec dev-agent . "Inspect this repository and choose the safest useful first action" \
   --mock --no-trace --json
@@ -904,7 +904,7 @@ pnpm exec dev-agent . "Inspect this repository and choose the safest useful firs
 
 The expected mock result is one JSON object with `status: "unexecuted"`; it
 must not edit the target project or require an API key. The installed version
-must report the exact archive's version (`0.5.0` for this checkout). Do not pack or publish
+must report the exact archive's version (`0.6.0` for this checkout). Do not pack or publish
 `.env`, traces, build cache, or `node_modules`.
 
 Initial provider milestone verification on 2026-10-03 passed typecheck, all 269 tests,
@@ -1050,7 +1050,7 @@ and installed CLIs on POSIX PTYs and native Windows ConPTY without live calls.
 The [verification record](docs/presentation/v0.5-verification.md) documents
 the completed matrix, the Windows EOF correction, and the scope limits.
 
-The unpublished [v0.6 candidate](PLAN.md#v06-draft-saved-runs-and-safe-resume) adds
+Version `0.6.0` ([plan](PLAN.md#v06-draft-saved-runs-and-safe-resume)) adds
 opt-in saved runs, local history, and continuation after a clean stop on the
 same machine and Git worktree. In this source checkout, `--save-run` connects
 the bounded store to the orchestration loop, and `--list-runs` / `--show-run`
@@ -1070,8 +1070,8 @@ inspection, evaluation, or execution. Worktree locking also applies to
 unsaved orchestration; those runs still do not persist task state. Saved
 records remain separate from diagnostic traces, and an unresolved execution
 or storage failure cannot be treated as a clean continuation point. The
-published `0.5.0` CLI does not include this in-progress v0.6 feature. The
-versioned format, local integrity checks, and current Windows limits are
+feature first shipped in `0.6.0`; earlier published versions do not include it.
+The versioned format, local integrity checks, and current Windows limits are
 documented in [saved-run storage contract v1](docs/saved-runs-v1.md).
 
 History inspection works without provider credentials or network access, even
@@ -1135,7 +1135,7 @@ content fingerprints remain inspectable; start a new saved run to use resume.
 The [offline restart verification record](docs/saved-runs-verification.md)
 covers the provider/worker matrix and compiled/installed terminal checks.
 The separately authorized [live pilot](docs/workflows/v0.6-live-protocol.md)
-remains required before the v0.6 release.
+governed release acceptance.
 The [original live candidate](docs/workflows/v0.6-live-results.md) passed fresh
 validation after resume but exhausted its iteration budget before acceptance.
 Resume now retains the actual prior worker process outcome as history, and
@@ -1144,9 +1144,12 @@ evidence. Fresh validation and separate completion approval remain required.
 The [2026-10-28 retest](docs/workflows/v0.6-live-retest-results-20261028.md)
 completed Codex stop/resume, but Claude exhausted its iteration budget after
 one explicit evaluation recovery despite passing fresh validation. The
-active-interruption scenario remains unlaunched and the live release gate
-remains blocked. Worker-token reporting was added after that frozen pilot;
-its offline tests do not establish live token reporting or release acceptance.
+active-interruption scenario was not launched. After the completion-review
+correction, worker-token reporting, and the Codex `gpt-6.1-terra` update, the
+[2026-10-31 retest](docs/workflows/v0.6-live-retest-results-20261031.md) passed
+all three required scenarios with explicit acceptance, including live token
+reporting. Version `0.6.0` was then published; see its
+[publication record](docs/releases/dev-orchestrator-0.6.0.md).
 
 ## v0.3 decision-model release
 
