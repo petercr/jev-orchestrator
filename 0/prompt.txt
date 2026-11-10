@@ -1,0 +1,5 @@
+pr merged lets on to # 2 of list
+
+---
+
+we have 2 open trails, both are in planning and not building pahse. move them to that phase for code reviews
