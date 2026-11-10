@@ -18,7 +18,10 @@ export type { EvaluationErrorCode } from './errors.js';
 export { JevEvaluationError, JEV_EVALUATION_MAX_RETRIES, JEV_EVALUATION_TIMEOUT_MS, normalizeJevEvaluationError } from './errors.js';
 export type { JevEvaluationErrorCode } from './errors.js';
 
-export type Evaluator = (state: AgentState, options?: ExecutionOptions) => Promise<EvaluationResult>;
+/** Loop-owned routing context; never restored from task text or an approved candidate. */
+export type EvaluationOptions = ExecutionOptions & { iterationLimit?: number };
+
+export type Evaluator = (state: AgentState, options?: EvaluationOptions) => Promise<EvaluationResult>;
 
 /** Bind transport credentials and model once, outside serializable run state. */
 export function createEvaluator(
@@ -55,7 +58,7 @@ function waitForRetry(milliseconds: number, signal: AbortSignal): Promise<void> 
 export async function evaluateAgentState(
   state: AgentState,
   model?: EvaluationModel,
-  options: ExecutionOptions = {},
+  options: EvaluationOptions = {},
 ): Promise<EvaluationResult> {
   throwIfInterrupted(options.signal);
   return createEvaluator(resolveEvaluationConfiguration(), model)(state, options);
@@ -64,15 +67,15 @@ export async function evaluateAgentState(
 async function evaluateConfiguredState(
   state: AgentState,
   configuration: EvaluationConfiguration,
-  options: ExecutionOptions,
+  options: EvaluationOptions,
   modelOverride?: EvaluationModel,
 ): Promise<EvaluationResult> {
   throwIfInterrupted(options.signal);
   const startedAt = performance.now();
+  const snapshot = boundAgentStateForEvaluation(state, options.iterationLimit);
   const deadline = new AbortController();
   const timeout = setTimeout(() => deadline.abort(), EVALUATION_TIMEOUT_MS);
   const signal = options.signal ? AbortSignal.any([options.signal, deadline.signal]) : deadline.signal;
-  const snapshot = boundAgentStateForEvaluation(state);
   try {
     for (let attempt = 0; ; attempt += 1) {
       try {

@@ -7,11 +7,12 @@ import {
 } from '../logging/trace.js';
 import { applyPolicy, hasValidatedWorkerAttempt } from '../policy.js';
 import { requiresTaskPreparation, taskPreparation } from '../repo/preparation.js';
-import { truncateText } from '../limits.js';
+import { MAX_ORCHESTRATION_ITERATIONS, truncateText } from '../limits.js';
 import { inspectRepo } from '../repo/inspect.js';
 import { isIssueContext, parseGitHubIssue } from '../repo/issue.js';
 import { hasFailedValidation, hasPassedValidation, pendingValidationScripts, selectPendingValidation } from '../repo/validation.js';
 import { evaluationFailure, type EvaluationFailure } from '../ai/errors.js';
+import type { Evaluator } from '../ai/evaluate.js';
 import { isWorkerActionAllowed } from '../agents/selection.js';
 import type {
   Action,
@@ -36,7 +37,7 @@ import { createRunMetrics, executionTimingPhase, type RunCounts, type RunMetrics
 import { isWorkerUsage, type WorkerUsageSummary } from '../agents/usage.js';
 import type { SavedRunEventInput, SavedRunStatus } from '../saved-runs/types.js';
 
-export const MAX_ORCHESTRATION_ITERATIONS = 8;
+export { MAX_ORCHESTRATION_ITERATIONS } from '../limits.js';
 export const MAX_APPROVAL_ALTERNATIVES = 2;
 const MAX_OBSERVATION_LENGTH = 2_000;
 
@@ -86,7 +87,7 @@ export type EvaluationRecoveryContext = {
 };
 
 export type OrchestrationDependencies = {
-  evaluate: (state: AgentState, options?: ExecutionOptions) => Promise<EvaluationResult>;
+  evaluate: Evaluator;
   approve: (context: ApprovalContext) => Promise<ApprovalDecision>;
   askForInformation: (state: AgentState) => Promise<string>;
   recoverEvaluation?: (context: EvaluationRecoveryContext) => Promise<'continue' | 'stop'>;
@@ -778,7 +779,7 @@ export async function runOrchestration(
       try {
         evaluation = await metrics.measure('evaluationMs', () => interruptible(() => {
           metrics.counts.evaluations += 1;
-          return dependencies.evaluate(state, executionOptions);
+          return dependencies.evaluate(state, { ...executionOptions, iterationLimit: maxIterations });
         }, options.signal));
       } catch (error) {
         throwIfInterrupted(options.signal);

@@ -678,8 +678,13 @@ output and snapshot lists to small fixed limits before sending state to Jev.
 Malformed or oversized `package.json` files and non-Git directories are handled
 as incomplete metadata rather than causing a model request to fail.
 
-Orchestration has a hard eight-iteration ceiling. Search uses direct `rg`
-arguments, literal bounded terms derived from the task, bounded file results,
+Orchestration has a hard eight-iteration ceiling. Each evaluation receives the
+remaining iterations under the run's actual limit, including a preserved lower
+limit after resume. This routing context cannot extend the budget or authorize
+an action.
+
+Search uses direct `rg` arguments, literal bounded terms derived from the task,
+bounded file results,
 and exclusions for Git metadata, dependencies, build output, traces, and common
 secret files. Reads are limited to regular files below the selected root,
 reject traversal and symlink escape, block common credential paths, and cap
