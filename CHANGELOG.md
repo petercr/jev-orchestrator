@@ -1,5 +1,12 @@
 # Release notes
 
+## Unreleased
+
+- Report evaluator iteration headroom using the run's actual ceiling, including
+  lower original limits after saved-run continuation and explicit evaluation
+  recovery. Preserve existing iteration/call limits, approvals, validation,
+  provider selection, and strict response parsing.
+
 ## dev-orchestrator 0.6.0 — saved runs and safe resume
 
 Published on npm on 2026-11-01 as

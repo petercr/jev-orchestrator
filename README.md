@@ -678,8 +678,13 @@ output and snapshot lists to small fixed limits before sending state to Jev.
 Malformed or oversized `package.json` files and non-Git directories are handled
 as incomplete metadata rather than causing a model request to fail.
 
-Orchestration has a hard eight-iteration ceiling. Search uses direct `rg`
-arguments, literal bounded terms derived from the task, bounded file results,
+Orchestration has a hard eight-iteration ceiling. Each evaluation receives the
+remaining iterations under the run's actual limit, including a preserved lower
+limit after resume. This routing context cannot extend the budget or authorize
+an action.
+
+Search uses direct `rg` arguments, literal bounded terms derived from the task,
+bounded file results,
 and exclusions for Git metadata, dependencies, build output, traces, and common
 secret files. Reads are limited to regular files below the selected root,
 reject traversal and symlink escape, block common credential paths, and cap
@@ -1001,9 +1006,9 @@ service's terms and send only repository data you authorize for that service.
 
 ## v0.4 task workflow release
 
-The [v0.4 proposal](PLAN.md#v04-draft-reliable-task-workflows) focuses on getting
-bounded coding tasks through implementation, validation, and acceptance review
-with fewer avoidable routing detours. It starts with complete workflow
+The [v0.4 task workflow release](PLAN.md#v04-release-reliable-task-workflows)
+focused on getting bounded coding tasks through implementation, validation,
+and acceptance review with fewer avoidable routing detours. It started with complete workflow
 reproductions, clearer explanations of blockers, focused routing fixes, and a
 bounded live comparison. The first deliverable is the
 [offline workflow baseline](docs/workflows/v0.4-baseline.md), with frozen tasks,
@@ -1019,7 +1024,7 @@ not establish improved live reliability, fewer detours, or speed.
 
 ## v0.5 terminal presentation
 
-The [v0.5 presentation milestone](PLAN.md#v05-candidate-terminal-presentation-and-interaction)
+The [v0.5 presentation milestone](PLAN.md#v05-release-terminal-presentation-and-interaction)
 now integrates styled orchestration prompts, phase progress, candidate review,
 and grouped results in this checkout. The
 [integration record](docs/presentation/v0.5-integration.md) follows the
@@ -1050,7 +1055,7 @@ and installed CLIs on POSIX PTYs and native Windows ConPTY without live calls.
 The [verification record](docs/presentation/v0.5-verification.md) documents
 the completed matrix, the Windows EOF correction, and the scope limits.
 
-Version `0.6.0` ([plan](PLAN.md#v06-draft-saved-runs-and-safe-resume)) adds
+Version `0.6.0` ([plan](PLAN.md#v06-release-saved-runs-and-safe-resume)) adds
 opt-in saved runs, local history, and continuation after a clean stop on the
 same machine and Git worktree. In this source checkout, `--save-run` connects
 the bounded store to the orchestration loop, and `--list-runs` / `--show-run`

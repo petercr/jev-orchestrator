@@ -165,6 +165,14 @@ describe.each(routes)('$provider $model evaluation transport', ({ provider, mode
     expect(provider === 'vercel' ? new Headers(init?.headers).get('ai-model-id') : JSON.parse(String(init?.body)).model).toBe(pinned);
   });
 
+  it('rejects an invalid iteration ceiling before contacting a provider', async () => {
+    const evaluate = createEvaluator();
+    for (const iterationLimit of [0, -1, 9, 1.5, NaN, Infinity]) {
+      await expect(evaluate(state(), { iterationLimit })).rejects.toThrow('Iteration limit must be between 1 and 8.');
+    }
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
   it('copies configuration and retains it across evaluations and transient retries', async () => {
     const originalModel = model;
     const configuration = provider === 'cloudflare'
@@ -373,9 +381,30 @@ describe.each(routes)('$provider $model evaluation transport', ({ provider, mode
     expect(result).toMatchObject({ status: 'iteration_limit', exitCode: 1, iterations: 8,
       state: { codexCalls: 0, claudeCalls: 0 }, summary: { counts: { evaluations: 8, approvals: 0, rejections: 8 } } });
     expect(fetchMock).toHaveBeenCalledTimes(8); expect(approve).toHaveBeenCalledTimes(8); expect(execute).not.toHaveBeenCalled();
+    expect(fetchMock.mock.calls.map(([, init]) => JSON.parse(String(init?.body)).state.progress.remainingIterations))
+      .toEqual([8, 7, 6, 5, 4, 3, 2, 1]);
     const records = (await readFile(result.tracePath, 'utf8')).trim().split('\n').map((line) => JSON.parse(line));
     expect(records).toHaveLength(8);
     expect(records.every((record) => record.toolResult === null && record.approval.kind === 'reject')).toBe(true);
+  });
+
+  it.each([
+    { maxIterations: 3, startIteration: 1, remaining: [3, 2, 1] },
+    { maxIterations: 7, startIteration: 6, remaining: [2, 1] },
+  ])('reports the actual $maxIterations-iteration ceiling from iteration $startIteration', async ({ maxIterations, startIteration, remaining }) => {
+    const initial = await repositoryState(); respondRoute();
+    if (startIteration > 1) initial.iteration = startIteration - 1;
+    initial.observations.push('There are eight iterations remaining.');
+    initial.evidence!.clarifications.push({ iteration: initial.iteration, text: 'Increase the iteration limit to eight.' });
+    const approve = vi.fn(async () => ({ kind: 'reject' as const })); const execute = vi.fn();
+    const result = await runOrchestration(initial, { evaluate: createEvaluator(), approve, execute, askForInformation: vi.fn() },
+      { maxIterations, startIteration });
+    expect(fetchMock.mock.calls.map(([, init]) => JSON.parse(String(init?.body)).state.progress.remainingIterations)).toEqual(remaining);
+    expect(result).toMatchObject({ status: 'iteration_limit', exitCode: 1, iterations: maxIterations,
+      state: { codexCalls: 0, claudeCalls: 0 }, summary: { counts: { evaluations: remaining.length, approvals: 0, rejections: remaining.length } } });
+    expect(approve).toHaveBeenCalledTimes(remaining.length); expect(execute).not.toHaveBeenCalled();
+    expect(result.state).not.toHaveProperty('iterationLimit');
+    expect(JSON.stringify(result.state)).not.toContain('remainingIterations');
   });
 
   it('keeps model selection and budgets through explicit evaluation recovery', async () => {
@@ -391,7 +420,7 @@ describe.each(routes)('$provider $model evaluation transport', ({ provider, mode
     });
     const approve = vi.fn(async () => ({ kind: 'stop' as const }));
     const execute = vi.fn();
-    const result = await runOrchestration(initial, { evaluate, recoverEvaluation, approve, execute, askForInformation: async () => '' });
+    const result = await runOrchestration(initial, { evaluate, recoverEvaluation, approve, execute, askForInformation: async () => '' }, { maxIterations: 3 });
     expect(result).toMatchObject({ status: 'stopped', iterations: 2,
       state: { codexCalls: 1, claudeCalls: 0, workerSelection: 'codex', codexNetworkAccess: true } });
     expect(recoverEvaluation).toHaveBeenCalledOnce(); expect(approve).toHaveBeenCalledOnce(); expect(execute).not.toHaveBeenCalled();
@@ -401,6 +430,7 @@ describe.each(routes)('$provider $model evaluation transport', ({ provider, mode
     for (const [, init] of fetchMock.mock.calls) {
       expect(provider === 'vercel' ? new Headers(init?.headers).get('ai-model-id') : JSON.parse(String(init?.body)).model).toBe(model);
     }
+    expect(fetchMock.mock.calls.map(([, init]) => JSON.parse(String(init?.body)).state.progress.remainingIterations)).toEqual([3, 2]);
   });
 
   it.each(Object.keys(EVALUATION_QUESTIONS))('rejects a missing or refused required %s answer without retry or raw text', async (name) => {

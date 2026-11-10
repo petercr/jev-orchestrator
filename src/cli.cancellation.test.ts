@@ -207,6 +207,36 @@ describe('CLI continuation review', () => {
     expect((await store.read(runId)).events.filter((event) => event.type === 'run_resumed')).toHaveLength(1);
   });
 
+  it('forwards a saved lower iteration ceiling to evaluation without extending the run', async () => {
+    const { store, runId } = await savedStop('typesafe');
+    const previous = (await store.read(runId)).checkpoint;
+    const state = { ...previous.state, iteration: 1 };
+    const created = await store.create({
+      repository: previous.repository, configuration: previous.configuration, iterationLimit: 3, state,
+    });
+    await store.append(created.runId, { type: 'iteration_reserved', iteration: 1 }, state);
+    await store.append(created.runId, { type: 'evaluation_completed', iteration: 1 }, state);
+    const { captureRepositorySnapshot } = await import('./saved-runs/snapshot.js');
+    await store.append(created.runId, { type: 'run_stopped', reason: 'user', resumable: true }, state,
+      await captureRepositorySnapshot(previous.repository));
+    const evaluate = vi.fn<evaluation.Evaluator>(async (current) => mockEvaluation(current));
+    vi.mocked(evaluation.createEvaluator).mockReturnValue(evaluate);
+    const execute = vi.spyOn((await import('./orchestration/execute.js')), 'executeCandidate');
+    terminal.question.mockResolvedValueOnce('continue').mockResolvedValueOnce('reject').mockResolvedValueOnce('reject');
+
+    const result = await runCliOrchestration({ resumeRunId: created.runId });
+
+    expect(evaluate.mock.calls.map(([current, options]) => [current.iteration, options?.iterationLimit])).toEqual([[2, 3], [3, 3]]);
+    for (const [current, options] of evaluate.mock.calls) {
+      expect(options?.signal).toBeInstanceOf(AbortSignal);
+      expect(current).not.toHaveProperty('iterationLimit');
+    }
+    expect(result).toMatchObject({ status: 'iteration_limit', exitCode: 1, iterations: 3,
+      state: { codexCalls: 0, claudeCalls: 0 }, summary: { counts: { evaluations: 2, approvals: 0 } } });
+    expect(execute).not.toHaveBeenCalled();
+    expect((await store.read(created.runId)).checkpoint.iterationLimit).toBe(3);
+  });
+
   it('combines stored evaluation recovery with the explicit continuation review exactly once', async () => {
     const { store, runId } = await savedStop();
     const record = await store.read(runId);

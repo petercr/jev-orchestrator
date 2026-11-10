@@ -11,6 +11,7 @@ import {
   MAX_EVALUATION_COMMANDS,
   MAX_EVALUATION_LIST_ITEMS,
   MAX_EVALUATION_TEXT_LENGTH,
+  MAX_ORCHESTRATION_ITERATIONS,
   MAX_TASK_LENGTH,
   truncateText,
 } from '../limits.js';
@@ -153,7 +154,13 @@ export type EvaluationSnapshot = Omit<AgentState, 'evidence'> & {
   };
 };
 
-export function boundAgentStateForEvaluation(state: AgentState): EvaluationSnapshot {
+export function boundAgentStateForEvaluation(
+  state: AgentState,
+  iterationLimit = MAX_ORCHESTRATION_ITERATIONS,
+): EvaluationSnapshot {
+  if (!Number.isInteger(iterationLimit) || iterationLimit < 1 || iterationLimit > MAX_ORCHESTRATION_ITERATIONS) {
+    throw new Error(`Iteration limit must be between 1 and ${MAX_ORCHESTRATION_ITERATIONS}.`);
+  }
   const { repo, evidence: _evidence, ...boundedState } = state;
   const required = requiredValidationScripts(state);
   const pending = pendingValidationScripts(state);
@@ -173,7 +180,7 @@ export function boundAgentStateForEvaluation(state: AgentState): EvaluationSnaps
       })),
       truncated: required.length > 8 || pending.length > 8 || hasOmittedValidationRequirements(state),
     },
-    remainingIterations: Math.max(0, 8 - state.iteration + 1),
+    remainingIterations: Math.max(0, iterationLimit - state.iteration + 1),
   };
   // Escaped text counts toward the serialized budget too. The prior packet
   // has its own 6,000-character cap, so shedding check/list items always fits.

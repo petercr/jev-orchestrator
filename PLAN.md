@@ -8,7 +8,7 @@ policy. The supported decision models include TypeSafe AI's Jev, Cloudflare
 Clef/Clef-flash, and OpenAI Decisions through OpenRouter. The repository is
 [`petercr/jev-orchestrator`](https://github.com/petercr/jev-orchestrator).
 
-Build on the published v0.5.0 CLI, preserving the decision-only default and
+Build on the published v0.6.0 CLI, preserving the decision-only default and
 explicit approval-gated orchestration mode. Decision-only collects a bounded
 repository snapshot, asks the selected decision model for a typed recommendation,
 applies local policy, prints the unexecuted decision, and can write a safe JSONL
@@ -29,23 +29,70 @@ Decision models supply probabilistic, high-level judgment only. They must never
 authorize destructive work, invent shell commands, or supply arbitrary paths,
 queries, or tool arguments.
 
-## Proposed release sequence
+<a id="proposed-release-sequence"></a>
 
-Versions 0.4 and 0.5 are published. The
-[v0.5 publication record](docs/releases/dev-orchestrator-0.5.0.md) retains the
-verified public archive, fresh registry installation, and operator-accepted
-recovery mitigation for [#61](https://github.com/petercr/jev-orchestrator/issues/61).
-Version 0.6 is the next release being planned. The proposal below turns the
-earlier saved-run draft into a bounded delivery sequence; implementation has
-not started and no release date is committed.
+## Release status
 
-| Version | Primary outcome | First deliverable |
+The planned releases through v0.6.0 are complete. Version 0.6.0 was published
+on npm on 2026-11-01 after all three required live stop/resume scenarios passed.
+The [publication record](docs/releases/dev-orchestrator-0.6.0.md) pins the tested
+archive, merged source, registry verification, and fresh installed-package checks.
+The sections below retain the delivery requirements and evidence from earlier
+checkpoints; their test totals and intermediate failures describe those dated
+candidates.
+
+| Version | Delivered outcome | Publication |
 | --- | --- | --- |
-| [v0.4](#v04-draft-reliable-task-workflows) | More reliable completion of bounded coding tasks | Reproducible complete-workflow baseline |
-| [v0.5](#v05-candidate-terminal-presentation-and-interaction) | Clearer, more polished terminal interaction | Published on 2026-10-22; [verified archive and installation](docs/releases/dev-orchestrator-0.5.0.md) |
-| [v0.6](#v06-draft-saved-runs-and-safe-resume) | Save, inspect, and resume a bounded task after a clean stop | Saving and history merged; explicit resume is the current milestone |
+| [v0.4](#v04-release-reliable-task-workflows) | Clearer task reviews and a focused repair-policy correction | Published on 2026-10-19; [verified archive and installation](docs/releases/dev-orchestrator-0.4.0.md) |
+| [v0.5](#v05-release-terminal-presentation-and-interaction) | Styled/plain terminal interaction and explicit evaluation-recovery guidance | Published on 2026-10-22; [verified archive and installation](docs/releases/dev-orchestrator-0.5.0.md) |
+| [v0.6](#v06-release-saved-runs-and-safe-resume) | Opt-in saved runs, local history, explicit resume, worker token reporting, and validated completion review | Published on 2026-11-01; [verified archive and installation](docs/releases/dev-orchestrator-0.6.0.md) |
 
-## v0.4 draft: reliable task workflows
+### Follow-up candidates
+
+No v0.7 scope or release date has been selected. The following work remains
+separate from the completed v0.6 release:
+
+- **Routing reliability:** invalid action totals still require strict rejection
+  and explicit recovery within the original budget. The operator accepted that
+  limitation for [v0.5](docs/presentation/v0.5-routing-mitigation-results.md).
+  The successful [v0.6 live retest](docs/workflows/v0.6-live-retest-results-20261031.md)
+  still needed manual routing alternatives; it does not establish a general
+  reliability or performance improvement.
+- **Saved-run management:** history JSON, run deletion, automatic retention
+  cleanup, and export/import remain deferred. The
+  [storage contract](docs/saved-runs-v1.md) documents current bounds and manual
+  housekeeping for inactive records.
+- **Larger workflow changes:** cross-machine transfer, recovery from uncertain
+  execution, background runs, worker-native conversation restoration, a
+  dashboard, new providers, automatic retries/failover, and expanded permissions
+  or budgets each require separate scope and safety review.
+
+### Current routing correction: iteration headroom
+
+The first follow-up is a focused, unreleased correction tracked in
+[trail 417](https://entire.com/gh/petercr/-/trails/417). The evaluator previously
+calculated remaining iterations from eight even when the loop enforced a lower
+original ceiling. Offline provider-boundary regressions reproduced a
+three-iteration run reporting `[8, 7, 6]` instead of `[3, 2, 1]`, and a
+seven-iteration run resumed at iteration six reporting `[3, 2]` instead of
+`[2, 1]`.
+
+The correction passes the validated loop-owned ceiling through evaluation
+options and the CLI wrapper, separately from task state, approved candidates,
+worker context, and display-only approval provenance. Regressions cover
+explicit evaluation recovery, CLI continuation, and all six provider/model
+routes with both workers in the existing offline restart matrix. This corrects routing
+input; no live reliability improvement or provider precision fix is claimed.
+Iteration/call limits, policy thresholds, permissions, strict parsing,
+independent validation, and separate approval/acceptance remain required.
+
+Verified locally on 2026-11-09: all 1,643 tests across 49 files passed, along
+with `pnpm check`, `pnpm build`, local documentation links, and `git diff --check`.
+The correction remains unreleased on `fix/evaluation-iteration-context`.
+
+<a id="v04-draft-reliable-task-workflows"></a>
+
+## v0.4 release: reliable task workflows
 
 Drafted on 2026-10-17 after completion of v0.3 and publication of
 `dev-orchestrator@0.3.1`. The operator confirmed v0.4 as the next version;
@@ -241,13 +288,15 @@ and explicit acceptance review. Provider selection stays fixed for a run;
 direct TypeSafe/Jev remains the default. A benchmark result alone cannot change
 that default, thresholds, permissions, or approvals.
 
-Durable resume is proposed for [v0.6](#v06-draft-saved-runs-and-safe-resume).
+Durable resume shipped in [v0.6](#v06-release-saved-runs-and-safe-resume).
 Unattended approval, automatic provider/worker failover, expanded command
 permissions, new provider transports, and a general setup wizard remain
-separate candidate milestones. This draft focuses v0.4 on the existing bounded
+separate candidate milestones. The v0.4 release focused on the existing bounded
 workflow. Traces remain diagnostic records.
 
-## v0.5 candidate: terminal presentation and interaction
+<a id="v05-candidate-terminal-presentation-and-interaction"></a>
+
+## v0.5 release: terminal presentation and interaction
 
 Requested on 2026-10-17: make `dev-agent` look and feel better, potentially
 using a Node terminal UI library. Recommended placement is v0.5, alongside
@@ -399,7 +448,9 @@ dependency decision are recorded below.
    retains the pnpm verification-consumer age exception and provenance;
    the known limitation and original failed observations remain visible.
 
-## v0.6 draft: saved runs and safe resume
+<a id="v06-draft-saved-runs-and-safe-resume"></a>
+
+## v0.6 release: saved runs and safe resume
 
 Originally drafted on 2026-10-17. Refined on 2026-10-22 after publication of
 v0.5.0 and merge of its publication record in
@@ -409,9 +460,13 @@ at `d102eec`. PR 2's loop integration merged in
 [PR #67](https://github.com/petercr/jev-orchestrator/pull/67) at `4be904c`.
 Local history merged in [PR #68](https://github.com/petercr/jev-orchestrator/pull/68)
 at `7ac6cd9`. Explicit resume merged in PR #69 at `88312e2`, followed by
-restart/platform verification in PR #70 at `1801d78`. The v0.6 scope is approved
-for implementation. The live pilot and release are the current milestone;
-this work remains unpublished until the v0.6 release.
+restart/platform verification in PR #70 at `1801d78`. PR #71 added the live
+pilot and resume-context corrections; PR #72 added worker token reporting;
+PR #73 added explicit completion review after validated worker attempts.
+PR #74 merged the Codex `gpt-6.1-terra` candidate and successful live retest at
+`cc0b009`. Published as `dev-orchestrator@0.6.0` on 2026-11-01; PR #75 merged
+the [publication record](docs/releases/dev-orchestrator-0.6.0.md) at `bf6a35b`.
+All six delivery steps and the release acceptance gates below are complete.
 
 **Release outcome:** an operator can stop an opted-in task, close the terminal,
 inspect its history, and continue it in a new CLI process without losing its
@@ -428,8 +483,8 @@ Resuming requires fresh repository checks, validation, and action approvals.
 | Required | Conservative failure handling | Storage errors, unresolved execution, incompatible records, and concurrent ownership stop execution with a specific explanation. |
 | Required | Verified release | Offline restart/failure coverage, installed-package terminal checks, and a recorded live stop/resume pilot pass before publication. |
 
-Keep this release focused. Cross-machine transfer, crash recovery for uncertain
-execution, background runs, worker-native conversation restoration, automatic
+Cross-machine transfer, crash recovery for uncertain execution, background
+runs, worker-native conversation restoration, automatic
 retries/failover, expanded permissions/budgets, a dashboard, and new providers
 are outside v0.6. Run deletion, export/import, and automatic retention cleanup
 are also deferred; the first version documents storage and manual housekeeping
@@ -444,7 +499,7 @@ to improve the model's probability output.
 
 ### Operator workflow
 
-Proposed command contract, to be frozen in the first implementation PR:
+Delivered command contract:
 
 ```text
 dev-agent . "Fix the bug and add regression tests" --orchestrate --save-run
@@ -478,7 +533,7 @@ and one Codex call. Resume starts at iteration four. Fresh validation consumes
 those remaining iterations; finishing is never promised when too little
 budget remains. Finished and exhausted runs stay inspectable.
 
-| Last condition | Proposed continuation behavior |
+| Last condition | Continuation behavior |
 | --- | --- |
 | Typed stop or EOF, with durable state and completed cleanup | Eligible after repository/configuration review. |
 | Evaluation failure stopped by the operator | Eligible with explicit recovery and budget remaining. |
@@ -493,7 +548,7 @@ Use a dedicated versioned saved-run format, separate from diagnostic JSONL
 traces. The current traces deliberately truncate data; they cannot supply
 resume state. Parse saved records as untrusted input. Integrity checks do not
 turn stored repository or issue text into authoritative instructions. The
-first contract must classify each saved field:
+[v1 storage contract](docs/saved-runs-v1.md) classifies each saved field:
 
 | Treatment | Data |
 | --- | --- |
@@ -510,10 +565,10 @@ storage can contain task text and source excerpts; document that local data
 and its retention without claiming encryption or perfect secret detection.
 
 The store belongs to the operator and must be outside worker-writable
-repositories. PR 1 must settle platform paths, restricted access, link/path
-rejection, explicit byte/event/record limits, atomic replacement, flush/write
-ordering, and schema compatibility. A checksum alone cannot make a checkpoint
-authoritative. Bind it to an integrity-checked, sequenced local attempt ledger
+repositories. The v1 contract defines platform paths, restricted access,
+link/path rejection, explicit byte/event/record limits, atomic replacement,
+flush/write ordering, and schema compatibility. A checksum alone cannot make a
+checkpoint authoritative. Bind it to an integrity-checked, sequenced local attempt ledger
 and reject mismatched or older records. No schema migration or trace import is
 required for v0.6; incompatible records remain non-executable.
 
@@ -543,9 +598,9 @@ cleanup, and final durable transition are known.
 Freeze non-secret configuration identity and reload credentials from the
 operator's environment. Explicit provider/model or Cloudflare account changes
 block continuation. The present configuration has no non-secret account ID for
-the other providers; PR 1 must decide and document credential-continuity rules
-before enabling resume. A variable name cannot prove account identity, and
-credential values must not be stored to fill that gap. Preserve the selected
+the other providers; the v1 contract documents that limitation and requires an
+operator decision at continuation review. A variable name cannot prove account
+identity, and credential values must not be stored to fill that gap. Preserve the selected
 model identifier; a provider alias such as `jev-latest` does not guarantee the
 same underlying served version on a later day.
 
@@ -580,11 +635,11 @@ Use a fresh local monotonic clock per segment; time between processes is neither
 active work nor prompt wait. Show cumulative attempt counts from durable records
 without double-counting recovery rows or treating metrics as permission.
 
-### Six proposed implementation PRs
+### Six completed delivery steps
 
-Each PR has a reviewable result and focused tests. Add the contract and failure
-fixtures before wiring saved data into execution; use the current small typed
-modules rather than introducing a workflow framework.
+The original six-step sequence and its requirements are retained below. The
+release step included corrective PRs and separately authorized live retests;
+the earlier failed observations remain part of its evidence.
 
 1. [x] **Saved-run contract and storage foundation.** Define schema version 1,
    field bounds, lifecycle/stop reasons, ledger ordering, repository identity,
@@ -647,7 +702,7 @@ modules rather than introducing a workflow framework.
    compiled/installed terminal evidence. Delivered in PR #70, with 1,551 tests,
    local compiled/installed matrices, and all six Ubuntu/Windows Node 22/24/26
    CI jobs passing. The live pilot remains separate.
-6. [ ] **Live pilot and v0.6.0 release.** Freeze a candidate archive and bounded
+6. [x] **Live pilot and v0.6.0 release.** Freeze a candidate archive and bounded
    protocol, obtain operator authorization for live calls, then run the pilot
    below before any publication. Fix failures in a separately identified
    candidate with retained observations. Record package/source provenance,
@@ -667,18 +722,40 @@ modules rather than introducing a workflow framework.
    evaluation recovery despite a valid patch and fresh validation. Four
    launches, sixteen evaluations, and two worker attempts are retained; the
    active-interruption slots were not launched. Worker-token reporting added
-   afterward has offline evidence only. The live release gate remains blocked.
+   afterward had offline evidence only at that checkpoint. The live release
+   gate remained blocked until the separately authorized 2026-10-31 retest.
    A follow-up adds optional explicit task acceptance alongside a clear
    file-read route after a worker attempt and fresh passing validation. The
    read remains the default; acceptance still requires selecting `FINISH`
    and approving its resolved candidate. The
    [offline correction record](docs/workflows/v0.6-completion-review-fix.md)
    retains the live failure and describes its deterministic reproduction.
-   Further live collection requires a frozen amendment and authorization.
+   The frozen [rerun amendment](docs/workflows/v0.6-live-retest-20261031b.md)
+   then exercised the exact installed `gpt-6.1-terra` candidate. The
+   [2026-10-31 results](docs/workflows/v0.6-live-retest-results-20261031.md)
+   record passing Codex styled stop/resume, Claude plain stop/resume, and
+   active Codex interruption followed by resume. Each task passed its external
+   oracle, fresh independent validation, and separate acceptance on iteration
+   6. Worker-token reporting was observed live; unavailable interrupted usage
+   stays unavailable. Earlier failures and the same-day quota-limited attempt
+   remain recorded. After PR #74 merged, the operator authorized publication
+   of the exact tested archive. npm publication on 2026-11-01, matching GitHub
+   release bytes, and a fresh registry installation are documented in the
+   [release record](docs/releases/dev-orchestrator-0.6.0.md). No archive was rebuilt
+   or replaced. Any future live collection requires new bounded authorization.
 
 ### Verification and release acceptance
 
-The live pilot is a release requirement, planned from the outset. It uses the
+Completed for v0.6.0. The [release record](docs/releases/dev-orchestrator-0.6.0.md)
+collects final candidate, CI, live acceptance, and publication evidence. The
+[offline verification](docs/saved-runs-verification.md) and
+[completion-review verification](docs/workflows/v0.6-completion-review-fix.md)
+retain the earlier platform checks. Native Windows checks of the final archive
+ran in CI; local native Windows results belong to the preceding candidate and
+are not attributed to the published archive. The requirements below describe
+the completed gate and remain constraints on future changes.
+
+The live pilot was a release requirement, planned from the outset. It used the
 exact installed candidate, actual default TypeSafe/Jev evaluation, and actual
 workers with separate action approvals. Freeze tasks, fixtures, stop points,
 maximum launches/time/spend, acceptance oracles, and candidate/tool versions
@@ -698,24 +775,24 @@ collection requires a recorded amendment. Natural invalid responses keep their
 explicit recovery gate. A small successful pilot establishes the exercised
 workflow, not a statistical routing-reliability or performance claim.
 
-- [ ] Storage, ownership, configuration identity, and attempt-ordering decisions
+- [x] Storage, ownership, configuration identity, and attempt-ordering decisions
   are documented and proven by focused failure tests; no contract questions
   remain that could authorize duplicate execution or reset a budget.
-- [ ] Clean stops resume in a new process for both workers. Exhausted, finished,
+- [x] Clean stops resume in a new process for both workers. Exhausted, finished,
   uncertain, incompatible, tampered, and concurrently owned runs cannot execute.
   Partial edits and original acceptance/validation requirements survive.
-- [ ] Fresh current-generation validation and separate task acceptance are
+- [x] Fresh current-generation validation and separate task acceptance are
   enforced after resume, including through manual alternatives and repair.
-- [ ] History, plain/styled prompts, signals/EOF, traces, secret exclusion, and
+- [x] History, plain/styled prompts, signals/EOF, traces, secret exclusion, and
   metrics pass their regressions. Earlier diagnostic traces remain diagnostic.
-- [ ] Focused tests, `pnpm check`, `pnpm test`, `pnpm build`, and
+- [x] Focused tests, `pnpm check`, `pnpm test`, `pnpm build`, and
   `pnpm env:check:schema` pass. Fresh installed-package checks and POSIX/Windows
   terminal matrices pass against the release candidate.
-- [ ] The live scenarios have recorded outcomes and the operator has accepted
+- [x] The live scenarios have recorded outcomes and the operator has accepted
   any remaining limitations before publication. If a required scenario fails,
   fix and reverify it or explicitly revise scope; offline tests alone cannot
   silently substitute for the live gate.
-- [ ] README/help, changelog, storage/compatibility instructions, release
+- [x] README/help, changelog, storage/compatibility instructions, release
   evidence, archive checksums, npm/GitHub publication, and independent registry
   installation verification are complete.
 

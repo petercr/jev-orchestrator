@@ -130,6 +130,8 @@ describe.each(routes)('restart enforcement: $provider/$model', ({ provider, mode
           : provider === 'vercel' ? 'https://ai-gateway.vercel.sh/v4/ai/evaluation-model'
             : provider === 'typesafe' ? 'https://api.typesafe.ai/v1/systemone' : 'https://openrouter.ai/api/alpha/decisions');
         expect(new Headers(init?.headers).get('authorization')).toBe(`Bearer ${key}`);
+        const snapshot = JSON.parse(String(init?.body)).state;
+        expect(snapshot.progress.remainingIterations).toBe(iterationLimit - snapshot.iteration + 1);
         const next = recommendations[index++];
         if (!next) throw new Error('Unexpected evaluation after scripted segment.');
         return response(provider, model, next);
