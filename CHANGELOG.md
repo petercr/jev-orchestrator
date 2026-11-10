@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Report evaluator iteration headroom using the run's actual ceiling, including
+  lower original limits after saved-run continuation and explicit evaluation
+  recovery. Preserve existing iteration/call limits, approvals, validation,
+  provider selection, and strict response parsing.
+
 - Add `--json` to `--list-runs` and `--show-run` with separate versioned list
   and detail reports. Preserve credential-free, read-only inspection, bounded
   history, sanitized text, integrity checks, and existing error exit codes.

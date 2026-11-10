@@ -632,7 +632,7 @@ export async function runCliOrchestration(request: CliOptions | ResumeRequest): 
     ]);
 
     const result = await runOrchestration(state, {
-      evaluate: async (currentState) => prompts.phase('Evaluating task', async () => evaluate(currentState, executionOptions), executionOptions),
+      evaluate: async (currentState, evaluationOptions) => prompts.phase('Evaluating task', async () => evaluate(currentState, evaluationOptions), executionOptions),
       approve: async (context) => promptForApproval(prompts, context, executionOptions),
       askForInformation: async () => prompts.question('Provide the required information: ', executionOptions),
       recoverEvaluation: async (context) => promptForEvaluationRecovery(prompts, context, executionOptions),

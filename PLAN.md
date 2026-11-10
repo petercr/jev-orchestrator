@@ -67,6 +67,30 @@ separate from the completed v0.6 release:
   dashboard, new providers, automatic retries/failover, and expanded permissions
   or budgets each require separate scope and safety review.
 
+### Current routing correction: iteration headroom
+
+The first follow-up is a focused, unreleased correction tracked in
+[trail 417](https://entire.com/gh/petercr/-/trails/417). The evaluator previously
+calculated remaining iterations from eight even when the loop enforced a lower
+original ceiling. Offline provider-boundary regressions reproduced a
+three-iteration run reporting `[8, 7, 6]` instead of `[3, 2, 1]`, and a
+seven-iteration run resumed at iteration six reporting `[3, 2]` instead of
+`[2, 1]`.
+
+The correction passes the validated loop-owned ceiling through evaluation
+options and the CLI wrapper, separately from task state, approved candidates,
+worker context, and display-only approval provenance. Regressions cover
+explicit evaluation recovery, CLI continuation, and all six provider/model
+routes with both workers in the existing offline restart matrix. This corrects routing
+input; no live reliability improvement or provider precision fix is claimed.
+Iteration/call limits, policy thresholds, permissions, strict parsing,
+independent validation, and separate approval/acceptance remain required.
+
+Verified locally on 2026-11-09: all 1,643 tests across 49 files passed, along
+with `pnpm check`, `pnpm build`, local documentation links, and `git diff --check`.
+The correction merged into main in [PR #76](https://github.com/petercr/jev-orchestrator/pull/76)
+at `99766ab` and remains unreleased.
+
 ### Current saved-run management slice: history JSON
 
 [Trail 420](https://entire.com/gh/petercr/-/trails/420) adds `--json` to
