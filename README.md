@@ -1080,8 +1080,22 @@ creating directories, changing permissions, taking locks, or writing traces.
 The listing shows at most 20 records: unreadable records first, then valid
 records by most recent update. `--show-run <run-id>` can inspect any known UUID,
 including an older record omitted from the list. Neither command accepts task
-arguments, execution flags, or `--json`; `--plain` is the only display option.
-Pipes, CI, `NO_COLOR`, and `TERM=dumb` also select plain output.
+arguments or execution flags. `--plain` selects static output; pipes, CI,
+`NO_COLOR`, and `TERM=dumb` also select plain output.
+
+This checkout adds unreleased, versioned JSON inspection:
+
+```bash
+dev-agent --list-runs --json
+dev-agent --show-run <run-id> --json
+```
+
+Each writes one JSON document with sanitized reporting fields and no terminal
+headings or prompts. The [history JSON v1 contract](docs/saved-run-history-json-v1.md)
+defines list/detail kinds, budgets, validation, worker usage, blockers, bounds,
+and error statuses. An unreadable run exposes only its ID and allowlisted error.
+The output is a read-only report; it cannot be imported as resume state.
+`--resume --json` remains invalid. Published v0.6.0 does not include history JSON.
 
 Each record shows its saved task/repository, status, consumed and remaining
 iterations, worker allowances and restrictions, provider/model/network

@@ -87,6 +87,12 @@ describe('parseArgs', () => {
     });
   });
 
+  it('accepts JSON for history inspection in either flag order, including plain output', () => {
+    expect(parseArgs(['--list-runs', '--json'])).toEqual({ kind: 'list-runs', json: true });
+    expect(parseArgs(['--json', '--show-run', runId])).toEqual({ kind: 'show-run', runId, json: true });
+    expect(parseArgs([`--show-run=${runId}`, '--plain', '--json'])).toEqual({ kind: 'show-run', runId, plain: true, json: true });
+  });
+
   it.each([
     ['--resume'], ['--resume=../record'], ['--resume', runId, '--list-runs'],
     ['--resume', runId, '--show-run', runId], ['--resume', runId, '--resume', runId],
@@ -102,7 +108,7 @@ describe('parseArgs', () => {
     ['--show-run'], ['--show-run', '../checkpoint.json'], ['--show-run', '--plain'], ['--show-run='],
     ['--show-run', 'not-a-run'], ['--list-runs', '--list-runs'], ['--list-runs', '--show-run', runId],
     ['--show-run', runId, '--show-run', runId], ['--list-runs', '/repo', 'Task'],
-    ['--list-runs', '--help'], ['--show-run', runId, '--version'], ['--list-runs', '--json'],
+    ['--list-runs', '--help'], ['--show-run', runId, '--version'],
     ['--list-runs', '--mock'], ['--list-runs', '--orchestrate'], ['--list-runs', '--save-run'],
     ['--list-runs', '--no-trace'], ['--show-run', runId, '--worker=codex'], ['--show-run', runId, '--codex-network'],
   ])('rejects invalid history requests: %s', (...flags) => {

@@ -6,6 +6,12 @@ through `--list-runs` / `--show-run <run-id>`. `--resume <run-id>` continues
 eligible clean stops after a fresh review and preflight.
 Saved records are never executable instructions or approved candidates.
 
+The current checkout also supports unreleased `--json` inspection on
+`--list-runs` and `--show-run`. Its separate
+[history JSON v1 contract](saved-run-history-json-v1.md) exposes a sanitized
+reporting projection. It does not change this storage schema, accept record
+imports, or authorize continuation.
+
 ## Files and bounds
 
 The default store is outside the repository:

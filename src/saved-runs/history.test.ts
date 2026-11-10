@@ -6,8 +6,9 @@ import { PassThrough } from 'node:stream';
 import { stripVTControlCharacters } from 'node:util';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { main } from '../cli.js';
-import { formatSavedRunLines } from '../cli/history.js';
+import { createSavedRunDetailOutput, createSavedRunListingOutput, formatSavedRunLines, type SavedRunDetailOutput, type SavedRunListOutput } from '../cli/history.js';
 import { createPresentation } from '../cli/terminal.js';
+import * as terminalPresentation from '../cli/terminal.js';
 import * as config from '../config.js';
 import * as evaluation from '../ai/evaluate.js';
 import * as execution from '../orchestration/execute.js';
@@ -140,6 +141,15 @@ describe('read-only saved run history', () => {
     expect(lines).toContain('Saved task worker tokens: unavailable; Codex unavailable; Claude no calls.');
     expect(lines).toContain('build (failed), lint (pending)');
     expect(lines).toContain('earlier passes cannot approve completion after restart');
+    expect(createSavedRunDetailOutput(detail).run).toMatchObject({
+      workerCalls: { codex: { used: 1, available: 1, excluded: false }, claude: { used: 0, available: 0, excluded: true } },
+      workerUsage: { codex: { reportedCalls: 0, unavailableCalls: 1 } },
+      validation: { generation: 2, checks: [
+        { script: 'check', status: 'passed' }, { script: 'test', status: 'passed' },
+        { script: 'build', status: 'failed' }, { script: 'lint', status: 'pending' },
+      ] },
+      continuation: { preflightRequired: true },
+    });
   });
 
   it('retains the explicit recovery requirement and evaluation diagnostics after a clean stop', async () => {
@@ -255,6 +265,8 @@ describe('read-only saved run history', () => {
     expect(listing).toMatchObject({ total: 21, hiddenRuns: 1 });
     expect(listing.runs).toHaveLength(SAVED_RUN_LIST_LIMIT);
     expect(listing.runs.some((run) => run.kind === 'valid' && run.checkpoint.runId === context.id)).toBe(false);
+    expect(createSavedRunListingOutput(listing)).toMatchObject({ limit: 20, total: 21, hiddenRuns: 1, runs: expect.any(Array) });
+    expect(createSavedRunListingOutput(listing).runs).toHaveLength(SAVED_RUN_LIST_LIMIT);
     expect(await inspectSavedRun(context.store, context.id)).toMatchObject({ kind: 'valid', checkpoint: { runId: context.id } });
   }, 20_000);
 
@@ -314,6 +326,121 @@ describe('read-only saved run history', () => {
 });
 
 describe('CLI local inspection boundaries', () => {
+  it('prints only sanitized JSON with saved budgets and checks without executing or mutating anything', async () => {
+    const context = await fixture({ worker: 'codex', task: 'Fix\u001b[2J\u001b]8;;https://untrusted.invalid\u0007link\u001b]8;;\u0007\r\u202e late-history-secret' });
+    context.state.observations.push('internal-observation-must-not-be-exported');
+    await evaluate(context);
+    await stop(context);
+    vi.stubEnv('TYPESAFE_API_KEY', 'late-history-secret');
+    vi.stubEnv('ROUTER_PROVIDER', 'invalid-for-live');
+    const open = SavedRunStore.openForInspection.bind(SavedRunStore);
+    vi.spyOn(SavedRunStore, 'openForInspection').mockImplementation(() => open(context.store.directory));
+    const forbidden = [
+      vi.spyOn(config, 'resolveEvaluationConfiguration'), vi.spyOn(evaluation, 'createEvaluator'),
+      vi.spyOn(execution, 'executeCandidate'), vi.spyOn(inspection, 'inspectRepo'),
+      vi.spyOn(inspection, 'inspectGitIdentity'), vi.spyOn(traces, 'writeTrace'),
+      vi.spyOn(SavedRunStore.prototype, 'acquireRunOwnership'),
+      vi.spyOn(SavedRunStore.prototype, 'acquireWorktreeOwnership'),
+      vi.spyOn(terminalPresentation, 'createPresentation'), vi.spyOn(globalThis, 'fetch'),
+    ];
+    const log = vi.spyOn(console, 'log').mockImplementation(() => {});
+    const before = await fileSnapshot(context.parent);
+
+    await main(['--list-runs', '--json']);
+    expect(log).toHaveBeenCalledTimes(1);
+    const listing: SavedRunListOutput = JSON.parse(String(log.mock.calls[0]?.[0]));
+    expect(listing).toMatchObject({ schemaVersion: 1, kind: 'saved-run-list', readOnly: true, status: 'ok',
+      limit: 20, total: 1, hiddenRuns: 0, ignoredEntries: 0 });
+    expect(listing.runs[0]).toMatchObject({
+      kind: 'valid', runId: context.id, status: 'stopped', task: 'Fixlink \\u202e [REDACTED]',
+      iterations: { used: 1, limit: 8, remaining: 7 },
+      workerCalls: { codex: { used: 0, available: 2, excluded: false }, claude: { used: 0, available: 0, excluded: true } },
+      validation: { generation: 0, checks: expect.arrayContaining([{ script: 'test', status: 'pending' }]) },
+      continuation: { preflightRequired: true, recoveryRequired: false },
+    });
+    expect(listing.runs[0]).not.toHaveProperty('timeline');
+    log.mockClear();
+
+    await main(['--json', '--show-run', context.id, '--plain']);
+    expect(log).toHaveBeenCalledTimes(1);
+    const detail: SavedRunDetailOutput = JSON.parse(String(log.mock.calls[0]?.[0]));
+    expect(detail).toMatchObject({ schemaVersion: 1, kind: 'saved-run-detail', readOnly: true, status: 'ok',
+      run: { repository: { root: context.root, available: true, head: 'a'.repeat(40) },
+        timeline: { total: 4, recent: expect.arrayContaining([expect.objectContaining({ type: 'run_stopped' })]) } } });
+    if (detail.run.kind !== 'valid') throw new Error('Expected validated saved history.');
+    expect(detail.run.continuation.blockers.length).toBeGreaterThan(0);
+    const serialized = JSON.stringify([listing, detail]);
+    for (const omitted of ['late-history-secret', '\u001b', '\u202e', 'https://untrusted.invalid',
+      'internal-observation-must-not-be-exported', 'ledgerHead', 'checksum', 'checkpoint', 'apiKey', 'worktreeFingerprint']) {
+      expect(serialized).not.toContain(omitted);
+    }
+    for (const spy of forbidden) expect(spy).not.toHaveBeenCalled();
+    expect(await fileSnapshot(context.parent)).toEqual(before);
+    expect(process.exitCode).toBe(originalExitCode);
+  });
+
+  it('reports missing history as JSON without creating a store or claiming a missing run is valid', async () => {
+    const parent = await parentDirectory();
+    const directory = path.join(parent, 'missing-store');
+    const open = SavedRunStore.openForInspection.bind(SavedRunStore);
+    vi.spyOn(SavedRunStore, 'openForInspection').mockImplementation(() => open(directory));
+    const log = vi.spyOn(console, 'log').mockImplementation(() => {});
+    await main(['--list-runs', '--json']);
+    expect(JSON.parse(String(log.mock.calls[0]?.[0]))).toMatchObject({ kind: 'saved-run-list', status: 'ok', total: 0, runs: [] });
+    expect(process.exitCode).toBe(originalExitCode);
+    log.mockClear();
+    const id = randomUUID();
+    await main(['--show-run', id, '--json']);
+    expect(JSON.parse(String(log.mock.calls[0]?.[0]))).toMatchObject({ kind: 'saved-run-detail', status: 'unavailable',
+      run: { kind: 'unavailable', runId: id, error: { code: 'not_found' } } });
+    expect(process.exitCode).toBe(1);
+    expect(await readdir(parent)).toEqual([]);
+  });
+
+  it('exposes only an ID and allowlisted error for corrupt JSON history and marks partial listings', async () => {
+    const context = await fixture();
+    await writeFile(path.join(context.store.runsDirectory, context.id, 'checkpoint.json'),
+      JSON.stringify({ schemaVersion: 1, task: 'unverified-history-payload', status: 'finished', codexCalls: 99 }));
+    await writeFile(path.join(context.store.runsDirectory, 'password=hidden-entry-name'), 'ignored');
+    const open = SavedRunStore.openForInspection.bind(SavedRunStore);
+    vi.spyOn(SavedRunStore, 'openForInspection').mockImplementation(() => open(context.store.directory));
+    const log = vi.spyOn(console, 'log').mockImplementation(() => {});
+    const before = await fileSnapshot(context.parent);
+    await main(['--show-run', context.id, '--json']);
+    const detail: SavedRunDetailOutput = JSON.parse(String(log.mock.calls[0]?.[0]));
+    expect(detail.status).toBe('unavailable');
+    expect(detail.run).toEqual({ kind: 'unavailable', runId: context.id,
+      error: { code: 'invalid_record', message: 'The saved checkpoint or event history is malformed or incomplete.' } });
+    expect(process.exitCode).toBe(1);
+    process.exitCode = originalExitCode;
+    log.mockClear();
+    await main(['--list-runs', '--json']);
+    const listing: SavedRunListOutput = JSON.parse(String(log.mock.calls[0]?.[0]));
+    expect(listing).toMatchObject({ status: 'partial', total: 1, ignoredEntries: 1, runs: [detail.run] });
+    expect(JSON.stringify(listing)).not.toContain('unverified-history-payload');
+    expect(JSON.stringify(listing)).not.toContain('hidden-entry-name');
+    expect(process.exitCode).toBe(1);
+    expect(await fileSnapshot(context.parent)).toEqual(before);
+  });
+
+  it('bounds JSON detail to the latest twelve events and omits the raw state', async () => {
+    const context = await fixture({ limit: 8 });
+    let current = context.state;
+    for (let iteration = 1; iteration <= 7; iteration += 1) {
+      current = { ...current, iteration };
+      await evaluate(context, current);
+    }
+    await stop(context, current);
+    const output = createSavedRunDetailOutput(await inspectSavedRun(context.store, context.id));
+    expect(output.run).toMatchObject({ iterations: { used: 7, limit: 8, remaining: 1 },
+      timeline: { total: 16, recent: expect.any(Array) } });
+    if (output.run.kind !== 'valid') throw new Error('Expected validated saved history.');
+    expect(output.run.timeline?.recent).toHaveLength(12);
+    expect(output.run.timeline?.recent.at(-1)?.type).toBe('run_stopped');
+    expect(output.run).not.toHaveProperty('state');
+    expect(createSavedRunListingOutput(await listSavedRuns(context.store)).runs[0]).not.toHaveProperty('timeline');
+  });
+
   it('lists and shows runs without credential preflight, evaluation, tools, tracing, or filesystem writes', async () => {
     const context = await fixture();
     await stop(context);
