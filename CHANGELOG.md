@@ -7,6 +7,13 @@
   recovery. Preserve existing iteration/call limits, approvals, validation,
   provider selection, and strict response parsing.
 
+- Add `--json` to `--list-runs` and `--show-run` with separate versioned list
+  and detail reports. Preserve credential-free, read-only inspection, bounded
+  history, sanitized text, integrity checks, and existing error exit codes.
+  Reports include saved budgets, validation, worker usage coverage, and
+  continuation blockers. They contain no executable checkpoint or approval;
+  `--resume --json` remains invalid.
+
 ## dev-orchestrator 0.6.0 — saved runs and safe resume
 
 Published on npm on 2026-11-01 as

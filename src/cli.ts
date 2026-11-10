@@ -14,7 +14,7 @@ import { writeTrace } from './logging/trace.js';
 import { evaluationAttribution, redactSensitiveText } from './logging/trace.js';
 import { mockEvaluation } from './mock.js';
 import { formatApprovalLines, formatOutcomeLines, formatRecoveryLines } from './cli/presentation.js';
-import { formatSavedRunLines, formatSavedRunListingLines } from './cli/history.js';
+import { createSavedRunDetailOutput, createSavedRunListingOutput, formatSavedRunLines, formatSavedRunListingLines } from './cli/history.js';
 import { formatWorkerUsage } from './cli/usage.js';
 import { createPresentation, createTerminal, terminalText, type CliTerminal } from './cli/terminal.js';
 import { executeCandidate } from './orchestration/execute.js';
@@ -68,8 +68,8 @@ export type CliOptions = {
 export type CliCommand =
   | { kind: 'help' }
   | { kind: 'version' }
-  | { kind: 'list-runs'; plain?: true }
-  | { kind: 'show-run'; runId: string; plain?: true }
+  | { kind: 'list-runs'; plain?: true; json?: true }
+  | { kind: 'show-run'; runId: string; plain?: true; json?: true }
   | { kind: 'resume'; runId: string; plain?: true }
   | { kind: 'run'; options: CliOptions };
 
@@ -108,14 +108,14 @@ export class CliUsageError extends Error {
 
 export function usage(): string {
   return `dev-agent <repo-path> <task> [--mock] [--no-trace] [--json] [--orchestrate] [--save-run] [--worker codex|claude] [--codex-network] [--plain]
-dev-agent --list-runs [--plain]
-dev-agent --show-run <run-id> [--plain]
+dev-agent --list-runs [--plain] [--json]
+dev-agent --show-run <run-id> [--plain] [--json]
 dev-agent --resume <run-id> [--plain]
 
 Options:
   --mock       Use the offline deterministic evaluation.
   --no-trace   Do not write a JSONL trace.
-  --json       Write one machine-readable decision to stdout.
+  --json       Write one machine-readable decision or saved-run inspection to stdout.
   --orchestrate  Enter the bounded, manually approved execution loop.
   --save-run     Persist the bounded orchestration state and event history.
   --list-runs    Inspect up to 20 local saved runs without credentials or network access.
@@ -285,10 +285,14 @@ export function parseArgs(argv: string[]): CliCommand {
   }
 
   if (history) {
-    if (mock || noTrace || json || orchestrate || saveRun || workerSelection !== undefined || codexNetworkAccess !== undefined || positional.length > 0) {
-      throw usageError('Saved run commands accept no task or execution overrides; only --plain may be added.');
+    if (mock || noTrace || orchestrate || saveRun || workerSelection !== undefined || codexNetworkAccess !== undefined || positional.length > 0) {
+      throw usageError('Saved run commands accept no task or execution overrides; use --plain or --json for inspection.');
     }
-    return { ...history, ...(plain ? { plain } : {}) };
+    if (history.kind === 'resume') {
+      if (json) throw usageError('--resume is interactive and cannot be combined with --json.');
+      return { ...history, ...(plain ? { plain } : {}) };
+    }
+    return { ...history, ...(plain ? { plain } : {}), ...(json ? { json: true as const } : {}) };
   }
 
   if (positional.length < 2) {
@@ -825,6 +829,18 @@ export async function main(argv: string[] = process.argv.slice(2)): Promise<void
 
   if (command.kind === 'list-runs' || command.kind === 'show-run') {
     const store = await SavedRunStore.openForInspection();
+    if (command.json) {
+      if (command.kind === 'list-runs') {
+        const output = createSavedRunListingOutput(await listSavedRuns(store));
+        console.log(JSON.stringify(output, null, 2));
+        if (output.status === 'partial') process.exitCode = EXIT_CODES.operationalError;
+      } else {
+        const output = createSavedRunDetailOutput(await inspectSavedRun(store, command.runId));
+        console.log(JSON.stringify(output, null, 2));
+        if (output.status === 'unavailable') process.exitCode = EXIT_CODES.operationalError;
+      }
+      return;
+    }
     const view = await createPresentation({ ...(command.plain ? { plain: true } : {}), writeLine: (line) => console.log(line) });
     try {
       view.section('Local saved run history', [

@@ -1,13 +1,131 @@
 import {
   describeSavedEvent, inspectionErrorText, SAVED_RUN_TIMELINE_LIMIT, savedWorkerUsage,
-  type SavedRunInspection, type SavedRunListing,
+  SAVED_RUN_LIST_LIMIT, type SavedRunDetail, type SavedRunInspection, type SavedRunListing,
 } from '../saved-runs/history.js';
+import type { WorkerUsageSummary } from '../agents/usage.js';
+import type { SavedRunConfiguration, SavedRunEvent, SavedRunStatus } from '../saved-runs/types.js';
+import type { WorkerSelection } from '../types.js';
 import { terminalText } from './terminal.js';
 import { formatWorkerUsage } from './usage.js';
 
 function text(value: string, limit = 4_096): string {
   const safe = terminalText(value).replace(/\s+/gu, ' ').trim();
   return safe.length > limit ? `${safe.slice(0, limit)}… [display shortened]` : safe;
+}
+
+type WorkerCallReport = { used: number; available: number; excluded: boolean };
+
+/** Reporting only. These objects are never accepted as saved records or approvals. */
+export type SavedRunReport = {
+  kind: 'unavailable';
+  runId: string;
+  error: { code: Extract<SavedRunInspection, { kind: 'unavailable' }>['code']; message: string };
+} | {
+  kind: 'valid';
+  runId: string;
+  status: SavedRunStatus;
+  createdAt: string;
+  updatedAt: string;
+  task: string;
+  repository: { root: string; available: boolean; head?: string; gitCommonDirectory?: string };
+  configuration: Pick<SavedRunConfiguration, 'mode' | 'provider' | 'model' | 'codexNetworkAccess'> & {
+    workerSelection: WorkerSelection | 'auto';
+  };
+  iterations: { used: number; limit: number; remaining: number };
+  workerCalls: { codex: WorkerCallReport; claude: WorkerCallReport };
+  workerUsage: WorkerUsageSummary;
+  validation: { generation: number; checks: SavedRunDetail['checks'] };
+  continuation: { preflightRequired: true; recoveryRequired: boolean; blockers: string[] };
+  lastFailure?: string;
+  lastStop?: string;
+  segments: number;
+  timeline?: {
+    total: number;
+    recent: Array<{ sequence: number; timestamp: string; type: SavedRunEvent['type']; description: string }>;
+  };
+};
+
+export type SavedRunListOutput = {
+  schemaVersion: 1;
+  kind: 'saved-run-list';
+  readOnly: true;
+  status: 'ok' | 'partial';
+  limit: number;
+  total: number;
+  hiddenRuns: number;
+  ignoredEntries: number;
+  runs: SavedRunReport[];
+};
+
+export type SavedRunDetailOutput = {
+  schemaVersion: 1;
+  kind: 'saved-run-detail';
+  readOnly: true;
+  status: 'ok' | 'unavailable';
+  run: SavedRunReport;
+};
+
+function savedRunReport(run: SavedRunInspection, detail: boolean): SavedRunReport {
+  if (run.kind === 'unavailable') {
+    return { kind: 'unavailable', runId: run.runId, error: { code: run.code, message: inspectionErrorText(run.code) } };
+  }
+  const { checkpoint } = run;
+  const { state, configuration, repository } = checkpoint;
+  const workerCalls = (used: number, excluded: boolean): WorkerCallReport => ({ used, available: excluded ? 0 : 2 - used, excluded });
+  return {
+    kind: 'valid', runId: checkpoint.runId, status: checkpoint.status,
+    createdAt: checkpoint.createdAt, updatedAt: checkpoint.updatedAt,
+    task: text(state.task),
+    repository: {
+      root: text(repository.root), available: run.repositoryAvailable,
+      ...(detail ? { head: repository.head, gitCommonDirectory: text(repository.gitCommonDirectory) } : {}),
+    },
+    configuration: {
+      mode: configuration.mode, provider: configuration.provider, model: text(configuration.model),
+      workerSelection: configuration.workerSelection ?? 'auto', codexNetworkAccess: configuration.codexNetworkAccess,
+    },
+    iterations: { used: run.iterationsUsed, limit: checkpoint.iterationLimit, remaining: run.iterationsRemaining },
+    workerCalls: {
+      codex: workerCalls(state.codexCalls, configuration.workerSelection === 'claude'),
+      claude: workerCalls(state.claudeCalls, configuration.workerSelection === 'codex'),
+    },
+    workerUsage: savedWorkerUsage(run.events),
+    validation: {
+      generation: state.evidence?.validationGeneration ?? 0,
+      checks: run.checks.map((check) => ({ script: text(check.script), status: check.status })),
+    },
+    continuation: {
+      preflightRequired: true, recoveryRequired: run.recoveryRequired,
+      blockers: run.blockers.map((blocker) => text(blocker)),
+    },
+    ...(run.lastFailure === undefined ? {} : { lastFailure: text(run.lastFailure, 1_200) }),
+    ...(run.lastStop === undefined ? {} : { lastStop: text(run.lastStop) }),
+    segments: 1 + run.events.filter((event) => event.type === 'run_resumed').length,
+    ...(detail ? {
+      timeline: {
+        total: run.events.length,
+        recent: run.events.slice(-SAVED_RUN_TIMELINE_LIMIT).map((event) => ({
+          sequence: event.sequence, timestamp: event.timestamp, type: event.type, description: text(describeSavedEvent(event)),
+        })),
+      },
+    } : {}),
+  };
+}
+
+export function createSavedRunListingOutput(listing: SavedRunListing): SavedRunListOutput {
+  return {
+    schemaVersion: 1, kind: 'saved-run-list', readOnly: true,
+    status: listing.ignoredEntries || listing.runs.some((run) => run.kind === 'unavailable') ? 'partial' : 'ok',
+    limit: SAVED_RUN_LIST_LIMIT, total: listing.total, hiddenRuns: listing.hiddenRuns, ignoredEntries: listing.ignoredEntries,
+    runs: listing.runs.map((run) => savedRunReport(run, false)),
+  };
+}
+
+export function createSavedRunDetailOutput(run: SavedRunInspection): SavedRunDetailOutput {
+  return {
+    schemaVersion: 1, kind: 'saved-run-detail', readOnly: true, status: run.kind === 'valid' ? 'ok' : 'unavailable',
+    run: savedRunReport(run, true),
+  };
 }
 
 export function formatSavedRunLines(run: SavedRunInspection, detail = true): string[] {

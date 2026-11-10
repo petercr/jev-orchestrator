@@ -58,8 +58,8 @@ separate from the completed v0.6 release:
   The successful [v0.6 live retest](docs/workflows/v0.6-live-retest-results-20261031.md)
   still needed manual routing alternatives; it does not establish a general
   reliability or performance improvement.
-- **Saved-run management:** history JSON, run deletion, automatic retention
-  cleanup, and export/import remain deferred. The
+- **Saved-run management:** history JSON is the current first slice. Run deletion,
+  automatic retention cleanup, and export/import remain deferred. The
   [storage contract](docs/saved-runs-v1.md) documents current bounds and manual
   housekeeping for inactive records.
 - **Larger workflow changes:** cross-machine transfer, recovery from uncertain
@@ -88,7 +88,20 @@ independent validation, and separate approval/acceptance remain required.
 
 Verified locally on 2026-11-09: all 1,643 tests across 49 files passed, along
 with `pnpm check`, `pnpm build`, local documentation links, and `git diff --check`.
-The correction remains unreleased on `fix/evaluation-iteration-context`.
+The correction merged into main in [PR #76](https://github.com/petercr/jev-orchestrator/pull/76)
+at `99766ab` and remains unreleased.
+
+### Current saved-run management slice: history JSON
+
+[Trail 420](https://entire.com/gh/petercr/-/trails/420) adds `--json` to
+`--list-runs` and `--show-run`, using the existing read-only history reader.
+The [separate reporting contract](docs/saved-run-history-json-v1.md) specifies
+bounded list/detail projections, sanitized text, saved budgets and validation,
+worker usage coverage, continuation blockers, and allowlisted inspection errors.
+The store, task state, approval candidates, and resume authorization remain
+unchanged; history JSON is not an executable record format. Human output and
+decision JSON stay compatible. The slice remains unreleased, with no v0.7
+scope or publication date selected.
 
 <a id="v04-draft-reliable-task-workflows"></a>
 
@@ -516,8 +529,9 @@ the terminal summary also prints the run ID and continuation status.
 
 Listing and showing are bounded, read-only local operations. A missing
 repository or missing provider credential must not prevent inspection. Plain
-output remains available; history JSON output is deferred so existing
-decision-only `--json` behavior stays stable. Run IDs resolve only within the
+output remains available. History JSON was deferred from v0.6; the current
+[management slice](#current-saved-run-management-slice-history-json) adds a
+separate reporting format while preserving decision-only JSON. Run IDs resolve only within the
 application store and never accept arbitrary file paths.
 
 Resume uses the stored task and repository rather than new positional
