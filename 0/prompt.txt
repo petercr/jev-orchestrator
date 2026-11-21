@@ -1,0 +1,5 @@
+lets look thru this repo and see what we can tune up or make more secure. send gpt sol-6.2 subs on medium for file reads
+
+---
+
+great send sol subs to open issue(s) for these
