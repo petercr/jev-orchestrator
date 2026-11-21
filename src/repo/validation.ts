@@ -44,7 +44,7 @@ export function validationWorkflow(
   scripts: string[],
   commands: Record<string, string>,
   manager: RepoSnapshot['packageManager'],
-): Pick<RepoSnapshot, 'requiredValidationScripts' | 'validationScriptCoverage'> {
+): Required<Pick<RepoSnapshot, 'requiredValidationScripts' | 'validationScriptCoverage'>> {
   const exact = VALIDATION_NAMES.filter((name) => scripts.includes(name));
   const requiredValidationScripts = exact.length > 0 ? [...exact] : [...scripts];
   const validationScriptCoverage: Record<string, string[]> = {};
@@ -98,8 +98,9 @@ function validationOutcomes(state: AgentState): Map<string, boolean> {
   const outcomes = new Map<string, boolean>();
   for (const result of (records ?? []).filter((item) => item.generation === generation)
     .sort((left, right) => left.iteration - right.iteration)) {
+    if (result.manifestHash !== undefined && result.manifestHash !== state.repo.validationManifestHash) continue;
     const passed = result.passed && result.exitCode === 0 && !result.timedOut;
-    const covered = passed ? validationCoverage(state.repo, result.script) : [result.script];
+    const covered = passed ? result.coveredScripts ?? [result.script] : [result.script];
     for (const script of covered) outcomes.set(script, passed);
   }
   return outcomes;

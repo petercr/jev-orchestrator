@@ -22,6 +22,7 @@ export type RepoSnapshot = {
   validationScripts: string[];
   requiredValidationScripts?: string[];
   validationScriptCoverage?: Record<string, string[]>;
+  validationManifestHash?: string;
   gitBranch?: string;
   gitStatus: string[];
   topLevelFiles: string[];
@@ -51,6 +52,8 @@ export type ValidationEvidence = {
   timedOut: boolean;
   passed: boolean;
   summary: string;
+  manifestHash?: string;
+  coveredScripts?: string[];
 };
 
 export type AgentEvidence = {

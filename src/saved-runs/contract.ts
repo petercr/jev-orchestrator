@@ -6,7 +6,7 @@ import { validateCloudflareAccountId, validateEvaluationModel, type EvaluationCo
 import { redactSensitiveText } from '../logging/trace.js';
 import { MAX_TASK_LENGTH } from '../limits.js';
 import { isIssueContext } from '../repo/issue.js';
-import { MAX_REQUIRED_VALIDATION_SCRIPTS } from '../repo/validation.js';
+import { isValidationScript, MAX_REQUIRED_VALIDATION_SCRIPTS } from '../repo/validation.js';
 import { ACTIONS, type AgentState, type EvaluationProvider, type WorkerSelection } from '../types.js';
 import type {
   SavedRunConfiguration,
@@ -80,12 +80,26 @@ function isRepoSnapshot(value: unknown): boolean {
   if (value.packageName !== undefined && !isBoundedString(value.packageName, 200)) return false;
   if (value.requiredValidationScripts !== undefined &&
       !isStringArray(value.requiredValidationScripts, MAX_REQUIRED_VALIDATION_SCRIPTS, 200)) return false;
+  if (value.validationManifestHash !== undefined &&
+      (typeof value.validationManifestHash !== 'string' || !HASH_PATTERN.test(value.validationManifestHash))) return false;
   if (value.gitBranch !== undefined && !isBoundedString(value.gitBranch, 500)) return false;
   if (value.validationScriptCoverage !== undefined &&
       (!isRecord(value.validationScriptCoverage) || Object.keys(value.validationScriptCoverage).length > 100 ||
         !Object.entries(value.validationScriptCoverage).every(([key, scripts]) =>
           isBoundedString(key, 200) && isStringArray(scripts, 100, 200)))) return false;
   return true;
+}
+
+function isValidationEvidence(value: unknown): boolean {
+  return isRecord(value) && isIntegerInRange(value.iteration, 1, 8) &&
+    isIntegerInRange(value.generation, 0, 1_000_000) && isBoundedString(value.script, 200) &&
+    (value.exitCode === null || (typeof value.exitCode === 'number' && Number.isInteger(value.exitCode))) &&
+    typeof value.timedOut === 'boolean' && typeof value.passed === 'boolean' &&
+    isBoundedString(value.summary, 1_000) &&
+    (value.manifestHash === undefined || (typeof value.manifestHash === 'string' && HASH_PATTERN.test(value.manifestHash))) &&
+    (value.coveredScripts === undefined ||
+      (isStringArray(value.coveredScripts, MAX_REQUIRED_VALIDATION_SCRIPTS, 200) &&
+        value.coveredScripts.includes(value.script) && value.coveredScripts.every(isValidationScript)));
 }
 
 function isEvidence(value: unknown): boolean {
@@ -104,15 +118,9 @@ function isEvidence(value: unknown): boolean {
   if (!value.failures.every((item) => isRecord(item) && isIntegerInRange(item.iteration, 1, 8) &&
       ACTIONS.includes(item.action as (typeof ACTIONS)[number]) && isBoundedString(item.summary, 1_000))) return false;
   if (value.issue !== undefined && !isIssueContext(value.issue)) return false;
-  const validations = value.validations;
-  const validation = value.validation;
-  const validationRecords = validations === undefined ? (validation === undefined ? [] : [validation]) : validations;
-  if (!Array.isArray(validationRecords) || validationRecords.length > 8 ||
-      !validationRecords.every((item) => isRecord(item) && isIntegerInRange(item.iteration, 1, 8) &&
-        isIntegerInRange(item.generation, 0, 1_000_000) && isBoundedString(item.script, 200) &&
-        (item.exitCode === null || (typeof item.exitCode === 'number' && Number.isInteger(item.exitCode))) &&
-        typeof item.timedOut === 'boolean' && typeof item.passed === 'boolean' &&
-        isBoundedString(item.summary, 1_000))) return false;
+  if (value.validation !== undefined && !isValidationEvidence(value.validation)) return false;
+  if (value.validations !== undefined && (!Array.isArray(value.validations) ||
+      value.validations.length > 8 || !value.validations.every(isValidationEvidence))) return false;
   if (value.worker !== undefined && (!isRecord(value.worker) ||
       !isIntegerInRange(value.worker.iteration, 1, 8) || !WORKERS.includes(value.worker.agent as WorkerSelection) ||
       !isIntegerInRange(value.worker.evidenceRevision, 0, 1_000_000) ||

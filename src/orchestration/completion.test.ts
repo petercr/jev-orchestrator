@@ -105,12 +105,19 @@ describe('completion after independent validation', () => {
     expect(result.state.observations).toContain('User explicitly confirmed task acceptance after all required independent validation passed.');
   });
 
-  function recordValidatedWorker(initial: ReturnType<typeof createInitialState>): void {
+  function recordPassedChecks(initial: ReturnType<typeof createInitialState>, iteration = 0, generation = 0): void {
     initial.tests = { ran: true, passed: true };
+    initial.evidence!.validations = ['verify', 'build'].map((script) => ({
+      iteration, generation, script, exitCode: 0, timedOut: false, passed: true, summary: '',
+      coveredScripts: initial.repo.validationScriptCoverage?.[script] ?? [script],
+    }));
+  }
+
+  function recordValidatedWorker(initial: ReturnType<typeof createInitialState>): void {
+    recordPassedChecks(initial, 2, 1);
     initial.claudeCalls = 1;
     initial.evidence!.validationGeneration = 1;
     initial.evidence!.worker = { agent: 'claude', iteration: 1, evidenceRevision: 0, exitCode: 0, timedOut: false, ok: true, summary: '', modifiedFiles: [] };
-    initial.evidence!.validations = ['verify', 'build'].map((script) => ({ iteration: 2, generation: 1, script, exitCode: 0, timedOut: false, passed: true, summary: '' }));
     initial.iteration = 2;
   }
 
@@ -166,8 +173,7 @@ describe('completion after independent validation', () => {
   it.each(['reject', 'stop'] as const)('does not complete a validation review on %s', async (kind) => {
     const repo = await repository();
     const initial = preparedState(repo);
-    initial.tests = { ran: true, passed: true };
-    initial.evidence!.validations = ['verify', 'build'].map((script) => ({ iteration: 0, generation: 0, script, exitCode: 0, timedOut: false, passed: true, summary: '' }));
+    recordPassedChecks(initial);
     const execute = vi.fn();
     const seen: string[] = [];
     const result = await runOrchestration(initial, {
@@ -187,8 +193,7 @@ describe('completion after independent validation', () => {
   it('does not fabricate completion approval when the resolved review is interrupted', async () => {
     const repo = await repository();
     const initial = preparedState(repo);
-    initial.tests = { ran: true, passed: true };
-    initial.evidence!.validations = ['verify', 'build'].map((script) => ({ iteration: 0, generation: 0, script, exitCode: 0, timedOut: false, passed: true, summary: '' }));
+    recordPassedChecks(initial);
     const controller = new AbortController();
     const execute = vi.fn();
     const result = await runOrchestration(initial, {

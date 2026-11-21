@@ -1,8 +1,14 @@
+import { mkdtemp, rm, writeFile } from 'node:fs/promises';
+import os from 'node:os';
+import path from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
 import { createCodexAdapter } from './codex.js';
 import { createClaudeAdapter } from './claude.js';
 import type { ProcessRunner } from '../process.js';
 import { executeCandidate } from '../orchestration/execute.js';
+import { selectCandidate } from '../orchestration/candidate.js';
+import { createInitialState } from '../orchestration/loop.js';
+import { inspectRepo } from '../repo/inspect.js';
 
 describe.each([
   ['codex', createCodexAdapter],
@@ -35,9 +41,16 @@ describe.each([
 it('propagates cancellation to validation without accepting a successful exit', async () => {
   const controller = new AbortController();
   const runner = vi.fn<ProcessRunner>(async () => ({ exitCode: 0, stdout: 'partial', stderr: '', timedOut: false, cancelled: true }));
-  const result = await executeCandidate({ action: 'RUN_TESTS', tool: 'package_script', input: {
-    root: '/repo', command: 'pnpm', args: ['run', 'test'], packageManager: 'pnpm', script: 'test',
-  } }, runner, { signal: controller.signal });
-  expect(runner.mock.calls[0]?.[1]).toEqual({ signal: controller.signal });
-  expect(result).toMatchObject({ cancelled: true, ok: false, timedOut: false });
+  const root = await mkdtemp(path.join(os.tmpdir(), 'validation-cancellation-'));
+  try {
+    await writeFile(path.join(root, 'package.json'), JSON.stringify({ scripts: { test: 'node --test' } }));
+    await writeFile(path.join(root, 'pnpm-lock.yaml'), '');
+    const proposal = await selectCandidate('RUN_TESTS', createInitialState(await inspectRepo(root), 'Fix the fixture'));
+    const result = await executeCandidate(proposal, runner, { signal: controller.signal });
+    expect(runner.mock.calls[0]?.[1]).toEqual({ signal: controller.signal });
+    expect(result).toMatchObject({ cancelled: true, ok: false, timedOut: false });
+    expect(result).not.toHaveProperty('coveredScripts');
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
 });

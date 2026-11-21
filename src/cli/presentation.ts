@@ -50,7 +50,7 @@ export function formatProgressLines(state: AgentState): string[] {
     (!result.passed || result.exitCode !== 0 || result.timedOut));
   if (failed) lines.push(`Independent ${text(failed.script, 100)} failure: ${failed.timedOut ? 'timed out' : `exit ${failed.exitCode ?? 'unavailable'}`}. ${text(failed.summary, 300)}`);
   if (pending.length && oldResults.some((result) => result.generation !== generation)) {
-    lines.push('Earlier-generation results are stale after a worker attempt; fresh checks are required.');
+    lines.push('Earlier-generation results are stale. Fresh independent checks are required.');
   }
   if (hasOmittedValidationRequirements(state)) lines.push('Completion blocked: task context omitted validation requirements; obtain the missing requirements.');
   if (state.evidence?.repoRefreshRequired) lines.push('Execution blocked: repository inspection requires recovery through approved user input.');

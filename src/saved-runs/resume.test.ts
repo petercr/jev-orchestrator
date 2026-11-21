@@ -4,6 +4,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { formatApprovalLines } from '../cli/presentation.js';
+import { executeCandidate } from '../orchestration/execute.js';
 import { createInitialState, runOrchestration } from '../orchestration/loop.js';
 import { createRunMetrics } from '../orchestration/summary.js';
 import { inspectGitIdentity, inspectRepo } from '../repo/inspect.js';
@@ -260,7 +261,10 @@ describe('resumed state and enforcement', { timeout: 15_000 }, () => {
             ? { test: 'node check.mjs', verify: 'pnpm run test' }
             : { test: 'node check.mjs', build: 'node check.mjs', verify: 'pnpm run test && pnpm run build' });
         }
-        if (proposal.action === 'RUN_TESTS') validations.push(proposal.input.script);
+        if (proposal.action === 'RUN_TESTS') {
+          validations.push(proposal.input.script);
+          return executeCandidate(proposal, async () => ({ exitCode: 0, timedOut: false, stdout: 'Passed.', stderr: '' }));
+        }
         return {
           action: proposal.action, ok: true, exitCode: 0, timedOut: false, durationMs: 1, output: 'Passed.',
           files: proposal.action === 'READ_FILE' ? [proposal.input.path] : [],

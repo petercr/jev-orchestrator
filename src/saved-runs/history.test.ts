@@ -117,7 +117,7 @@ describe('read-only saved run history', () => {
         failures: [{ iteration: 1, action: 'CALL_CODEX', summary: 'Worker timed out after partial edits.' }],
         validations: [
           { iteration: 1, generation: 1, script: 'lint', exitCode: 0, passed: true, timedOut: false, summary: 'Old pass.' },
-          { iteration: 1, generation: 2, script: 'verify', exitCode: 0, passed: true, timedOut: false, summary: 'Passed workflow.' },
+          { iteration: 1, generation: 2, script: 'verify', exitCode: 0, passed: true, timedOut: false, summary: 'Passed workflow.', coveredScripts: ['verify', 'check', 'test'] },
           { iteration: 1, generation: 2, script: 'build', exitCode: 1, passed: false, timedOut: false, summary: 'Build failed.' },
         ],
       },

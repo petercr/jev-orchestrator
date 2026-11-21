@@ -641,7 +641,7 @@ describe('applyPolicy', () => {
     initial.repo = { ...initial.repo, requiredValidationScripts: ['test', 'lint'], validationScriptCoverage: { verify: ['test', 'lint'] } };
     initial.evidence!.validations!.push({ ...initial.evidence!.validations![0]!, script: 'lint', iteration: 1 });
     expect(applyPolicy(initial, inspection)).not.toHaveProperty('completionReview');
-    initial.evidence!.validations = [{ ...initial.evidence!.validations![0]!, script: 'verify' }];
+    initial.evidence!.validations = [{ ...initial.evidence!.validations![0]!, script: 'verify', coveredScripts: ['verify', 'test', 'lint'] }];
     expect(applyPolicy(initial, inspection).completionReview).toBe('validated_inspection');
   });
 });

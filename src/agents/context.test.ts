@@ -46,7 +46,9 @@ function state(): AgentState {
 
 describe('worker context', () => {
   it('keeps typed provenance, recent failure, bounds, and redacts credentials', () => {
-    const context = buildWorkerContext(state());
+    const initial = state();
+    initial.evidence!.validation!.manifestHash = 'a'.repeat(64);
+    const context = buildWorkerContext(initial);
     expect(context).toMatchObject({
       validationGeneration: 1,
       clarifications: [{ iteration: 2, text: 'The login route should reject expired tokens.' }],
@@ -55,6 +57,7 @@ describe('worker context', () => {
       remainingCalls: { codex: 1, claude: 2 },
     });
     expect(JSON.stringify(context)).not.toContain('private-value');
+    expect(context.validation).not.toHaveProperty('manifestHash');
     expect(JSON.stringify(context).length).toBeLessThanOrEqual(MAX_WORKER_CONTEXT_LENGTH);
     expect(() => assertWorkerContext(context)).not.toThrow();
   });
