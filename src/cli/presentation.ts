@@ -3,7 +3,7 @@ import { truncateText } from '../limits.js';
 import { redactSensitiveText } from '../logging/trace.js';
 import { MAX_CLAUDE_CALLS, MAX_CODEX_CALLS } from '../agents/types.js';
 import { taskPreparation } from '../repo/preparation.js';
-import { hasOmittedValidationRequirements, hasPassedValidation, validationChecks } from '../repo/validation.js';
+import { hasOmittedValidationRequirements, hasPassedValidation, unavailableValidationScripts, validationChecks } from '../repo/validation.js';
 import { ACTIONS, type AgentState } from '../types.js';
 import type { ApprovalContext, EvaluationRecoveryContext, OrchestrationResult } from '../orchestration/loop.js';
 
@@ -54,10 +54,8 @@ export function formatProgressLines(state: AgentState): string[] {
   }
   if (hasOmittedValidationRequirements(state)) lines.push('Completion blocked: task context omitted validation requirements; obtain the missing requirements.');
   if (state.evidence?.repoRefreshRequired) lines.push('Execution blocked: repository inspection requires recovery through approved user input.');
-  if (pending.some((check) => !state.repo.validationScripts.includes(check.script) &&
-    !state.repo.validationScripts.some((script) => state.repo.validationScriptCoverage?.[script]?.includes(check.script)))) {
-    lines.push('Some required checks have no declared runnable coverage; clarify the missing check before completion.');
-  }
+  const unavailable = unavailableValidationScripts(state);
+  if (unavailable.length) lines.push(`Required checks with no declared runnable coverage: ${list(unavailable)}.`);
   if (state.repo.packageManager === 'unknown' && pending.length) lines.push('Validation blocked: no supported package manager was detected from a lockfile.');
   const worker = state.evidence?.worker;
   if (worker && !worker.ok) {

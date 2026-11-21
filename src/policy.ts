@@ -1,5 +1,5 @@
 import type { AgentAssessment, AgentState, PolicyDecision } from './types.js';
-import { hasFailedValidation, hasOmittedValidationRequirements, hasPassedValidation, pendingValidationScripts } from './repo/validation.js';
+import { hasFailedValidation, hasOmittedValidationRequirements, hasPassedValidation, pendingValidationScripts, selectPendingValidation } from './repo/validation.js';
 import { taskPreparation } from './repo/preparation.js';
 import { availableWorkerActions, isWorkerActionAllowed } from './agents/selection.js';
 
@@ -77,11 +77,21 @@ function requireValidation(
     };
   }
 
+  const pending = pendingValidationScripts(state);
+  if (pending.length > 0 && selectPendingValidation(state) === undefined) {
+    return {
+      requested,
+      selected: 'ASK_USER',
+      override: requested !== 'ASK_USER',
+      reason: 'The pending required checks have no declared runnable coverage.',
+    };
+  }
+
   return {
     requested,
     selected: 'RUN_TESTS',
     override: requested !== 'RUN_TESTS',
-    reason: `Policy requires passing independent validation before completion: ${pendingValidationScripts(state).join(', ')}.`,
+    reason: `Policy requires passing independent validation before completion: ${pending.join(', ')}.`,
   };
 }
 

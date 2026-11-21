@@ -6,6 +6,7 @@ import { validateCloudflareAccountId, validateEvaluationModel, type EvaluationCo
 import { redactSensitiveText } from '../logging/trace.js';
 import { MAX_TASK_LENGTH } from '../limits.js';
 import { isIssueContext } from '../repo/issue.js';
+import { MAX_REQUIRED_VALIDATION_SCRIPTS } from '../repo/validation.js';
 import { ACTIONS, type AgentState, type EvaluationProvider, type WorkerSelection } from '../types.js';
 import type {
   SavedRunConfiguration,
@@ -77,7 +78,8 @@ function isRepoSnapshot(value: unknown): boolean {
       !isStringArray(value.scripts, 100, 200) || !isStringArray(value.validationScripts, 100, 200) ||
       !isStringArray(value.gitStatus, 100, 500) || !isStringArray(value.topLevelFiles, 80, 512)) return false;
   if (value.packageName !== undefined && !isBoundedString(value.packageName, 200)) return false;
-  if (value.requiredValidationScripts !== undefined && !isStringArray(value.requiredValidationScripts, 100, 200)) return false;
+  if (value.requiredValidationScripts !== undefined &&
+      !isStringArray(value.requiredValidationScripts, MAX_REQUIRED_VALIDATION_SCRIPTS, 200)) return false;
   if (value.gitBranch !== undefined && !isBoundedString(value.gitBranch, 500)) return false;
   if (value.validationScriptCoverage !== undefined &&
       (!isRecord(value.validationScriptCoverage) || Object.keys(value.validationScriptCoverage).length > 100 ||

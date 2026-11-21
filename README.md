@@ -606,9 +606,11 @@ attempts as unavailable. Token counts never change worker or iteration budgets.
 Independent checks are reported as `passed`, `failed`, or `pending` for the
 current validation generation. Passing declared conjunctive workflows covers
 their constituent scripts, while a new worker attempt invalidates earlier
-results. Omitted requirements and an unresolved repository refresh remain
-explicit completion blockers. The summary reports validation; task acceptance
-still requires the existing completion review and approval.
+results. Repository refreshes retain established requirements and add newly
+detected ones. If a required check has no declared runnable coverage, it stays
+pending and blocks completion. Omitted requirements and an unresolved
+repository refresh also block completion. Task acceptance still requires the
+existing completion review and approval.
 
 ## Traces
 
