@@ -10,7 +10,7 @@ import { requiresTaskPreparation, taskPreparation } from '../repo/preparation.js
 import { MAX_ORCHESTRATION_ITERATIONS, truncateText } from '../limits.js';
 import { inspectRepo } from '../repo/inspect.js';
 import { isIssueContext, parseGitHubIssue } from '../repo/issue.js';
-import { hasFailedValidation, hasPassedValidation, pendingValidationScripts, selectPendingValidation } from '../repo/validation.js';
+import { hasFailedValidation, hasPassedValidation, pendingValidationScripts, retainValidationRequirements, selectPendingValidation } from '../repo/validation.js';
 import { evaluationFailure, type EvaluationFailure } from '../ai/errors.js';
 import type { Evaluator } from '../ai/evaluate.js';
 import { isWorkerActionAllowed } from '../agents/selection.js';
@@ -976,7 +976,7 @@ export async function runOrchestration(
         if (nextState.evidence?.repoRefreshRequired) {
           phase = 'refresh';
           try {
-            const refreshed = await metrics.measure('inspectionMs', () => inspect(state.repo.root));
+            const refreshed = retainValidationRequirements(state, await metrics.measure('inspectionMs', () => inspect(state.repo.root)));
             const modified = modifiedFiles(refreshed);
             nextState = {
               ...nextState,
@@ -1042,7 +1042,7 @@ export async function runOrchestration(
         if (isCodingAgentProposal(proposal)) {
           phase = 'refresh';
           try {
-            refreshedRepo = await metrics.measure('inspectionMs', () => inspect(state.repo.root));
+            refreshedRepo = retainValidationRequirements(state, await metrics.measure('inspectionMs', () => inspect(state.repo.root)));
           } catch {
             refreshFailed = true;
             toolResult = {

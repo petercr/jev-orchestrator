@@ -1,6 +1,7 @@
 import type { AgentState, RepoSnapshot } from '../types.js';
 
 export const VALIDATION_NAMES = ['verify', 'check', 'test', 'typecheck', 'lint', 'build'] as const;
+export const MAX_REQUIRED_VALIDATION_SCRIPTS = 100;
 
 export function isValidationScript(script: string): boolean {
   return /^[a-zA-Z0-9][a-zA-Z0-9:_-]{0,199}$/u.test(script) &&
@@ -70,6 +71,26 @@ export function requiredValidationScripts(state: AgentState): string[] {
   ])];
 }
 
+export function retainValidationRequirements(
+  previous: AgentState,
+  current: RepoSnapshot,
+  additionalRequirements: readonly string[] = [],
+): RepoSnapshot {
+  const required = [...new Set([
+    ...requiredValidationScripts(previous),
+    ...additionalRequirements,
+    ...(current.requiredValidationScripts ?? current.validationScripts),
+  ])];
+  if (required.length > MAX_REQUIRED_VALIDATION_SCRIPTS) {
+    throw new Error('Validation requirements cannot fit safely in the refreshed state.');
+  }
+  return { ...current, requiredValidationScripts: required };
+}
+
+function validationCoverage(repo: RepoSnapshot, script: string): readonly string[] {
+  return repo.validationScriptCoverage?.[script] ?? [script];
+}
+
 function validationOutcomes(state: AgentState): Map<string, boolean> {
   const generation = state.evidence?.validationGeneration ?? 0;
   const records = state.evidence?.validations ??
@@ -78,7 +99,7 @@ function validationOutcomes(state: AgentState): Map<string, boolean> {
   for (const result of (records ?? []).filter((item) => item.generation === generation)
     .sort((left, right) => left.iteration - right.iteration)) {
     const passed = result.passed && result.exitCode === 0 && !result.timedOut;
-    const covered = passed ? state.repo.validationScriptCoverage?.[result.script] ?? [result.script] : [result.script];
+    const covered = passed ? validationCoverage(state.repo, result.script) : [result.script];
     for (const script of covered) outcomes.set(script, passed);
   }
   return outcomes;
@@ -92,6 +113,12 @@ export function pendingValidationScripts(state: AgentState): string[] {
     state.tests.ran && state.tests.passed === true) return [];
   const outcomes = validationOutcomes(state);
   return required.filter((script) => outcomes.get(script) !== true);
+}
+
+export function unavailableValidationScripts(state: AgentState): string[] {
+  const covered = new Set(state.repo.validationScripts.filter(isValidationScript)
+    .flatMap((script) => validationCoverage(state.repo, script)));
+  return pendingValidationScripts(state).filter((script) => !covered.has(script));
 }
 
 export type ValidationCheck = { script: string; status: 'passed' | 'failed' | 'pending' };
@@ -122,7 +149,7 @@ export function selectPendingValidation(state: AgentState): string | undefined {
   if (pending.length === 0) return undefined;
   const candidates = state.repo.validationScripts.filter(isValidationScript);
   const score = (script: string): number =>
-    (state.repo.validationScriptCoverage?.[script] ?? [script]).filter((name) => pending.includes(name)).length;
+    validationCoverage(state.repo, script).filter((name) => pending.includes(name)).length;
   const priority = (script: string): number => {
     const index = VALIDATION_NAMES.findIndex((name) => script === name || script.startsWith(`${name}:`));
     return index < 0 ? VALIDATION_NAMES.length : index;

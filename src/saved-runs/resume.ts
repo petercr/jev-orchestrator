@@ -1,5 +1,5 @@
 import { resolveEvaluationConfiguration, type EvaluationConfiguration } from '../config.js';
-import { requiredValidationScripts, validationRequirementsFromText } from '../repo/validation.js';
+import { retainValidationRequirements, validationRequirementsFromText } from '../repo/validation.js';
 import { REPOSITORY_INSTRUCTION_FILES } from '../repo/preparation.js';
 import { createSavedRunConfiguration, redactAndValidateAgentState } from './contract.js';
 import { changedSnapshotPaths, type RepositorySnapshot } from './snapshot.js';
@@ -46,11 +46,8 @@ export function resolveResumeConfiguration(saved: SavedRunConfiguration, environ
 
 export function refreshResumeState(checkpoint: SavedRunCheckpointV1, repo: RepoSnapshot, snapshot?: RepositorySnapshot): AgentState {
   const previous = checkpoint.state;
-  const required = [...new Set([
-    ...requiredValidationScripts(previous), ...validationRequirementsFromText(previous.task).scripts,
-    ...(repo.requiredValidationScripts ?? repo.validationScripts),
-  ])];
-  if (required.length > 100 || validationRequirementsFromText(previous.task).truncated) {
+  const taskRequirements = validationRequirementsFromText(previous.task);
+  if (taskRequirements.truncated) {
     throw new Error('Original validation requirements cannot fit safely in the resumed state.');
   }
   const evidence = previous.evidence;
@@ -59,7 +56,7 @@ export function refreshResumeState(checkpoint: SavedRunCheckpointV1, repo: RepoS
     ? snapshot.files.some((item) => item.path === file && item.hash !== null) : repo.topLevelFiles.includes(file));
   const next: AgentState = {
     ...previous,
-    repo: { ...repo, requiredValidationScripts: required,
+    repo: { ...retainValidationRequirements(previous, repo, taskRequirements.scripts),
       topLevelFiles: [...new Set([...instructionFiles, ...repo.topLevelFiles])].slice(0, 80) },
     currentGoal: 'Reinspect instructions and independently validate the preserved task before acceptance.',
     filesRead: [],

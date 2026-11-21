@@ -3,6 +3,7 @@ import { link, mkdir, mkdtemp, readFile, rm, symlink, writeFile } from 'node:fs/
 import os from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { formatApprovalLines } from '../cli/presentation.js';
 import { createInitialState, runOrchestration } from '../orchestration/loop.js';
 import { createRunMetrics } from '../orchestration/summary.js';
 import { inspectGitIdentity, inspectRepo } from '../repo/inspect.js';
@@ -12,6 +13,7 @@ import { applyPolicy } from '../policy.js';
 import { selectCandidate } from '../orchestration/candidate.js';
 import { mockEvaluation } from '../mock.js';
 import * as tracing from '../logging/trace.js';
+import type { Action } from '../types.js';
 import { createSavedRunConfiguration, createSavedRunRepository } from './contract.js';
 import { captureRepositorySnapshot, changedSnapshotPaths, SNAPSHOT_FILE_BYTES } from './snapshot.js';
 import { refreshResumeState, resolveResumeConfiguration, resumePosition, validateSnapshotDrift } from './resume.js';
@@ -23,12 +25,13 @@ afterEach(async () => {
   await Promise.all(roots.splice(0).map((root) => rm(root, { recursive: true, force: true })));
 });
 
-async function fixture() {
+async function fixture(task = 'Fix value.txt and run pnpm lint.', iterationLimit = 5) {
   const parent = await mkdtemp(path.join(os.tmpdir(), 'dev-resume-unit-'));
   roots.push(parent);
   const root = path.join(parent, 'project');
   await mkdir(root);
   await writeFile(path.join(root, 'package.json'), JSON.stringify({ scripts: { test: 'node check.mjs', build: 'node check.mjs' } }));
+  await writeFile(path.join(root, 'pnpm-lock.yaml'), "lockfileVersion: '9.0'\n");
   await writeFile(path.join(root, 'AGENTS.md'), 'Read these instructions before implementing.');
   await writeFile(path.join(root, 'value.txt'), 'original');
   execFileSync('git', ['init', '--quiet'], { cwd: root });
@@ -36,10 +39,10 @@ async function fixture() {
   execFileSync('git', ['-c', 'user.name=Fixture', '-c', 'user.email=fixture@example.invalid', 'commit', '--quiet', '-m', 'fixture'], { cwd: root });
   const git = await inspectGitIdentity(root);
   const repository = await createSavedRunRepository(git.root, git.gitCommonDirectory, git.head);
-  const state = createInitialState(await inspectRepo(root), 'Fix value.txt and run pnpm lint.', 'codex');
+  const state = createInitialState(await inspectRepo(root), task, 'codex');
   const configuration = createSavedRunConfiguration('mock', undefined, 'codex');
   const store = await openSavedRunStore(path.join(parent, 'state'));
-  const created = await store.create({ state, repository, configuration, iterationLimit: 5 });
+  const created = await store.create({ state, repository, configuration, iterationLimit });
   await store.append(created.runId, { type: 'iteration_reserved', iteration: 1 }, state);
   await store.append(created.runId, { type: 'evaluation_completed', iteration: 1 }, state);
   const snapshot = await captureRepositorySnapshot(repository);
@@ -199,6 +202,86 @@ describe('resumed state and enforcement', { timeout: 15_000 }, () => {
     expect(execute).not.toHaveBeenCalled();
     const trace = JSON.parse((await readFile(result.tracePath, 'utf8')).trim());
     expect(trace).toMatchObject({ savedRunId: context.checkpoint.runId, segment: 2, iteration: 2 });
+  });
+
+  it.each(['worker refresh', 'inspection recovery'] as const)('retains missing resumed checks through %s', async (refreshPath) => {
+    const recoverInspection = refreshPath === 'inspection recovery';
+    const { root, store, checkpoint, repository } = await fixture('Fix value.txt', 8);
+    const writeScripts = async (scripts: Record<string, string>) =>
+      writeFile(path.join(root, 'package.json'), JSON.stringify({ scripts }));
+    await writeScripts({ test: 'node check.mjs' });
+    const initial = refreshResumeState(checkpoint, await inspectRepo(root), await captureRepositorySnapshot(repository));
+    expect(initial.repo.requiredValidationScripts).toEqual(['test', 'build']);
+    expect(initial.repo.validationScripts).toEqual(['test']);
+    await store.append(checkpoint.runId, { type: 'run_resumed', segment: 2 }, initial);
+
+    const actions: Action[] = ['READ_FILE', 'CALL_CODEX'];
+    if (recoverInspection) actions.push('ASK_USER');
+    actions.push('RUN_TESTS', 'FINISH', 'RUN_TESTS', 'FINISH');
+    const blockedIteration = 5 + Number(recoverInspection);
+    const inspections = vi.fn(inspectRepo);
+    if (recoverInspection) inspections.mockRejectedValueOnce(new Error('Transient inspection failure'));
+    const validations: string[] = [];
+    let workers = 0;
+    const result = await runOrchestration(initial, {
+      evaluate: async (state) => {
+        const action = actions[state.iteration - 2]!;
+        const evaluation = mockEvaluation(state);
+        evaluation.assessment.taskComplete.probability = action === 'FINISH' ? 0.99 : 0.02;
+        evaluation.assessment.needsTesting.probability = 0.02;
+        evaluation.assessment.nextAction = { choice: action, probabilities: { [action]: 1 }, confidence: 0.99 };
+        return evaluation;
+      },
+      approve: async (review) => {
+        const { state, policy, proposal, allowedAlternatives } = review;
+        if (state.iteration === blockedIteration - 1) {
+          expect(state.repo.requiredValidationScripts).toEqual(['test', 'build', 'verify']);
+          expect(state.repo.validationScripts).toEqual(['test', 'verify']);
+          expect(proposal).toMatchObject({ action: 'RUN_TESTS', input: { script: 'verify' } });
+        }
+        if (state.iteration === blockedIteration && proposal.action !== 'CALL_CODEX') {
+          expect(policy).toMatchObject({ requested: 'FINISH', selected: 'ASK_USER' });
+          expect(proposal.action).toBe('ASK_USER');
+          expect(allowedAlternatives).not.toContain('FINISH');
+          expect(allowedAlternatives).not.toContain('RUN_TESTS');
+          expect(pendingValidationScripts(state)).toEqual(['build']);
+          expect(state.evidence?.validation).toMatchObject({ script: 'verify', passed: true });
+          expect(formatApprovalLines(review).join('\n')).toContain('Required checks with no declared runnable coverage: build.');
+          return { kind: 'alternative', action: 'CALL_CODEX' };
+        }
+        return { kind: 'approve' };
+      },
+      askForInformation: async () => 'The repository is available again.',
+      inspect: inspections,
+      execute: async (proposal) => {
+        if (proposal.action === 'CALL_CODEX') {
+          workers += 1;
+          await writeScripts(workers === 1
+            ? { test: 'node check.mjs', verify: 'pnpm run test' }
+            : { test: 'node check.mjs', build: 'node check.mjs', verify: 'pnpm run test && pnpm run build' });
+        }
+        if (proposal.action === 'RUN_TESTS') validations.push(proposal.input.script);
+        return {
+          action: proposal.action, ok: true, exitCode: 0, timedOut: false, durationMs: 1, output: 'Passed.',
+          files: proposal.action === 'READ_FILE' ? [proposal.input.path] : [],
+        };
+      },
+    }, {
+      startIteration: 2, maxIterations: checkpoint.iterationLimit, savedRunId: checkpoint.runId, segment: 2,
+      persistence: { record: (event, next) => store.append(checkpoint.runId, event, next) },
+    });
+    expect(inspections).toHaveBeenCalledTimes(recoverInspection ? 3 : 2);
+    expect(workers).toBe(2);
+    expect(validations).toEqual(['verify', 'verify']);
+    expect(result).toMatchObject({
+      status: 'finished', iterations: blockedIteration + 2,
+      summary: { validation: { generation: 3, passed: true, checks: [
+        { script: 'test', status: 'passed' }, { script: 'build', status: 'passed' }, { script: 'verify', status: 'passed' },
+      ] } },
+    });
+    expect(result.state.evidence?.validations).toEqual([
+      expect.objectContaining({ script: 'verify', iteration: blockedIteration + 1, generation: 3 }),
+    ]);
   });
 
   it('keeps resume review waits outside active time without fabricating action approvals', () => {
