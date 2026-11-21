@@ -119,7 +119,7 @@ describe('evaluation contract diagnostics and progress', () => {
     initial.tests = { ran: true, passed: true };
     initial.evidence!.validations = [{ iteration: 0, generation: 0, script: 'verify', passed: true, exitCode: 0, timedOut: false, summary: 'previous pass' }];
     expect(boundAgentStateForEvaluation(initial).progress.independentValidation).toMatchObject({ allRequiredPassed: false, pendingScripts: ['verify', 'test', 'typecheck'] });
-    initial.evidence!.validations.push({ iteration: 2, generation: 1, script: 'verify', passed: true, exitCode: 0, timedOut: false, summary: 'current pass' });
+    initial.evidence!.validations.push({ iteration: 2, generation: 1, script: 'verify', passed: true, exitCode: 0, timedOut: false, summary: 'current pass', coveredScripts: ['verify', 'test', 'typecheck'] });
     expect(boundAgentStateForEvaluation(initial).progress.independentValidation).toMatchObject({ allRequiredPassed: true, pendingScripts: [] });
     initial.evidence!.validations.push({ iteration: 3, generation: 1, script: 'test', passed: false, exitCode: 1, timedOut: false, summary: 'subsequent failure' });
     expect(boundAgentStateForEvaluation(initial).progress.independentValidation).toMatchObject({ allRequiredPassed: false, pendingScripts: ['test'] });

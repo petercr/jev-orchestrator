@@ -132,7 +132,7 @@ describe('operator explanations from policy and candidate evidence', () => {
     initial.repo.validationScriptCoverage = { lint: ['lint', 'test'] };
     initial.evidence!.validations = [
       { iteration: 3, generation: 1, script: 'test', exitCode: 1, timedOut: false, passed: false, summary: 'Previous assertion.' },
-      { iteration: 4, generation: 1, script: 'lint', exitCode: 0, timedOut: false, passed: true, summary: 'Both checks passed.' },
+      { iteration: 4, generation: 1, script: 'lint', exitCode: 0, timedOut: false, passed: true, summary: 'Both checks passed.', coveredScripts: ['lint', 'test'] },
     ];
     const output = formatProgressLines(initial).join('\n');
     expect(output).toContain('test: passed, lint: passed');
@@ -156,7 +156,7 @@ describe('operator explanations from policy and candidate evidence', () => {
     initial.repo.validationScripts = ['verify', 'test', 'lint', 'build'];
     initial.repo.requiredValidationScripts = ['verify', 'test', 'lint', 'build'];
     initial.repo.validationScriptCoverage = { verify: ['verify', 'test', 'lint'], build: ['build'] };
-    initial.evidence!.validations = [{ iteration: 5, generation: 1, script: 'verify', exitCode: 0, timedOut: false, passed: true, summary: 'Passed.' }];
+    initial.evidence!.validations = [{ iteration: 5, generation: 1, script: 'verify', exitCode: 0, timedOut: false, passed: true, summary: 'Passed.', coveredScripts: ['verify', 'test', 'lint'] }];
     const output = formatApprovalLines(await context(initial, evaluation('FINISH', 0.99, 0.99))).join('\n');
     expect(output).toContain('verify: passed, test: passed, lint: passed, build: pending');
     expect(output).toContain('Completion needs independent checks: build.');

@@ -18,6 +18,7 @@ import {
 import { resolveSafeRepoFile, type CandidateProposal } from './candidate.js';
 import { isAllowedDiagnosticCommand } from './diagnostics.js';
 import { readGitHubIssue } from '../repo/issue.js';
+import { inspectValidationManifest } from '../repo/inspect.js';
 import { isValidationScript } from '../repo/validation.js';
 import type { IssueContext } from '../types.js';
 
@@ -48,6 +49,8 @@ export type ToolResult = {
   stderr?: string;
   issue?: IssueContext;
   usage?: WorkerUsage;
+  coveredScripts?: string[];
+  validationManifestChanged?: 'before' | 'during';
 };
 
 export class ToolExecutionError extends Error {
@@ -201,6 +204,8 @@ export async function executeCandidate(
     return codingAgentToolResult(proposal.action, result);
   }
 
+  const startedAt = performance.now();
+  let approvedManifest: Awaited<ReturnType<typeof inspectValidationManifest>>;
   if (proposal.action === 'RUN_TESTS') {
     const expectedCommand = proposal.input.packageManager;
     const expectedArgs = ['run', proposal.input.script];
@@ -212,6 +217,17 @@ export async function executeCandidate(
       proposal.input.args.some((arg, index) => arg !== expectedArgs[index])
     ) {
       throw new ToolExecutionError('The validation proposal does not match its package-manager script.');
+    }
+    approvedManifest = await inspectValidationManifest(proposal.input.root);
+    throwIfInterrupted(options.signal);
+    if (!approvedManifest || approvedManifest.hash !== proposal.input.manifestHash ||
+        approvedManifest.packageManager !== expectedCommand || !approvedManifest.coverage[proposal.input.script]) {
+      return {
+        action: 'RUN_TESTS', ok: false, exitCode: null, timedOut: false, files: [],
+        durationMs: Math.round(performance.now() - startedAt),
+        output: 'The approved validation manifest could not be verified before execution. Review a fresh candidate.',
+        validationManifestChanged: 'before',
+      };
     }
   }
   if (
@@ -225,7 +241,6 @@ export async function executeCandidate(
     throw new ToolExecutionError('The diagnostic proposal does not match the fixed command allowlist.');
   }
 
-  const startedAt = performance.now();
   let request: ProcessRequest;
   if (proposal.action === 'SEARCH_REPO') {
     request = {
@@ -263,7 +278,7 @@ export async function executeCandidate(
     : [];
   const successfulSearch = proposal.action === 'SEARCH_REPO' && result.exitCode === 1;
 
-  return {
+  const outcome: ToolResult = {
     action: proposal.action,
     ok: !result.cancelled && !result.timedOut && (result.exitCode === 0 || successfulSearch),
     exitCode: result.exitCode,
@@ -273,4 +288,20 @@ export async function executeCandidate(
     output: normalizedOutput(result),
     files,
   };
+  if (proposal.action !== 'RUN_TESTS' || !approvedManifest || result.cancelled) {
+    return outcome;
+  }
+  if (options.signal?.aborted) return { ...outcome, ok: false, cancelled: true };
+  const currentManifest = await inspectValidationManifest(proposal.input.root);
+  outcome.durationMs = Math.round(performance.now() - startedAt);
+  if (options.signal?.aborted) return { ...outcome, ok: false, cancelled: true };
+  if (!currentManifest || currentManifest.hash !== approvedManifest.hash ||
+      currentManifest.revision !== approvedManifest.revision || currentManifest.packageManager !== approvedManifest.packageManager) {
+    return {
+      ...outcome, ok: false, validationManifestChanged: 'during',
+      output: 'The validation manifest changed or became unavailable during execution. The result cannot provide independent validation.',
+    };
+  }
+  if (outcome.ok) outcome.coveredScripts = approvedManifest.coverage[proposal.input.script]!;
+  return outcome;
 }

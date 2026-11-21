@@ -1,3 +1,5 @@
+import { createHash } from 'node:crypto';
+import { constants, type BigIntStats } from 'node:fs';
 import { lstat, open, opendir, realpath, stat } from 'node:fs/promises';
 import path from 'node:path';
 import { spawn } from 'node:child_process';
@@ -21,6 +23,7 @@ type PackageMetadata = {
   packageName?: string;
   scripts: string[];
   validationCommands?: Record<string, string>;
+  manifest?: { hash: string; revision: string };
 };
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -114,17 +117,26 @@ async function readTopLevelFiles(root: string): Promise<string[]> {
   return entries.sort().slice(0, MAX_TOP_LEVEL_FILES);
 }
 
-async function readPackageMetadata(packageJsonPath: string): Promise<PackageMetadata> {
-  if (!(await isRegularFile(packageJsonPath))) return { scripts: [] };
+function fileRevision(stat: BigIntStats): string {
+  return [stat.dev, stat.ino, stat.size, stat.mtimeNs, stat.ctimeNs].join(':');
+}
 
+async function readPackageMetadata(packageJsonPath: string): Promise<PackageMetadata> {
   try {
-    const packageJson = await open(packageJsonPath, 'r');
+    const entry = await lstat(packageJsonPath, { bigint: true });
+    if (!entry.isFile() || entry.size > MAX_PACKAGE_JSON_BYTES) return { scripts: [] };
+    const packageJson = await open(packageJsonPath, constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK);
     try {
+      const revision = fileRevision(entry);
+      if (fileRevision(await packageJson.stat({ bigint: true })) !== revision) return { scripts: [] };
       const contents = Buffer.alloc(MAX_PACKAGE_JSON_BYTES + 1);
       const { bytesRead } = await packageJson.read(contents, 0, contents.length, 0);
-      if (bytesRead > MAX_PACKAGE_JSON_BYTES) return { scripts: [] };
+      if (BigInt(bytesRead) !== entry.size || fileRevision(await lstat(packageJsonPath, { bigint: true })) !== revision) {
+        return { scripts: [] };
+      }
 
-      const parsed: unknown = JSON.parse(contents.subarray(0, bytesRead).toString('utf8'));
+      const bytes = contents.subarray(0, bytesRead);
+      const parsed: unknown = JSON.parse(bytes.toString('utf8'));
       if (!isRecord(parsed)) return { scripts: [] };
 
       const packageName = typeof parsed.name === 'string'
@@ -143,7 +155,11 @@ async function readPackageMetadata(packageJsonPath: string): Promise<PackageMeta
         const command = isRecord(parsed.scripts) ? parsed.scripts[name] : undefined;
         if (typeof command === 'string') validationCommands[name] = command;
       }
-      return { ...(packageName ? { packageName } : {}), scripts, validationCommands };
+      return {
+        ...(packageName ? { packageName } : {}),
+        scripts, validationCommands,
+        manifest: { hash: createHash('sha256').update(bytes).digest('hex'), revision },
+      };
     } finally {
       await packageJson.close();
     }
@@ -163,6 +179,23 @@ async function detectPackageManager(root: string): Promise<RepoSnapshot['package
     return 'bun';
   }
   return 'unknown';
+}
+
+async function inspectPackage(root: string) {
+  const [metadata, packageManager] = await Promise.all([
+    readPackageMetadata(path.join(root, 'package.json')), detectPackageManager(root),
+  ]);
+  const validationScripts = metadata.scripts.filter(isValidationScript);
+  return {
+    ...metadata, packageManager, validationScripts,
+    ...validationWorkflow(validationScripts, metadata.validationCommands ?? {}, packageManager),
+  };
+}
+
+/** Read the same bounded manifest used for inspection without collecting unrelated repository data. */
+export async function inspectValidationManifest(root: string) {
+  const { manifest, packageManager, validationScriptCoverage } = await inspectPackage(root);
+  return manifest ? { ...manifest, packageManager, coverage: validationScriptCoverage } : undefined;
 }
 
 async function inspectGit(root: string): Promise<Pick<RepoSnapshot, 'gitBranch' | 'gitStatus'>> {
@@ -235,23 +268,21 @@ export async function inspectRepo(inputPath: string): Promise<RepoSnapshot> {
   }
   if (!rootStat.isDirectory()) throw new Error(`Repository path must be a directory: ${root}`);
 
-  const packageJsonPath = path.join(root, 'package.json');
-  const [topLevelFiles, packageMetadata, packageManager, gitMetadata] = await Promise.all([
+  const [topLevelFiles, packageMetadata, gitMetadata] = await Promise.all([
     readTopLevelFiles(root),
-    readPackageMetadata(packageJsonPath),
-    detectPackageManager(root),
+    inspectPackage(root),
     inspectGit(root),
   ]);
 
-  const validationScripts = packageMetadata.scripts.filter(isValidationScript);
-
   return {
     root,
-    packageManager,
+    packageManager: packageMetadata.packageManager,
     ...(packageMetadata.packageName ? { packageName: packageMetadata.packageName } : {}),
     scripts: packageMetadata.scripts,
-    validationScripts,
-    ...validationWorkflow(validationScripts, packageMetadata.validationCommands ?? {}, packageManager),
+    validationScripts: packageMetadata.validationScripts,
+    requiredValidationScripts: packageMetadata.requiredValidationScripts,
+    validationScriptCoverage: packageMetadata.validationScriptCoverage,
+    ...(packageMetadata.manifest ? { validationManifestHash: packageMetadata.manifest.hash } : {}),
     ...gitMetadata,
     topLevelFiles,
   };

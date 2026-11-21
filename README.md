@@ -612,6 +612,12 @@ pending and blocks completion. Omitted requirements and an unresolved
 repository refresh also block completion. Task acceptance still requires the
 existing completion review and approval.
 
+Validation approvals bind to the bounded `package.json` inspected for that
+candidate. The executor checks the manifest and detected package manager before
+launch and after the check returns. If it cannot verify the definition, the
+loop re-inspects the repository and requires fresh approval and validation.
+Passing results record the constituent scripts they covered at execution time.
+
 ## Traces
 
 Unless `--no-trace` is set, each successful decision writes one JSONL record

@@ -82,6 +82,7 @@ describe('orchestration run summary', () => {
     repo.scripts = repo.validationScripts = ['verify', 'test', 'typecheck', 'build'];
     repo.requiredValidationScripts = [...repo.validationScripts];
     repo.validationScriptCoverage = { verify: ['verify', 'test', 'typecheck'], build: ['build'] };
+    repo.validationManifestHash = 'a'.repeat(64);
     const advance = clock();
     const actions: Action[] = ['SEARCH_REPO', 'READ_FILE', 'CALL_CODEX', 'RUN_TESTS', 'RUN_TESTS', 'FINISH'];
     const outcome = await runOrchestration(createInitialState(repo, 'Fix fixture'), {
@@ -91,7 +92,11 @@ describe('orchestration run summary', () => {
       execute: async (proposal) => {
         advance(proposal.action === 'CALL_CODEX' ? 1_000 : proposal.action === 'SEARCH_REPO' ? 20
           : proposal.action === 'READ_FILE' ? 30 : proposal.action === 'RUN_TESTS' && proposal.input.script === 'verify' ? 70 : 80);
-        return result(proposal, proposal.action === 'CALL_CODEX' ? { usage: { input: 100, output: 20, total: 120 } } : {});
+        if (proposal.action === 'CALL_CODEX') return result(proposal, { usage: { input: 100, output: 20, total: 120 } });
+        if (proposal.action === 'RUN_TESTS') {
+          return result(proposal, { coveredScripts: repo.validationScriptCoverage?.[proposal.input.script] ?? [proposal.input.script] });
+        }
+        return result(proposal);
       },
       inspect: async () => { advance(20); return repo; },
     }, { initialInspectionMs: 40 });

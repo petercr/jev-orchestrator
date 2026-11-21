@@ -9,6 +9,7 @@ import { EvaluationError } from '../ai/errors.js';
 import { executeCandidate } from '../orchestration/execute.js';
 import { createInitialState, runOrchestration, type ApprovalContext } from '../orchestration/loop.js';
 import type { ProcessRunner } from '../process.js';
+import { inspectRepo } from '../repo/inspect.js';
 import type { Action, EvaluationResult, RepoSnapshot } from '../types.js';
 import { createTerminal, type CliTerminal } from './terminal.js';
 
@@ -19,7 +20,7 @@ beforeEach(async () => {
   root = await mkdtemp(path.join(os.tmpdir(), 'dev-terminal-loop-'));
   await writeFile(path.join(root, 'package.json'), JSON.stringify({ scripts: { test: 'node --test' } }));
   await writeFile(path.join(root, 'package-lock.json'), '{}');
-  repo = { root, packageManager: 'npm', scripts: ['test'], validationScripts: ['test'], gitStatus: [], topLevelFiles: ['package.json'] };
+  repo = await inspectRepo(root);
 });
 afterEach(async () => { terminal?.dispose(); await rm(root, { recursive: true, force: true }); });
 

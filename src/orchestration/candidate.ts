@@ -58,6 +58,7 @@ export type TestProposal = {
     root: string;
     packageManager: Exclude<AgentState['repo']['packageManager'], 'unknown'>;
     script: string;
+    manifestHash?: string;
     command: string;
     args: string[];
   };
@@ -354,6 +355,7 @@ export async function selectCandidate(
           root: state.repo.root,
           packageManager: state.repo.packageManager,
           script,
+          ...(state.repo.validationManifestHash ? { manifestHash: state.repo.validationManifestHash } : {}),
           ...validationCommand(state.repo.packageManager, script),
         },
       };

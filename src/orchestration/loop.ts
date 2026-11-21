@@ -10,7 +10,10 @@ import { requiresTaskPreparation, taskPreparation } from '../repo/preparation.js
 import { MAX_ORCHESTRATION_ITERATIONS, truncateText } from '../limits.js';
 import { inspectRepo } from '../repo/inspect.js';
 import { isIssueContext, parseGitHubIssue } from '../repo/issue.js';
-import { hasFailedValidation, hasPassedValidation, pendingValidationScripts, retainValidationRequirements, selectPendingValidation } from '../repo/validation.js';
+import {
+  hasFailedValidation, hasPassedValidation, isValidationScript, MAX_REQUIRED_VALIDATION_SCRIPTS,
+  pendingValidationScripts, retainValidationRequirements, selectPendingValidation,
+} from '../repo/validation.js';
 import { evaluationFailure, type EvaluationFailure } from '../ai/errors.js';
 import type { Evaluator } from '../ai/evaluate.js';
 import { isWorkerActionAllowed } from '../agents/selection.js';
@@ -240,6 +243,8 @@ function withToolEvidence(
       timedOut: result.timedOut,
       passed: result.ok,
       summary: truncateText(result.output, 1_000),
+      ...(proposal.input.manifestHash ? { manifestHash: proposal.input.manifestHash } : {}),
+      ...(result.ok && result.coveredScripts ? { coveredScripts: [...result.coveredScripts] } : {}),
     };
     evidence.validations = [...(previous.validations ?? []).filter((item) =>
       item.generation === previous.validationGeneration && item.script !== proposal.input.script), evidence.validation].slice(-8);
@@ -352,6 +357,13 @@ function isToolResult(value: unknown, proposal: CandidateProposal): value is Too
     result.files.every((file) => typeof file === 'string') &&
     (result.stdout === undefined || typeof result.stdout === 'string') &&
     (result.stderr === undefined || typeof result.stderr === 'string') &&
+    (result.validationManifestChanged === undefined || (action === 'RUN_TESTS' && !result.ok &&
+      (result.validationManifestChanged === 'before' || result.validationManifestChanged === 'during'))) &&
+    (result.coveredScripts === undefined || (proposal.action === 'RUN_TESTS' && result.ok &&
+      proposal.input.manifestHash !== undefined && Array.isArray(result.coveredScripts) &&
+      result.coveredScripts.length <= MAX_REQUIRED_VALIDATION_SCRIPTS &&
+      result.coveredScripts.includes(proposal.input.script) &&
+      result.coveredScripts.every((script) => typeof script === 'string' && isValidationScript(script)))) &&
     (proposal.action !== 'READ_ISSUE' || !result.ok ||
       (isIssueContext(result.issue) && result.issue.url === proposal.input.url));
 }
@@ -402,6 +414,22 @@ function applyToolResult(
   refreshFailed: boolean = false,
   workerCallReserved: boolean = false,
 ): AgentState {
+  if (proposal.action === 'RUN_TESTS' && result.validationManifestChanged !== undefined) {
+    const evidence = currentEvidence(state);
+    return {
+      ...state,
+      repo: refreshedRepo ?? state.repo,
+      filesModified: refreshedRepo ? modifiedFiles(refreshedRepo) : state.filesModified,
+      observations: [...state.observations, result.output],
+      tests: { ran: false },
+      currentGoal: 'Review and approve a fresh validation candidate for the current manifest.',
+      evidence: {
+        ...evidence,
+        validationGeneration: evidence.validationGeneration + 1,
+        repoRefreshRequired: refreshFailed,
+      },
+    };
+  }
   const signature = proposalSignature(proposal, state);
   const observations = [...state.observations];
   const failedApproaches = [...state.failedApproaches];
@@ -904,7 +932,8 @@ export async function runOrchestration(
         const exhaustedClaude = proposal.action === 'CALL_CLAUDE' && state.claudeCalls >= MAX_CLAUDE_CALLS;
         const blockedCompletion = proposal.action === 'FINISH' &&
           !completionAllowed(state, policy);
-        const blockedValidation = proposal.action === 'RUN_TESTS' && selectPendingValidation(state) === undefined;
+        const blockedValidation = proposal.action === 'RUN_TESTS' &&
+          (selectPendingValidation(state) === undefined || proposal.input.manifestHash !== state.repo.validationManifestHash);
         const blockedPreparation = requiresTaskPreparation(proposal.action) && taskPreparation(state).nextAction !== null;
         const blockedWorker = !isWorkerActionAllowed(proposal.action, workerSelection) ||
           (isCodingAgentProposal(proposal) && state.workerSelection !== workerSelection);
@@ -1039,7 +1068,7 @@ export async function runOrchestration(
         if (proposal.action === 'SEARCH_REPO' && toolResult.ok) searchResults = toolResult.files;
         let refreshedRepo: RepoSnapshot | undefined;
         let refreshFailed = false;
-        if (isCodingAgentProposal(proposal)) {
+        if (isCodingAgentProposal(proposal) || toolResult.validationManifestChanged !== undefined) {
           phase = 'refresh';
           try {
             refreshedRepo = retainValidationRequirements(state, await metrics.measure('inspectionMs', () => inspect(state.repo.root)));
@@ -1048,7 +1077,7 @@ export async function runOrchestration(
             toolResult = {
               ...toolResult,
               ok: false,
-              output: `${toolResult.output}\nUnable to inspect the repository after ${codingAgentName(proposal)} execution.`,
+              output: `${toolResult.output}\nUnable to refresh repository inspection after ${isCodingAgentProposal(proposal) ? codingAgentName(proposal) : 'validation manifest drift'}.`,
             };
           }
         }

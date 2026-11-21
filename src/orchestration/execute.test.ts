@@ -2,6 +2,9 @@ import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { inspectRepo } from '../repo/inspect.js';
+import { selectCandidate } from './candidate.js';
+import { createInitialState } from './loop.js';
 import {
   executeCandidate,
   DIAGNOSTIC_TIMEOUT_MS,
@@ -89,23 +92,16 @@ describe('constrained execution', () => {
 
   it('runs only the resolved package script command and records failures and timeouts', async () => {
     const root = await temporaryRoot();
+    await writeFile(path.join(root, 'package.json'), JSON.stringify({ scripts: { test: 'node --test' } }));
+    await writeFile(path.join(root, 'pnpm-lock.yaml'), '');
     const runner = vi.fn<ProcessRunner>().mockResolvedValue({
       exitCode: null,
       stdout: '',
       stderr: 'terminated',
       timedOut: true,
     });
-    const result = await executeCandidate({
-      action: 'RUN_TESTS',
-      tool: 'package_script',
-      input: {
-        root,
-        packageManager: 'pnpm',
-        script: 'test',
-        command: 'pnpm',
-        args: ['run', 'test'],
-      },
-    }, runner);
+    const proposal = await selectCandidate('RUN_TESTS', createInitialState(await inspectRepo(root), 'Fix the fixture'));
+    const result = await executeCandidate(proposal, runner);
 
     expect(result).toMatchObject({ ok: false, timedOut: true, exitCode: null });
     expect(runner).toHaveBeenCalledWith({

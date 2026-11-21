@@ -5,6 +5,8 @@ import { selectCandidate } from '../orchestration/candidate.js';
 import { mockEvaluation } from '../mock.js';
 import { hasPassedValidation, pendingValidationScripts, validationWorkflow } from './validation.js';
 
+const verifyCoverage = ['verify', 'test', 'typecheck'];
+
 function state(comprehensive = false) {
   const scripts = ['test', 'typecheck', 'verify'];
   const initial = createInitialState({
@@ -37,7 +39,7 @@ describe('required independent validation', () => {
 
   it('credits a passing declared conjunction and requires diagnosis after a subsequent failed check', () => {
     const initial = state(true);
-    initial.evidence!.validations = [{ iteration: 1, generation: 0, script: 'verify', passed: true, timedOut: false, exitCode: 0, summary: 'all passed' }];
+    initial.evidence!.validations = [{ iteration: 1, generation: 0, script: 'verify', passed: true, timedOut: false, exitCode: 0, summary: 'all passed', coveredScripts: verifyCoverage }];
     expect(pendingValidationScripts(initial)).toEqual([]);
     expect(hasPassedValidation(initial)).toBe(true);
     initial.evidence!.validations.push({ iteration: 2, generation: 0, script: 'test', passed: false, timedOut: false, exitCode: 1, summary: 'failed' });
@@ -49,7 +51,7 @@ describe('required independent validation', () => {
 
   it('does not propose a passed script again through a manual validation alternative', async () => {
     const initial = state(true);
-    initial.evidence!.validations = [{ iteration: 1, generation: 0, script: 'verify', passed: true, timedOut: false, exitCode: 0, summary: 'all passed' }];
+    initial.evidence!.validations = [{ iteration: 1, generation: 0, script: 'verify', passed: true, timedOut: false, exitCode: 0, summary: 'all passed', coveredScripts: verifyCoverage }];
     await expect(selectCandidate('RUN_TESTS', initial)).resolves.toMatchObject({ action: 'ASK_USER' });
     initial.evidence!.validationGeneration += 1;
     initial.tests = { ran: false };
@@ -58,6 +60,22 @@ describe('required independent validation', () => {
 
   it.each(['npm test || true', 'npm test; npm run typecheck', 'npm run test -- --watch', '$(npm test)', 'pnpm test', 'npm test && echo ok', 'npm test | cat'])('does not infer coverage from %s', (command) => {
     expect(validationWorkflow(['test', 'verify'], { verify: command }, 'npm').validationScriptCoverage?.verify).toEqual(['verify']);
+  });
+
+  it('does not expand recorded or legacy validation coverage from a later snapshot', () => {
+    const initial = state();
+    const manifestHash = 'a'.repeat(64);
+    initial.repo.validationManifestHash = manifestHash;
+    const passed = {
+      iteration: 1, generation: 0, script: 'verify', passed: true, timedOut: false, exitCode: 0, summary: 'passed',
+    };
+    initial.evidence!.validations = [{ ...passed, manifestHash, coveredScripts: ['verify', 'test'] }];
+    initial.repo.validationScriptCoverage = { verify: verifyCoverage };
+    expect(pendingValidationScripts(initial)).toEqual(['typecheck']);
+    initial.repo.validationManifestHash = 'b'.repeat(64);
+    expect(pendingValidationScripts(initial)).toEqual(['verify', 'test', 'typecheck']);
+    initial.evidence!.validations = [passed];
+    expect(pendingValidationScripts(initial)).toEqual(['test', 'typecheck']);
   });
 
   it('bounds cycles and transitive aliases without counting non-validation scripts', () => {
@@ -92,7 +110,7 @@ describe('required independent validation', () => {
   it('requires extra checks from supplied context and keeps missing checks pending', async () => {
     const initial = state(true);
     initial.evidence!.clarifications = [{ iteration: 2, text: 'Issue context: fix config and run npm run check:docs; then npm run deploy.' }];
-    initial.evidence!.validations = [{ iteration: 3, generation: 0, script: 'verify', passed: true, timedOut: false, exitCode: 0, summary: 'passed' }];
+    initial.evidence!.validations = [{ iteration: 3, generation: 0, script: 'verify', passed: true, timedOut: false, exitCode: 0, summary: 'passed', coveredScripts: verifyCoverage }];
     expect(pendingValidationScripts(initial)).toEqual(['check:docs']);
     expect(hasPassedValidation(initial)).toBe(false);
     await expect(selectCandidate('RUN_TESTS', initial)).resolves.toMatchObject({ action: 'ASK_USER' });
@@ -106,7 +124,10 @@ describe('required independent validation', () => {
     const initial = state(true);
     const extraScripts = Array.from({ length: 9 }, (_, index) => `check:extra${index}`);
     initial.evidence!.clarifications = [{ iteration: 2, text: extraScripts.map((script) => `npm run ${script}`).join(', ') }];
-    initial.evidence!.validations = ['verify', ...extraScripts].map((script) => ({ iteration: 3, generation: 0, script, passed: true, timedOut: false, exitCode: 0, summary: 'passed' }));
+    initial.evidence!.validations = ['verify', ...extraScripts].map((script) => ({
+      iteration: 3, generation: 0, script, passed: true, timedOut: false, exitCode: 0, summary: 'passed',
+      ...(script === 'verify' ? { coveredScripts: verifyCoverage } : {}),
+    }));
     expect(pendingValidationScripts(initial)).toEqual([]);
     expect(hasPassedValidation(initial)).toBe(false);
     const assessment = mockEvaluation().assessment;
