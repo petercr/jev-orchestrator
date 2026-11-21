@@ -4,7 +4,7 @@ import { ACTIONS } from '../types.js';
 import { MAX_CLAUDE_CALLS, MAX_CODEX_CALLS } from './types.js';
 import { truncateText } from '../limits.js';
 import { redactSensitiveText } from '../logging/trace.js';
-import type { Action, AgentState, EvidenceFinding, IssueContext } from '../types.js';
+import type { Action, AgentState, EvidenceFinding, IssueContext, ValidationEvidence } from '../types.js';
 import { isIssueContext } from '../repo/issue.js';
 
 export const MAX_WORKER_CONTEXT_LENGTH = 6_000;
@@ -20,7 +20,7 @@ export type WorkerContext = {
   failures: Array<{ iteration: number; action: Action; summary: string }>;
   remainingCalls: { codex: number; claude: number };
   issue?: IssueContext;
-  validation?: NonNullable<AgentState['evidence']>['validation'];
+  validation?: Pick<ValidationEvidence, 'iteration' | 'generation' | 'script' | 'exitCode' | 'timedOut' | 'passed' | 'summary'>;
   previousWorker?: NonNullable<AgentState['evidence']>['worker'];
   truncated?: boolean;
 };
@@ -108,9 +108,10 @@ export function buildWorkerContext(state: AgentState): WorkerContext {
 
   // Admit provenance first, then spend the text budget in priority order.
   if (evidence.validation) {
+    const { iteration, generation, script, exitCode, timedOut, passed } = evidence.validation;
     context.validation = {
-      ...evidence.validation,
-      script: bounded(evidence.validation.script, 200),
+      iteration, generation, exitCode, timedOut, passed,
+      script: bounded(script, 200),
       summary: '',
     };
   }
